@@ -12,7 +12,7 @@ use VCtools::Common;
 # OPTIONS AND ENVIRONMENT VARS
 #################################
 
-VCtools::args('files', 'list', 'file(s) (or directory/ies) to commit');
+VCtools::args('files', 'list', 'file(s) (or directory/ies) to revert back to repository status');
 VCtools::getopts();
 
 # remember, directories are files too

@@ -13,7 +13,7 @@ use VCtools::Common;
 #################################
 
 VCtools::switch('recursive', 'r', 'operate recursively');
-VCtools::args('files', 'optlist', 'file(s) (or directory/ies) to commit');
+VCtools::args('files', 'optlist', 'file(s) (or directory/ies) to show status of (default .)');
 VCtools::getopts();
 
 # remember, directories are files too
