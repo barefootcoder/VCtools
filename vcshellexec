@@ -73,12 +73,25 @@ if (not exists $ENV{VCTOOLS_SHELL})
 	{
 		# no argument; use current directory
 		my $pwd = getcwd();
-		if (substr($pwd, 0, length(VCtools::WORKING_DIR))
+		if ($pwd eq VCtools::WORKING_DIR)
+		{
+			# we're in the root of the personal testing tree
+			# but we don't know which group to choose, because different
+			# projects underneath here might have different groups
+			# so bitch about it and get out
+			error("don't know which project you want to work with\n"
+					. "   (specify project name or cd to project dir)");
+		}
+		elsif (substr($pwd, 0, length(VCtools::WORKING_DIR))
 				ne VCtools::WORKING_DIR)
 		{
+			# not even in the right tree at all
 			error("current dir not part of personal testing tree\n"
 					. "   (specify project name or cd into tree)");
 		}
+
+		# so we're somewhere underneath a particular project
+		# just grab the group of the current dir (hope it's right!)
 		$group = getgrgid((stat $pwd)[5]);
 	}
 
