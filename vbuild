@@ -18,15 +18,12 @@ VCtools::args('project', 'single', 'project to build');
 VCtools::getopts();
 
 my $project = VCtools::project();
+print STDERR "vbuild: going to try to build project $project\n" if DEBUG >= 4;
 
 
 #################################
 # CHECK FOR ERRORS
 #################################
-
-# have to do this before we can do much else
-# if password is required, this will set it up
-VCtools::auth_check();
 
 VCtools::fatal_error("must be run from top-level personal testing directory")
 		if getcwd() ne VCtools::WORKING_DIR;
