@@ -3,8 +3,6 @@
 use strict;
 use warnings;
 
-use File::Copy;
-
 use VCtools::Base;
 use VCtools::Args;
 use VCtools::Common;
@@ -74,12 +72,7 @@ check_file_status($proj, 'modified', "have local modifications", sub
 
 		# function args will be modified files, so save them here
 		@bak_files = @_;
-
-		foreach (@bak_files)
-		{
-			move($_, "$_$BAK_EXT");
-			copy("$_$BAK_EXT", $_);
-		}
+		VCtools::create_backup_files(@bak_files, { ext => $BAK_EXT });
 
 		VCtools::revert_files(@bak_files);
 	}
@@ -138,21 +131,8 @@ if (my $tagfile = VCtools::get_proj_directive($proj, 'TagFile') and not VCtools:
 VCtools::create_tag($proj, VCtools::tag());
 
 # put back any files we temporarily reverted
-if (@bak_files)
-{
-	foreach my $file (@bak_files)
-	{
-		# just double check and make sure the backup is there
-		# before we go deleting stuff
-		if (! -r "$file$BAK_EXT" or -s _ == 0)
-		{
-			fatal_error("backup for file $file missing or corrupted");
-		}
+VCtools::restore_backup_files(@bak_files, { ext => $BAK_EXT, OVERWRITE => 1 });
 
-		unlink($file);
-		move("$file$BAK_EXT", $file);
-	}
-} 
 
 #################################
 # SUBS
