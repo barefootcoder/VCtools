@@ -1,0 +1,125 @@
+#! /usr/bin/perl
+
+use strict;
+
+# use Barefoot::debug;							# comment out for production
+
+use DirHandle;
+use Getopt::Std;
+use Cwd qw(getcwd);
+use Barefoot::cvs;
+
+my $me = $0;
+$me =~ s@^.*/@@;
+
+
+# default values
+my $verbose=0;
+my $cvsroot=$::ENV{CVSROOT};
+
+
+#################################
+# OPTIONS AND ENVIRONMENT VARS
+#################################
+
+my $opt = {};
+getopts('vd:', $opt);
+$verbose = 1 if defined $opt->{v};
+$cvsroot = $opt->{d} if defined $opt->{d};
+
+
+#################################
+# CHECK FOR ERRORS
+#################################
+
+if (!$cvsroot)
+{
+	print STDERR "$me: variable CVSROOT must be set\n";
+	exit 2;
+}
+
+my $offsite = cvs::is_offsite($cvsroot);
+
+my $file = $ARGV[0];
+if (!$file)
+{
+	print STDERR "$me: argument is not a valid file, $ARGV[0]\n";
+	print STDERR "usage: $me [options] [file]\n";
+	print STDERR "         -v : verbose\n";
+	print STDERR "         -d : cvsroot, if not using CVSROOT\n";
+	exit 2;
+}
+
+my $options = "";
+
+if (-e $file)
+{
+	# this will delete the file if it exists
+	$options = "-f";
+}
+
+#################################
+# MAIN
+#################################
+
+if ( $^O =~ /MSWin32/ )
+{
+	open(ADD, "cvs -d $cvsroot remove $options $file |") or 
+								die "can't execute cvs remove\n"; 
+}
+else
+{
+	open(ADD, "cvs -d $cvsroot remove $options $file 2>&1 |") or 
+								die "can't execute cvs remove\n"; 
+}
+
+while ( <ADD> )
+{
+	chomp;
+	next if ( /use \'cvs commit\'/ || /^done/ );
+	
+	if ( /server\: (.*)/ )
+	{
+		print "$me: $1\n";
+	}
+	else
+	{
+		# don't know what this line is
+		print "$me: $_\n";
+	}
+}
+close(ADD);
+
+
+# commit is not needed for directories
+if ( $^O =~ /MSWin32/ )
+{
+	open(COM, "cvs -r -d $cvsroot commit -m\"deletion\" $file |") 
+		unless $?;
+}
+else
+{
+	open(COM, "cvs -r -d $cvsroot commit -m\"deletion\" $file 2>&1 |") 
+		unless $?;
+}
+
+while ( <COM> )
+{
+	chomp;
+	next if ( /^done/ );
+		
+	if ( /server\: (.*)/ )
+	{
+		print "$me: $1\n";
+	}
+	else
+	{
+		# don't know what this line is
+		print "$me: $_\n";
+	}
+
+	close(COM);
+}
+
+print "done\n";
+
