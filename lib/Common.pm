@@ -1211,7 +1211,8 @@ sub log_we_created
 	my ($proj) = @_;
 
 	# $^T is the time the script started running
-	if (@log_cache and $log_cache[0]->{date} > $^T)
+	# we'll go 2 seconds before that just to allow for a small amount of discrepancy between us and the server
+	if (@log_cache and $log_cache[0]->{date} > ($^T - 2))
 	{
 		return log_lines($proj, 0);
 	}
@@ -1387,9 +1388,9 @@ sub move_files
 	}
 	print STDERR "after move, files are @files\n" if DEBUG >= 3;
 
-	# have to put the destination files (which are really there) before the source files (which aren't any more)
-	# otherwise, the commit email stuff (which just grabs the first commit file) will freak out
-	commit_files($proj, @dest_files, @files);
+	# have to tell commit_files that this was a move, and how many files were moved
+	# that way it can distinguish where one array ends and the other begins
+	commit_files($proj, @files, @dest_files, { MOVE => scalar(@files) } );
 }
 
 
@@ -1425,11 +1426,11 @@ sub commit_files
 	my ($proj, @files) = @_;
 	my @filenames = @files;
 
-	# if a debugging regex is specified, we need to search each file for
-	# that pattern.  if we find it, we ask the user if they're really
-	# sure they want to commit a file which apparently still has some
+	# if a debugging regex is specified, we need to search each file for that pattern.  if we find it,
+	# we ask the user if they're really sure they want to commit a file which apparently still has some
 	# debugging switch turned on
-	if (my $debug_pattern = get_proj_directive($proj, 'DebuggingRegex'))
+	# (note: we suspend this check for straight moves.  generally the contents of those files haven't changed)
+	if (not exists $opts->{MOVE} and my $debug_pattern = get_proj_directive($proj, 'DebuggingRegex'))
 	{
 		foreach my $file (@files)
 		{
@@ -1468,7 +1469,10 @@ sub commit_files
 		{
 			# commit message will be the same for all files, so we'll just grab the first one
 			# note: can't use $files[0] here; it might be a -m option from above
-			get_log($filenames[0]);
+			# further note: in a move, we need to grab the first _destination_ file; the source files are gone and
+			# the log command will fail on them
+			my $index = exists $opts->{MOVE} ? $opts->{MOVE} : 0;
+			get_log($filenames[$index]);
 			my $log_message = log_we_created($proj);
 
 			if ($log_message)
@@ -1479,7 +1483,18 @@ sub commit_files
 					$mail->{To} = $_;
 					$mail->{From} = $config->{EmailsFrom};
 					$mail->{Subject} = "Commit Notification: project $proj";
-					$mail->{Body} = "The following files were committed: @filenames\n\n$log_message";
+					if (not exists $opts->{MOVE})
+					{
+						$mail->{Body} = "The following files were committed: @filenames\n\n$log_message";
+					}
+					else
+					{
+						# move commits are a bit trickier:
+						$mail->{Body} = "The following files were renamed/moved:\n"
+								. join("\n",
+										map { "\t$filenames[$_] -> $filenames[$_ + $opts->{MOVE}]" } 0..($opts->{MOVE} - 1)
+								) . "\n\n$log_message";
+					}
 
 					unless (sendmail(%$mail))
 					{

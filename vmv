@@ -13,8 +13,8 @@ use VCtools::Common;
 #################################
 
 VCtools::switch('dont_ask', 'n', 'do not ask if it is necessary to pass off to standard mv, just do it');
-VCtools::switch('force', 'f', 'force (for passthrough to mv)');
-VCtools::switch('interactive', 'I', 'interactive (for passthrough to mv)');
+VCtools::switch('force', 'f', "force (in VC mode, don't ask about moving modified files; else passthrough to mv)");
+VCtools::switch('interactive', 'I', 'interactive (for passthrough to mv--no effect in VC mode)');
 VCtools::args('files', 'list', 'file(s) (or directory/ies) to move/rename');
 VCtools::args('dest', 'single', 'directory (or filename) to move to');
 VCtools::getopts();
@@ -41,6 +41,20 @@ my $proj = VCtools::verify_files_and_group(@files);
 if (-e $dest and not -d $dest)
 {
 	VCtools::fatal_error("sorry; cannot overwrite $dest in VC mode");
+}
+
+# make sure none of the files to be moved are also modified
+foreach (@files)
+{
+	if (VCtools::modified_from_vc($_))
+	{
+		VCtools::prompt_to_continue("Warning! $_ has been modified",
+				"It's generally a bad idea to move a modified file.",
+				"It would be much better to do it in two steps: vcommit the file first, then re-run vmv.",
+				"However, if you really insist, I'll continue and move the modified file right now.",
+				"(Note that your changes will automatically be committed if you do this!)"
+		) unless VCtools::force();
+	}
 }
 
 
