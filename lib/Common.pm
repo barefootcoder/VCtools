@@ -27,6 +27,8 @@ use Carp;
 use FileHandle;
 use File::Spec;
 use Perl6::Form;
+use Date::Parse;
+use Date::Format;
 use Data::Dumper;
 use Cwd qw<realpath>;
 use Fcntl qw<F_SETFD>;
@@ -43,8 +45,8 @@ our $vcroot = $ENV{SVNROOT};							# for Subversion
 	# actually, I don't really think Subversion has anything like this,
 	# but we'll leave it here to keep from rehacking everything
 
-# for internal use only (_get_lockers & cache_file_status, respectively)
-my (%lockers_cache, %status_cache);
+# for internal use only (_get_lockers, cache_file_status, & _interpret_log_output, respectively)
+my (%lockers_cache, %status_cache, @log_cache);
 
 # help get messages out a bit more quickly
 $| = 1;
@@ -57,6 +59,15 @@ use constant VCTOOLS_BINDIR => $config->{VCtoolsBinDir};
 use constant SUBVERSION_BINDIR => $config->{SubversionBinDir};
 
 use constant DEFAULT_STATUS => 'unknown';
+
+# vlog output defaults
+use constant LOG_FIELD_ORDERING => 'rev author date message';
+use constant LOG_DATE_FORMAT => '%D at %l:%M%P';
+use constant LOG_OUTPUT_FORMAT => <<END;
+
+=> {'{*}'} (by {'{*}'} on {'{*}'})
+   {"{1000}"}
+END
 
 
 ###########################
@@ -443,18 +454,20 @@ sub _interpret_svn_log_output
 
 	# bit of a shortcut here for the field separators
 	my $SEP = qr/\s*\|\s*/;
-	if ( / ^ r(\d+) $SEP (\w+) $SEP (.*?) \s+ (.*?) \s+ /x )
+	if ( / ^ r(\d+) $SEP (\w+) $SEP (.*? \s+ .*?) \s+ /x )
 	{
-		my $rev = $1;
-		my $author = $2;
-		my $date = $3;
-		my $time = $4;
+		my $log = {};
+		@$log{ qw<rev author date> } = ($1, $2, str2time($3));
 
-		return "\n=> $rev (by $author on $date at $time)\n";
+		$log->{message} = '';					# this gets filled in later
+		push @log_cache, $log;
 	}
-
-	# assume everything else is just an actual message line and pass it back with just a bit of indentation
-	return "   $_";
+	else
+	{
+		# assume everything else is just an actual log commit message line
+		# it must belong to the last log in the cache, so just tack it on there
+		$log_cache[-1]->{message} .= $_;
+	}
 }
 
 
@@ -623,7 +636,7 @@ sub _execute_normally
 }
 
 
-sub file_hash
+sub _file_hash
 {
 	my (@files) = @_;
 
@@ -643,6 +656,23 @@ sub file_hash
 	}
 
 	return $files;
+}
+
+
+sub _log_format
+{
+	my ($log, $time_fmt, $log_fmt, @fields) = @_;
+
+	# create more human readable datestr field from date field
+	$log->{datestr} = time2str($time_fmt, $log->{date});
+
+	print STDERR "_log_format: fields are ", join(' // ', @$log{@fields}) if DEBUG >= 4;
+	my $output = form({interleave => 1}, $log_fmt, @$log{@fields});
+	# sometimes field value with newlines in mutliline field spec in format with newline at end causes too many newlines ...
+	$output =~ s/\n+$/\n/;
+	print STDERR "_log_format: will output ==>\n$output<==\n" if DEBUG >= 4;
+
+	return $output;
 }
 
 
@@ -1062,17 +1092,52 @@ sub get_log
 {
 	my ($file) = @_;
 
-	my @output = ();
-
 	my $fh = _execute_and_get_output("log", $file);
 	while ( <$fh> )
 	{
-		my $line = _interpret_log_output;
-		push @output, $line if $line;
+		_interpret_log_output;
 	}
 	close($fh);
 
-	return @output;
+	print STDERR Dumper(\@log_cache) if DEBUG >= 3;
+}
+
+
+sub log_lines
+{
+	my ($proj, $which) = @_;
+
+	my $time_fmt = get_proj_directive($proj, 'LogDatetimeFormat', LOG_DATE_FORMAT);
+	my $log_fmt = get_proj_directive($proj, 'LogOutputFormat', LOG_OUTPUT_FORMAT);
+
+	# ordering of fields takes a little work
+	# first, we have to replace "date" with "datestr" (i.e., the legible version)
+	# (_log_format() will produce the datestr field from the date one)
+	# then we have to split the ordering to produce an array of field names
+	my $field_order = get_proj_directive($proj, 'LogFieldsOrdering', LOG_FIELD_ORDERING);
+	$field_order =~ s/\bdate\b/datestr/;
+	my @fields = split(' ', $field_order);
+
+	print STDERR "time format $time_fmt, log format $log_fmt, fields @fields\n" if DEBUG >= 2;
+
+	if (defined $which)
+	{
+		return _log_format($log_cache[$which], $time_fmt, $log_fmt, @fields);
+	}
+
+	my @results;
+	push @results, _log_format($_, $time_fmt, $log_fmt, @fields) foreach @log_cache;
+	return @results;
+}
+
+
+sub log_field
+{
+	my ($which_log, $which_field) = @_;
+
+	print STDERR "log_field: going to return [$which_log]{$which_field} : $log_cache[$which_log]->{$which_field}\n"
+			if DEBUG >= 3;
+	return $log_cache[$which_log]->{$which_field};
 }
 
 
@@ -1171,7 +1236,7 @@ sub add_files
 	my (@files) = @_;
 
 	# for looking up files
-	my $files = file_hash(@files);
+	my $files = _file_hash(@files);
 
 	# the process of adding may very well add files unexpectedly,
 	# if we add recursively.  so collect those filenames and return
@@ -1201,7 +1266,7 @@ sub revert_files
 	my (@files) = @_;
 
 	# for looking up files
-	my $files = file_hash(@files);
+	my $files = _file_hash(@files);
 
 	# expand your recursions before calling this if you need them
 	# recursive reversion is just _such_ a bad idea ...
