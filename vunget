@@ -52,5 +52,12 @@ foreach my $file (@files)
 #################################
 
 VCtools::revert_files(@files);
+foreach my $file (@files)
+{
+	VCtools::get_log($file);
+	my $orig_date = VCtools::log_field(0, 'date');
+	print STDERR "going to set date of $file to $orig_date\n" if DEBUG >= 2;
+	utime $orig_date, $orig_date, $file;
+}
 
 print "done\n" unless $?;
