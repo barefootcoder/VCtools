@@ -242,6 +242,8 @@ sub _interpret_cvs_status_output
 	my $file = substr($_, 2);
 	# if it's not in our cache hash (haha!), it's probably not a filename
 	# at all (status output can include lots o' funky stuff)
+	# NOTE!!! the above statement was found to be wildly inaccurate.
+	# this was fixed for Subversion, but not CVS (yet).  caveat codor.
 	if (exists $status_cache{$file})
 	{
 		my $status = substr($_, 0, 1);
@@ -274,53 +276,51 @@ sub _interpret_svn_status_output
 	# as a special case, sometimes an unknown file will look like this:
 	if ( /svn: '(.*)' is not under version control/ )
 	{
-		my $file = $1;
-		$status_cache{$file} = 'unknown';
-		return $file;
+		return wantarray ? ($1, 'unknown') : $1;
 	}
 
-	return undef unless length > 40;
+	return wantarray ? () : undef unless length > 40;
+
 	my $file = substr($_, 40);
 	print "interpreting status output: file is <$file>\n" if DEBUG >= 4;
+	# if we're not going to return the status, may as well not bother to figure it out
+	return $file unless wantarray;
 
 	my $status = substr($_, 0, 1);
 	# have to check locked and outdated (in that order) before everything
 	# else, because they override other statuses
 	if (substr($_, 2, 1) eq 'L')
 	{
-		$status_cache{$file} = 'locked';
+		return ($file, 'locked');
 	}
 	elsif (substr($_, 7, 1) eq '*')
 	{
-		$status_cache{$file} = 'outdated';
+		return ($file, 'outdated');
 	}
 	elsif ($status eq 'M' or $status eq 'A' or $status eq 'D')
 	{
-		$status_cache{$file} = 'modified';
+		return ($file, 'modified');
 	}
 	elsif ($status eq ' ')
 	{
-		$status_cache{$file} = 'nothing';
+		return ($file, 'nothing');
 	}
 	elsif ($status eq 'C')
 	{
-		$status_cache{$file} = 'conflict';
+		return ($file, 'conflict');
 	}
 	elsif ($status eq '?')
 	{
-		$status_cache{$file} = 'unknown';
+		return ($file, 'unknown');
 	}
 	elsif ($status eq '!' or $status eq '~')
 	{
-		$status_cache{$file} = 'broken';
+		return ($file, 'broken');
 	}
 	else
 	{
 		fatal_error("can't figure out status line: $_", 3);
 	}
-
-	# somebody might want this for something
-	return $file;
 }
 
 
@@ -556,6 +556,8 @@ sub _make_svn_command
 		# we need to check the server for outdating info
 		# also, without -v, you don't get any output for unmodified files
 		status		=>	'status -uv',
+		# for lists, this is quicker than svn list because it doesn't go out to the server
+		list		=>	'status -v',
 	);
 	$command = $cmd_subs{$command} if exists $cmd_subs{$command};
 
@@ -891,11 +893,14 @@ sub cache_file_status
 	while ( <$st> )
 	{
 		print STDERR "<file status>:$_" if DEBUG >= 5;
-		my $file = _interpret_status_output;
+		my ($file, $status) = _interpret_status_output;
+
+		next unless $file;
+		$status_cache{$file} = $status;
 
 		# directories sometimes come in with trailing slashes, so make sure
 		# lookups for those won't fail
-		$status_cache{"$file/"} = $status_cache{$file} if $file and -d $file;
+		$status_cache{"$file/"} = $status if $file and -d $file;
 	}
 	close($st);
 
@@ -977,17 +982,22 @@ sub get_all_files
 	# note that in this case, they're more like to be dirs than files,
 	# but we'll call it @files just for consistency
 
-	# the way we do this is basically just cheat:
-	# if we can convince cache_file_status to do things recursively (regardless of the state of recursive()),
-	# then, for every file we send it which is really a directory (which ought to be all of them for this function),
-	# we'll end up with all the files in that directory
-	# EXCEPT we'll exclude all the VC housekeeping files and anything that's been set to be ignored by VC
-	# pretty clever, eh?
-	cache_file_status(@files, { DONT_RECURSE => 0});
+	my @return_files;
+	# we always need to go recursive here, and we can't toss STDERR because sometimes it contains a filename
+	my $st = _execute_and_get_output("list", @files, { DONT_RECURSE => 0, IGNORE_ERRORS => 0 });
+	while ( <$st> )
+	{
+		print STDERR "<file list>:$_" if DEBUG >= 5;
+		my $file = _interpret_status_output;
+
+		push @return_files, $file if $file;
+	}
+	close($st);
 
 	# now we just need to sort the files we return to simulate a classic breadth-first search (like find)
-	# also, since cache_file_status adds two entries for directories, remove the extra one
-	return sort grep { substr($_, -1) ne "/" } keys %status_cache;
+	# (it's possible that this might not be necessary, depending on the implementation of the "list" command,
+	# but I don't trust it at this point)
+	return sort @return_files;
 }
 
 
