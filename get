@@ -2,7 +2,7 @@
 
 use strict;
 
-# use Barefoot::debug;							# comment out for production
+#use Barefoot::debug;							# comment out for production
 
 use Getopt::Std;
 use Cwd qw(getcwd);
@@ -35,15 +35,10 @@ $rev = $opt->{r} if defined $opt->{r};
 # CHECK FOR ERRORS
 #################################
 
-if (!$cvsroot )
-{
-	print STDERR "$me: variable CVSROOT must be set\n";
-	exit 2;
-}
+cvs::check_general_errors();
 
-my $offsite = cvs::is_offsite($cvsroot);
 my $module = $ARGV[0];
-print "$me: Module $module\n";
+print "$me: Module $module\n" if $verbose;
 
 if (!$module)
 {
@@ -60,14 +55,10 @@ if (!-r $module)
 my ($project, $subdir) = cvs::parse_module(getcwd());
 
 
-if ( !$offsite )
+if (not cvs::exists($module))
 {
-	if (!-e "$cvsroot/$project/$subdir/$module,v")
-	{
-		print "$cvsroot/$project/$subdir/$module,v\n";
-		print STDERR "$me: $module does not appear to be checked into CVS\n";
-		exit 2;
-	}
+	print STDERR "$me: $module does not appear to be checked into CVS\n";
+	exit 2;
 }
 
 
@@ -78,54 +69,47 @@ if ( !$offsite )
 my $user = $::ENV{USER};
 $user = $::ENV{USERNAME} if !$user;
 
-my $user_is_locker = 0;
-my @lockers = cvs::getLockers($cvsroot, $module, \$user_is_locker);
+my @lockers = cvs::lockers($module);
 if (@lockers)
 {
 	# inform user that others are editing the file
 	print "$me info: $module is currently being edited by: @lockers\n";
-	if ( !$offsite )
+	if (!get_yn("Do you want to edit it anyway?"))
 	{
-		if (!get_yn("Do you want to edit it anyway?"))
-		{
-			exit 1;
-		}
+		exit 1;
 	}
 }
 
 # check to see if the user is already editing the file
-print "$me:  you are already editing the file.\n" if $user_is_locker;
+print "$me:  you are already editing the file.\n"
+		if cvs::user_is_a_locker($module);
 
 if ( $revdate || $rev )
 { 
 	# this is a precaution, as I f#cked myself with conflicts by 
 	# checking out older version on top of edited new version
-	die "$me: can not check out older version if editing." if $user_is_locker;
+	die "$me: can not check out older version if editing."
+			if cvs::user_is_a_locker($module);
 
 	# -f gets the latest version if -r or -D fail
 	my $options = "-f";
 	$options = $options . " -D $revdate" if $revdate;
 	$options = $options . " -r $rev" if $rev;
-	print "$me: Syncing $module using $options.\n";
+	print "$me: Syncing $module using $options.\n" if $verbose;
 	system("cvs -r -d $cvsroot update $options $module");
 }
 else
 {
 	# -A resets any stick tags
-	print "$me: Syncing $module to latest version.\n";
+	print "$me: Syncing $module to latest version.\n" if $verbose;
 	system("cvs -r -d $cvsroot update -A $module");
 }
 
-if ( !$user_is_locker )
+unless (cvs::user_is_a_locker($module))
 {
-	print "$me: Adding to watch and editors list.\n";
+	print "$me: Adding to watch and editors list.\n" if $verbose;
 	system("cvs -d $cvsroot edit $module");
 	system("cvs -d $cvsroot watch add -a edit $module");
-	if ( !$offsite )
-	{
-		system("chgrp guestpc $module") unless $?;
-		system("chmod g+w $module") unless $?;
-	}
 }
 
 print "done\n" unless $?;
