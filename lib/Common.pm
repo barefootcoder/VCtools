@@ -1287,27 +1287,34 @@ sub prev_merge_point
 	my $merge_commit = get_proj_directive($proj, 'MergeCommit');
 	fatal_error("cannot look for previous merge points without a MergeCommit directive") unless $merge_commit;
 
-	foreach my $file (@files)
+	my ($project, $path) = parse_vc_file($files[0]);
+	die("file is not in the right project!") unless $proj eq $project;		# this should theoretically never happen
+	if (@files == 1 and $path eq '.')
 	{
-		get_log($file, { BRANCH_ONLY => 1 });
-		my $msg = find_log($merge_commit, 'message') || '';
-		print STDERR "looking for previous merge point on $file, found $msg\n" if DEBUG >= 4;
+		# doing entire working copy; this seems to be a special case for some reason (not sure why)
 
-		if (not defined $message)
-		{
-			$message = $msg;
-		}
-		elsif ($msg ne $message)
-		{
-			fatal_error("found two different previous merge points");
-		}
-	}
-
-	unless ($message)
-	{
 		# try looking for a project-wide merge point
 		get_log(_project_path($proj, 'branch', $branch), { BRANCH_ONLY => 1 });
 		$message = find_log($merge_commit, 'message') || '';
+	}
+	else
+	{
+		# find prev merge point for each file/dir, and make sure they're all the same
+		foreach my $file (@files)
+		{
+			get_log($file, { BRANCH_ONLY => 1 });
+			my $msg = find_log($merge_commit, 'message') || '';
+			print STDERR "looking for previous merge point on $file, found $msg\n" if DEBUG >= 4;
+
+			if (not defined $message)
+			{
+				$message = $msg;
+			}
+			elsif ($msg ne $message)
+			{
+				fatal_error("found two different previous merge points");
+			}
+		}
 	}
 
 	if ($message)
