@@ -1757,9 +1757,7 @@ sub revert_files
 
 	# revert_files works differently than other functions regarding recursion
 	# (because recursive reversion is just _such_ a bad idea ...)
-	# to revert a full tree, call with { TREE_OPS => 1 }
-	# otherwise, you can only revert individual files
-	my $o = $opts->{TREE_OPS} ? {} : { DONT_RECURSE => 1 };
+	my $o = { DONT_RECURSE => 1 };
 
 	# for looking up files
 	my $files = _file_hash(@files);
@@ -1770,10 +1768,7 @@ sub revert_files
 	{
 		if ( / ^ Reverted \s+ '(.*)' \s* $ /x )
 		{
-			unless ($opts->{TREE_OPS})
-			{
-				warning("unexpectedly reverted file $1") unless exists $files->{$1};
-			}
+			warning("unexpectedly reverted file $1") unless exists $files->{$1};
 		}
 		else
 		{
@@ -1823,8 +1818,7 @@ sub commit_files
 
 	# we expect that our filelist has already been expanded for purposes of recursion,
 	# so we're not going to do any recursion here
-	# (to work around this, send TREE_OPS => 1 as an option)
-	$opts->{DONT_RECURSE} = $opts->{TREE_OPS} ? 0 : 1;
+	$opts->{DONT_RECURSE} = 1;
 	_execute_normally("commit", @files, $opts);
 
 	# now let's send out an email to whoever's on the list (if anyone is)
