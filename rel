@@ -2,7 +2,7 @@
 
 use strict;
 
-use Barefoot::debug(1);							# comment out for production
+use Barefoot::debug(3);							# comment out for production
 
 use Getopt::Std;
 use Data::Dumper;
@@ -44,6 +44,13 @@ my $cp_file =
 	LOCAL	=>	\&local_cp,
 	rsh		=>	\&rcp,
 	ssh		=>	\&scp,
+};
+
+my $fix_group =
+{
+	LOCAL	=>	\&local_chgrp,
+	rsh		=>	\&rsh_chgrp,
+	ssh		=>	\&ssh_chgrp,
 };
 
 
@@ -165,6 +172,10 @@ sub find_control_directives
 	{
 		chomp;
 
+		# skip blank lines and comments
+		next if /^\s*$/;
+		next if /^\s*#/;
+
 		my $directive = {};
 		@$directive{ @fields } = split(':');
 
@@ -258,6 +269,11 @@ sub release
 	print STDERR "trying to copy $file to $old_file\n" if DEBUG >= 3;
 	$cp_file->{$rp->{method}}->($rp->{machine}, $file, $old_file);
 
+	# make sure file has the correct group
+	my $group = getgrgid((stat $file)[5]);
+	print STDERR "trying to change group on $file to $group\n" if DEBUG >= 3;
+	$fix_group->{$rp->{method}}->($rp->{machine}, $old_file, $group);
+
 	# successfully released
 	return true;
 }
@@ -308,4 +324,21 @@ sub rcp
 sub scp
 {
 	system("scp -p $_[1] $_[0]:$_[2]");
+}
+
+
+sub local_chgrp
+{
+	print("chgrp $_[2] $_[1]");
+	system("chgrp $_[2] $_[1]");
+}
+
+sub rsh_chgrp
+{
+	system("rsh $_[0] chgrp $_[2] $_[1]");
+}
+
+sub ssh_chgrp
+{
+	system("ssh $_[0] chgrp $_[2] $_[1]");
 }
