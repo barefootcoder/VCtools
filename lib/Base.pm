@@ -4,65 +4,47 @@
 #
 ###########################################################################
 #
-# Include this module to indicate your Perl script is running in test mode.
-# This has two primary effects:
+# This module is used by VCtools programs to handle debugging.  When use'd
+# normally, thus:
 #
-#	1) When you include a local Perl module, it will be drawn from your
-#		private testing area (as determined by the VCtools config file).
-#		Standard Perl modules will generally not change, although you
-#		could potentially use this mechanism to create your own 'strict.pm'
-#		or somesuch (but I wouldn't advise it).
+#		use VCtools::Base;
 #
-#	2) There is now a DEBUG constant that is defined to the value you pass
-#		in to this module.  For instance:
+# by a top-level script, the DEBUG constant is defined as 0.  However,
+# the module may also be used thus:
 #
-#				use Geek::Dev::Debug(1);
+#		use VCtools::Base(DEBUG => 3);
 #
-#				print DEBUG, "\n";			# prints 1
+# to indicate that DEBUG should be defined as 3 instead.  The scripts
+# typically use 5 debugging levels to output various amounts of
+# information.
 #
-#		Note that this is a compile-time constant, so that if you do something
-#		like this:
+# Note that since DEBUG is a constant, code such as:
 #
-#				print "my variable is $myvar\n" if DEBUG >= 2;
+#		print STDERR "value is $val\n" if DEBUG >= 2;
 #
-#		then not only will the program never print the statement when DEBUG
-#		is 0 or 1, but it won't even test the value.  The code is completely
-#		removed during the compile phase (because of constant folding).  Thus
-#		you can leave in debugging statements without fear of slowing down
-#		production code.
+# will not even be compiled when debugging is off (or when it's only
+# set to 1, FTM).
 #
-# To turn off debugging, change your use statement thus:
+# Additionally, if DEBUG is defined to any non-zero value, all further
+# VCtools::modules will be drawn from your personal working copy of
+# the VCtools code.  Note that it uses vctools-config to figure out
+# where that is, which means that you can neither test vctools-config
+# itself nor this module with this method.  (Technically, since this
+# only uses vctools-config --working, you could use it to test other
+# switches, but careful not to confuse yourself.)
 #
-#				use Geek::Dev::Debug(0);
-#
-# but don't just comment it out.  If you did that, your code containing
-# DEBUG wouldn't compile any more.
-#
-# To make things a little more clear, you can also do something like this:
-#
-#				use Geek::Dev::Debug qw<OFF>;
-#
-# The module accepts "off", "false", and (just for fun) "not!" in a case
-# insensitive manner.
-#
-# You also need to make sure you put your "use Geek::Dev::Debug" before any
-# other local "use" statements, or you won't be able to get the debugging
-# versions of those modules.  In general, it is recommended that you put
-# your "use Geek::Dev::Debug" statement as early as possible in your script
-# (but it doesn't have to come before the "use strict").
+# You need to make sure you put your "use VCtools::Base" before any
+# other "use" statements for VCtools modules, or you won't be able to get
+# the debugging versions of those modules.
 #
 # The value of DEBUG is designed to "fall through" to libraries and modules
 # that are aware of it.  If you do this:
 #
-#				use Geek::Dev::Debug;
+#				use VCtools::Base;
 #
 # in a module, it means that you wish to use the value of DEBUG that was set
 # in a higher level module (probably the top level Perl program).  If no
 # such value was ever set, DEBUG will be 0.
-#
-# It probably also bears noting that you can't actually test changes to the
-# Geek::Dev::Debug.pm module itself via this method, because of the distinct
-# chicken-and-egg problem it engenders.
 #
 # #########################################################################
 #
