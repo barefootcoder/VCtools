@@ -329,7 +329,6 @@ sub scp
 
 sub local_chgrp
 {
-	print("chgrp $_[2] $_[1]");
 	system("chgrp $_[2] $_[1]");
 }
 
