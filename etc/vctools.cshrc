@@ -14,6 +14,7 @@ else
 
 		if ( $?VCTOOLS_SHELL_STARTDIR ) then
 			cd $VCTOOLS_SHELL_STARTDIR
+			unsetenv VCTOOLS_SHELL_STARTDIR
 		endif
 		umask 2
 	endif
