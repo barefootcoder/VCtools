@@ -25,7 +25,7 @@ else
 
 			# these require a bit more work
 			alias vcshell "unsetenv VCTOOLS_SHELL ; exec $shellexec"
-			alias vcd 'cd `vprojdir \!^`'
+			alias vcd 'cd `vfind -dirfind \!^`'
 
 			if ( $?VCTOOLS_SHELL_STARTDIR ) then
 				cd $VCTOOLS_SHELL_STARTDIR

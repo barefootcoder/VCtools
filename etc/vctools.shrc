@@ -28,7 +28,7 @@ else
 			alias vcshell="unset VCTOOLS_SHELL ; exec $shellexec"
 			function vcd
 			{
-				cd `vprojdir $1`
+				cd `vfind -dirfind $1`
 			}
 
 			if [ -n "$VCTOOLS_SHELL_STARTDIR" ]
