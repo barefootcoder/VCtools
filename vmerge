@@ -105,27 +105,35 @@ if (@mod_files)
 VCtools::merge_from_branch($proj, $branch, $start, $end, @files);
 
 # now figure out what got modified, if there are any conflicts, etc
-VCtools::cache_file_status(@files, { DONT_RECURSE => 0 });
-my @problem_files;
-push @problem_files, VCtools::get_all_with_status($_) foreach qw< conflict broken locked outdated >;
-if (@problem_files)
+CONFLICT_RESOLUTION:
 {
-	VCtools::info_msg("WARNING! There are problem files resulting from the merge.");
-	VCtools::list_files($proj, "have one of the following statuses: conflict, broken, locked, outdated", @problem_files);
-	VCtools::info_msg("The merge cannot continue.");
-
-	if (yesno_no_default("Do you wish to restore the project to pre-merge status?"))
+	VCtools::cache_file_status(@files, { DONT_RECURSE => 0 });
+	my @problem_files;
+	push @problem_files, VCtools::get_all_with_status($_) foreach qw< conflict broken locked outdated >;
+	if (@problem_files)
 	{
-		VCtools::restore_project_backup($proj, { ext => BAK_EXT });
-	}
-	else
-	{
-		VCtools::info_msg("Your project is in an unstable state.  After further investigation, you may wish to");
-		VCtools::info_msg(-INDENT => "manually restore the complete project backup located at "
-				. VCtools::full_project_backup_name($proj, { ext => BAK_EXT }));
-	}
+		VCtools::info_msg("WARNING! There are problem files resulting from the merge.");
+		VCtools::list_files($proj, "have one of the following statuses: conflict, broken, locked, outdated", @problem_files);
+		VCtools::info_msg("The merge cannot continue unless these problems are resolved.");
+		VCtools::info_msg("If you like, you can use another window to attempt to resolve the problems then say 'y' below.");
+		if (VCtools::yesno("Do you want to check for problem files again?"))
+		{
+			redo CONFLICT_RESOLUTION;
+		}
 
-	exit 1;
+		if (yesno_no_default("Do you wish to restore the project to pre-merge status?"))
+		{
+			VCtools::restore_project_backup($proj, { ext => BAK_EXT });
+		}
+		else
+		{
+			VCtools::info_msg("Your project is in an unstable state.  After further investigation, you may wish to");
+			VCtools::info_msg(-INDENT => "manually restore the complete project backup located at "
+					. VCtools::full_project_backup_name($proj, { ext => BAK_EXT }));
+		}
+
+		exit 1;
+	}
 }
 my @new_mod_files = VCtools::get_all_with_status('modified');
 print STDERR "new mod files are: ", join(', ', @new_mod_files), "\n" if DEBUG >= 3;
