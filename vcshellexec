@@ -11,14 +11,16 @@ use VCtools::common;
 
 
 my $opts = {};
-getopts('p:', $opts);
+getopts('pb', $opts);
 
+
+# just calculate new $PATH and get out
 if (defined $opts->{p})
 {
 	# return adjusted path
-	my @addpath = ( VCtools::VCTOOLS_BINDIR, VCtools::SUBVERSION_BINDIR);
+	my @addpath = ( VCtools::VCTOOLS_BINDIR, VCtools::SUBVERSION_BINDIR );
 
-	my @path = split(':', $opts->{p});
+	my @path = split(':', $ENV{PATH});
 	if ($path[-1] eq ".")
 	{
 		splice @path, -1, 0, @addpath;
@@ -33,15 +35,33 @@ if (defined $opts->{p})
 }
 
 
+# being called initially from alias vcshell
 if (not exists $ENV{VCTOOLS_SHELL})
 {
+	# are we going to transmogrify ourselves into vbuild?
+	my $buildit = exists $opts->{b};
+
 	my $group;
-	if ($ARGV[0])
+	if ($buildit)
 	{
-		my $pdir = VCtools::proj_dir($ARGV[0]);
+		# if no args, or if final arg starts with a dash (ie, is a switch),
+		# just call vbuild right here
+		unless (@ARGV and $ARGV[-1] !~ /^-/)
+		{
+			my $vbuild = VCtools::VCTOOLS_BINDIR . "/vbuild";
+			exec $vbuild, @ARGV;
+		}
+
+		$group = VCtools::project_group($ARGV[-1]);
+		# pass args through to next incarnation
+		$buildit = join(' ', @ARGV);
+	}
+	elsif ($ARGV[0])
+	{
+		my $pdir = VCtools::project_dir($ARGV[0]);
 		if (-d $pdir)
 		{
-			$group = (stat $pdir)[5];
+			$group = VCtools::project_group($ARGV[0]);
 		}
 		else
 		{
@@ -59,20 +79,26 @@ if (not exists $ENV{VCTOOLS_SHELL})
 			error("current dir not part of personal testing tree\n"
 					. "   (specify project name or cd into tree)");
 		}
-		$group = (stat $pwd)[5];
+		$group = getgrgid((stat $pwd)[5]);
 	}
-	$group = getgrgid($group);
-	$ENV{VCTOOLS_SHELL} = "-$group";
 
-	exec $ENV{SHELL};
-}
-elsif ($ENV{VCTOOLS_SHELL} =~ /^-(.*)$/)
-{
-	my $group = $1;
-
-	$ENV{VCTOOLS_SHELL} = "1";
+	$ENV{VCTOOLS_SHELL} = $buildit ? "b:$buildit" : "1";
 	exec "newgrp", $group;
 }
+# being called by newgrp, but originally came from vbuild alias
+elsif ($ENV{VCTOOLS_SHELL} =~ /^b:(.*)$/)
+{
+	# turn command line string back into individual args
+	my @args = split(' ', $1);
+
+	$ENV{VCTOOLS_SHELL} = "1";
+	chdir VCtools::WORKING_DIR;
+
+	$ENV{PATH} .= ":" . VCtools::SUBVERSION_BINDIR;
+	my $vbuild = VCtools::VCTOOLS_BINDIR . "/vbuild";
+	exec $vbuild, @args;
+}
+# being called by ourselves, essentially, from newgrp
 else
 {
 }
