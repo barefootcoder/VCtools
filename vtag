@@ -131,8 +131,9 @@ if (my $tagfile = VCtools::get_proj_directive($proj, 'TagFile'))
 
 	if ($commit_msg)
 	{
-		# 
-		VCtools::commit_files($proj, "-m'$commit_msg'", $full_tagfile);
+		# sending -m switch as if it were a file is cheating a bit, but it will work
+		# note that since filenames are automatically quoted, we don't have to quote the commit message itself
+		VCtools::commit_files($proj, "-m$commit_msg", $full_tagfile);
 	}
 	else
 	{
