@@ -507,7 +507,7 @@ sub _make_svn_command
 	my %cmd_subs =
 	(
 		# we need to check the server for outdating info
-		# and without -v, you don't get any output for unmodified files
+		# also, without -v, you don't get any output for unmodified files
 		status		=>	'status -uv',
 	);
 	$command = $cmd_subs{$command} if exists $cmd_subs{$command};
@@ -885,18 +885,16 @@ sub get_all_files
 	# but we'll call it @files just for consistency
 
 	# the way we do this is basically just cheat:
-	# if we can convince cache_file_status to do things recursively
-	# (regardless of the state of recursive()), then, for every file we
-	# send it which is really a directory (which ought to be all of them
-	# for this function), we'll end up with all the files in that directory
-	# EXCEPT we'll exclude all the VC housekeeping files and anything
-	# that's been set to be ignored by VC
+	# if we can convince cache_file_status to do things recursively (regardless of the state of recursive()),
+	# then, for every file we send it which is really a directory (which ought to be all of them for this function),
+	# we'll end up with all the files in that directory
+	# EXCEPT we'll exclude all the VC housekeeping files and anything that's been set to be ignored by VC
 	# pretty clever, eh?
 	cache_file_status(@files, { DONT_RECURSE => 0});
 
-	# now we just need to sort the files we return to simulate a classic
-	# breadth-first search (like find)
-	return sort keys %status_cache;
+	# now we just need to sort the files we return to simulate a classic breadth-first search (like find)
+	# also, since cache_file_status adds two entries for directories, remove the extra one
+	return sort grep { substr($_, -1) ne "/" } keys %status_cache;
 }
 
 
@@ -1175,8 +1173,8 @@ sub commit_files
 		}
 	}
 
-	# we expect that our filelist has already been expanded for purposes of
-	# recursion, so we're not going to do any recursion here
+	# we expect that our filelist has already been expanded for purposes of recursion,
+	# so we're not going to do any recursion here
 	_execute_normally("commit", @files, { DONT_RECURSE => 1 } );
 }
 
@@ -1192,6 +1190,20 @@ sub update_files
 		_interpret_update_output;
 	}
 	close($upd);
+}
+
+
+# this couldn't possibly work with CVS
+sub edit_commit_log
+{
+	my ($file, $rev) = @_;
+
+	my ($proj, $path, $basefile) = parse_vc_file($file);
+	my $server_path = _project_path($proj) . "/$path/$basefile";
+
+	# passing command options as if they were part of the command itself is a slight perversion of the spirit of
+	# _make_vc_command, but it _will_ work
+	_execute_normally("propedit svn:log --revprop -r $rev", $server_path);
 }
 
 
