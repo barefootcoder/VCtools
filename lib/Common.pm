@@ -468,7 +468,7 @@ sub _make_cvs_command
 sub _make_svn_command
 {
 	my $command = shift;
-	my $opts = @_ && ref $_[$#_] eq "HASH" ? pop : {};
+	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
 
 	my $quiet = $opts->{VERBOSE} ? "-v" : "";
 	my $local = $opts->{DONT_RECURSE} ? "-N" : "";
@@ -522,7 +522,13 @@ sub _execute_and_get_output
 	my $cmd = &_make_vc_command;
 	print STDERR "will process output of: $cmd\n" if DEBUG >= 2;
 
-	my $fh = new FileHandle("$cmd 2>&1 |")
+	# if user has requested us to ignore errors, _make_vc_command will have
+	# redirected STDERR off into the ether;
+	# but if they haven't, let's catch that too 
+	$cmd .= " 2>&1" unless @_ and ref $_[-1] eq 'HASH'
+			and $_[-1]->{IGNORE_ERRORS};
+
+	my $fh = new FileHandle("$cmd |")
 			or fatal_error("call to cvs command $cmd failed with $!", 3);
 	return $fh;
 }
@@ -570,6 +576,16 @@ sub auth_check
 {
 	# pass straight through to appropriate VC system
 	_svn_auth_check;
+}
+
+
+sub current_project
+{
+	# you probably ought to call check_common_errors() before this function
+	# that will verify that the VCTOOLS_SHELL var is properly set
+	
+	$ENV{VCTOOLS_SHELL} =~ /proj:(\w+)/;
+	return $1;
 }
 
 
@@ -686,10 +702,15 @@ sub project_script
 
 sub cache_file_status
 {
+	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop
+			: { DONT_RECURSE => not recursive(), };
+	# have to make sure we don't ignore errors, because STDERR will contain
+	# crucial info for us under Subversion (at least)
+	# therefore, override even if client told us to ignore
+	$opts->{IGNORE_ERRORS} = 0;
 	my (@files) = @_;
 
-	my $st = _execute_and_get_output("status", @files,
-			{ DONT_RECURSE => not recursive() } );
+	my $st = _execute_and_get_output("status", @files, $opts);
 	while ( <$st> )
 	{
 		print STDERR "<file status>:$_" if DEBUG >= 5;
@@ -766,6 +787,28 @@ sub get_all_with_status
 	# that also begin with the requested prefix (usually a dirname)
 	return grep { $status_cache{$_} eq $status and /^\Q$prefix\E/ }
 			keys %status_cache;
+}
+
+
+sub get_all_files
+{
+	my @files = @_;
+	# note that in this case, they're more like to be dirs than files,
+	# but we'll call it @files just for consistency
+
+	# the way we do this is basically just cheat:
+	# if we can convince cache_file_status to do things recursively
+	# (regardless of the state of recursive()), then, for every file we
+	# send it which is really a directory (which ought to be all of them
+	# for this function), we'll end up with all the files in that directory
+	# EXCEPT we'll exclude all the VC housekeeping files and anything
+	# that's been set to be ignored by VC
+	# pretty clever, eh?
+	cache_file_status(@files, { DONT_RECURSE => 0});
+
+	# now we just need to sort the files we return to simulate a classic
+	# breadth-first search (like find)
+	return sort keys %status_cache;
 }
 
 
