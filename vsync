@@ -1,192 +1,56 @@
 #! /usr/bin/perl
 
 use strict;
+use warnings;
 
-# use Barefoot::debug;							# comment out for production
+use Geek::Dev::Debug(1);
 
 use Getopt::Std;
-use Cwd qw(getcwd);
-use Barefoot::cvs;
 
-my $me = $0;
-$me =~ s@^.*/@@;
-
-# default values
-my $verbose=0;
-my $cvsroot=$::ENV{CVSROOT};
+use VCtools::common;
 
 
 #################################
 # OPTIONS AND ENVIRONMENT VARS
 #################################
 
-my $opt = {};
-getopts('vd:', $opt);
-$verbose = 1 if defined $opt->{v};
-$cvsroot = $opt->{d} if defined $opt->{d};
+VCtools::process_args( {
+		r   =>  {
+			name    =>  'recursive',
+			usage   =>  '[-r]',
+			comment =>  'apply operation recursively',
+		},
+	}, "[file_or_dir ...]");
+
+# remember, directories are files too
+my @files = @ARGV || ".";
 
 
 #################################
 # CHECK FOR ERRORS
 #################################
 
-if (!$cvsroot)
+VCtools::verify_files_and_group(@files);
+
+# get statuses for everything at once (quicker that way)
+VCtools::cache_file_status(@files);
+
+foreach my $file (@files)
 {
-	print STDERR "$me: variable CVSROOT must be set\n";
-	exit 2;
+	VCtools::fatal_error("$file is not in VC")
+			unless VCtools::exists_in_vc($file);
 }
 
-my $offsite = cvs::is_offsite($cvsroot);
-
-if ($ARGV[0])
-{
-	if (!chdir($ARGV[0]))
-	{
-		print STDERR "$me: argument is not a valid path, $ARGV[0]\n";
-		print STDERR "usage: $me [options] [path]\n";
-		print STDERR "         default path is .\n";
-		print STDERR "         -v : verbose\n";
-		print STDERR "         -d : cvsroot, if not using CVSROOT\n";
-		exit 2;
-	}
-}
-
-
-# TODO figure out what this is doing and see if it is relevant offsite
-my ($project, $subdir) = cvs::parse_module(getcwd());
-if ( !$offsite )
-{
-	if (!defined($project))
-	{
-		print STDERR "$me: path does not appear to be a private CVS directory\n";
-		exit 2;
-	}
-
-	if (!-d "$cvsroot/$project/$subdir")
-	{
-		print STDERR "$me: path does not appear to be checked into CVS\n";
-		exit 2;
-	}
-}
 
 #################################
 # MAIN
 #################################
 
-# for debugging, we'll save the original output in a tmp file
-my $tmp_debug = "/tmp/" . $me . "_$$.out";
-$tmp_debug = "$::ENV{TEMP}/" . $me . "_$$.out" unless !length($::ENV{TEMP});
-if (-e $tmp_debug)
-{
-	# clear out the existing file
-	open(TD, ">$tmp_debug") and close(TD);
-}
-else
-{
-	# create and make world-writable
-	open(TD, ">$tmp_debug") and close(TD);
-	chmod(0777,$tmp_debug);
-}
-open(TD, ">>$tmp_debug") or die("$me: can't save debugging output");
+VCtools::update_files(@files);
 
-# can't do some command line stuff in windows
-if ( $^O =~ /MSWin32/ )
-{
-	open(UPD, "cvs -r -d $cvsroot update -A -d -P . |") or 
-										die("can't execute cvs update");
-}
-else
-{
-	# note that we catch cvs update's stderr as well
-	open(UPD, "cvs -r -d $cvsroot update -A -d -P . 2>&1 |") or 
-										die("can't execute cvs update");
-}
-
-UPDATE_LINE: while ( <UPD> )
-{
-	print TD;							# debugging
-	next if /^cvs update: Updating/;	# ignore these
-	if ( /^([UPM]) (.*)/ )				# ignore unless verbose is on
-	{
-		if ($verbose)
-		{
-			print "$me: ", $1 eq "M" ? "merged" : "updated", " file $2\n";
-		}
-		next;
-	}
-	if (/^A (.*)/)
-	{
-		print "file was cvs add'ed but never committed: $1\n";
-	}
-	elsif (/^R (.*)/)
-	{
-		print "file was cvs remove'd but never committed: $1\n";
-	}
-	elsif (/^C (.*)/)
-	{
-		print "warning! conflict on file $1 (please attend to immediately)\n";
-		# this should probably email something to people as well
-	}
-	elsif (/^\? (.*)/)
-	{
-		# this is trickier ...
-		my $file = $1;
-		if ( !$offsite )
-		{
-			if (-d $file)
-			{
-				# if it's a directory, it just means that there's no CVS
-				# files _in_ that directory ... however, that's perfectly
-				# okay if that directory is also in cvsroot
-				my $wdir = cvs::WORKING_DIR;
-				my $cvsdir = "$wdir/$project/$subdir/$file";
-				$cvsdir =~ s/$wdir/$cvsroot/;
-				next if -d $cvsdir;
-			}
-		}
-
-		# if the dir isn't in cvs, or if it's a file (and that _definitely_
-		# isn't in cvs, else it wouldn't have popped up), that's a problem
-		print "file/dir isn't in CVS repository: $file\n";
-	}
-	elsif (/^RCS file:/)
-	{
-		# this is _probably_ a merge taking place ... we'll check the next
-		# few lines to be sure, but also save the lines in case something
-		# goes wrong and we need to put the entire output back out
-		my $save = $_;
-
-		# if it's just retrieving various revisions, it's still okay
-		do { $_ = <UPD> and $save .= $_ } while /^retrieving revision/;
-
-		# if it's a "merging" informational message, it's still okay
-		if ( /^Merging differences/ )
-		{
-			$save .= $_;
-			$_ = <UPD>;
-			# if it's a message that the merge is already done, it's okay
-			if ( /already contains the differences/ )
-			{
-				# and we're done ... back to outer loop
-				next UPDATE_LINE;
-			}
-			
-			# everything was okay up to here, but we read one line too many
-			redo UPDATE_LINE;
-		}
-
-		# at this point, the output has diverged from our pattern too much
-		print STDERR $save;
-		redo UPDATE_LINE;
-	}
-	else
-	{
-		# dunno what the hell _this_ is; better just print it out
-		print STDERR;
-	}
-}
-close(UPD);
 print "done\n" unless $?;
 
-# delete the temp file
-unlink($tmp_debug);
+
+#################################
+# SUBS
+#################################
