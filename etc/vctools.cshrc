@@ -10,7 +10,10 @@ else
 	else
 		setenv PATH `$shellexec -p`
 
+		alias commit vcommit
 		alias get vget
+
+		alias vcd 'cd `vprojdir \!^`'
 
 		if ( $?VCTOOLS_SHELL_STARTDIR ) then
 			cd $VCTOOLS_SHELL_STARTDIR
