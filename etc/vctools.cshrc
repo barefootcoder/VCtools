@@ -3,11 +3,12 @@ set shellexec=$vcbindir/vcshellexec
 
 if ( ! $?VCTOOLS_SHELL ) then
 	alias vcshell "exec $shellexec"
+	alias vbuild "$shellexec -b --"
 else
 	if ( "$VCTOOLS_SHELL" != 1 ) then
 		exec $shellexec
 	else
-		setenv PATH `$shellexec -p $PATH`
+		setenv PATH `$shellexec -p`
 
 		alias get vget
 
