@@ -212,6 +212,12 @@ sub _set_defaults
 	switch('verbose', 'v', 'verbose output');
 	switch('ignore_errors', 'i', 'ignore errors');
 	switch('rootpath', 'R', 'override default VC root path', 'rootpath');
+
+	# recursive is a special case
+	# even when the program won't allow a recursive option, some of the library
+	# routines need to check it.  so we'll just provide a default here and then
+	# VCtools::recursive() will just return 0 when no -r switch is allowed.
+	$args->{'recursive'} = 0;
 }
 
 
@@ -220,29 +226,42 @@ sub _set_defaults
 ###########################
 
 
-sub switch
+BEGIN
 {
-	my ($name, $short_form, $comment, $arg) = @_;
+	my %short_forms;
 
-	# if short form defined, use that first and name as the long form (second)
-	# otherwise, we have to use name only
-	my ($first, $second) = $short_form ? ($short_form, $name) : ($name, undef);
-
-	if (defined $arg)
+	sub switch
 	{
-		$args->{$name} = undef;
+		my ($name, $short_form, $comment, $arg) = @_;
 
-		push @spec, form(FIRST_SWITCH, "-$first <$arg>", $comment);
-		push @spec, "              { \$VCtools::args->{$name} = \$$arg }\n";
-		push @spec, form(SECOND_SWITCH, "--$second <$arg>") if $second;
-	}
-	else
-	{
-		$args->{$name} = 0;
+		# if short form defined, use that first and name as the long form (second)
+		# otherwise, we have to use name only
+		my ($first, $second) = $short_form ? ($short_form, $name) : ($name, undef);
 
-		push @spec, form(FIRST_SWITCH, "-$first", $comment);
-		push @spec, "              { \$VCtools::args->{$name} = 1 }\n";
-		push @spec, form(SECOND_SWITCH, "--$second") if $second;
+		# double check that no one is giving us the same short form switch twice
+		if ($short_form)
+		{
+			die("switch -$short_form used for two different arguments")
+					if exists $short_forms{$short_form};
+			$short_forms{$short_form} = 1;
+		}
+
+		if (defined $arg)
+		{
+			$args->{$name} = undef;
+
+			push @spec, form(FIRST_SWITCH, "-$first <$arg>", $comment);
+			push @spec, "              { \$VCtools::args->{$name} = \$$arg }\n";
+			push @spec, form(SECOND_SWITCH, "--$second <$arg>") if $second;
+		}
+		else
+		{
+			$args->{$name} = 0;
+
+			push @spec, form(FIRST_SWITCH, "-$first", $comment);
+			push @spec, "              { \$VCtools::args->{$name} = 1 }\n";
+			push @spec, form(SECOND_SWITCH, "--$second") if $second;
+		}
 	}
 }
 
@@ -318,7 +337,7 @@ sub action
 
 sub getopts
 {
-	print Dumper($args), "\n" if DEBUG >= 2;
+	print STDERR Dumper($args), "\n" if DEBUG >= 4;
 
 	# Getopt::Declare demands tabs, so let's give 'em to it
 	my $spec = join('', unexpand(@spec));
@@ -330,6 +349,9 @@ sub getopts
 
 	Getopt::Declare->new($spec, @ARGV)
 			or fatal_error("illegal command line", 'usage');
+
+	print STDERR Dumper($args), "\n" if DEBUG >= 2;
+
 }
 
 
@@ -359,7 +381,48 @@ sub warning
 
 sub info_msg
 {
-	print join(' ', "$me:", @_), "\n";
+	my $indent = 0;
+	if ($_[0] eq "-INDENT")
+	{
+		$indent = 1;
+		shift;
+	}
+
+	print join(' ', $indent ? ' ' x (length($me) + 1) : "$me:", @_), "\n";
+}
+
+
+sub list_files
+{
+	my ($proj, $msg, @files) = @_;
+
+	my $proj_dir = project_dir($proj);
+	# this will speed up subsitutions considerably
+	$proj_dir = qr<^\Q$proj_dir/\E>;
+
+	info_msg("the following files or directories $msg:");
+	foreach (@files)
+	{
+		# if this fails, then the file doesn't start with
+		# the project directory, so no harm done
+		s/$proj_dir//;
+
+		print "   $_\n"
+	}
+	print "\n";
+}
+
+
+sub prompt_to_continue
+{
+	my ($first_line, @other_lines) = @_;
+
+	my $old_fh = select STDERR;
+	info_msg($first_line);
+	info_msg(-INDENT => $_) foreach @other_lines;
+
+	exit unless yesno("Are you sure you want to continue?");
+	select $old_fh;
 }
 
 
