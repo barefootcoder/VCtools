@@ -1,0 +1,311 @@
+#! /usr/bin/perl -w
+
+use strict;
+
+use Barefoot::debug(1);							# comment out for production
+
+use Getopt::Std;
+use Data::Dumper;
+use Cwd qw<getcwd>;
+
+use Barefoot::cvs;
+use Barefoot::base;
+use Barefoot::string;
+use Barefoot::input qw<get_yn>;
+
+my $me = $0;
+$me =~ s@^.*/@@;
+
+$| = true;
+
+
+# default values									 
+my $verbose = false;
+my $info_only = false;
+
+
+# dispatch tables for release methods
+my $get_mtime =
+{
+	LOCAL	=>	\&local_mtime,
+	rsh		=>	\&rsh_mtime,
+	ssh		=>	\&ssh_mtime,
+};
+
+my $rm_file =
+{
+	LOCAL	=>	\&local_rm,
+	rsh		=>	\&rsh_rm,
+	ssh		=>	\&ssh_rm,
+};
+
+my $cp_file =
+{
+	LOCAL	=>	\&local_cp,
+	rsh		=>	\&rcp,
+	ssh		=>	\&scp,
+};
+
+
+#################################
+# OPTIONS AND ENVIRONMENT VARS
+#################################
+
+my $opt = {};
+getopts('vid:', $opt);
+$verbose = true if defined $opt->{v};
+$info_only = true if defined $opt->{i};
+cvs::set_cvsroot($opt->{d}) if defined $opt->{d};
+
+
+#################################
+# CHECK FOR ERRORS
+#################################
+
+cvs::check_general_errors();
+
+my $file = $ARGV[0] || "<blank>";
+if (not $file or not -e $file or -d $file or $file =~ m@/@)
+{
+	print STDERR "$me: argument is not a regular file in current directory ",
+			"($file)\n";
+	print STDERR "usage: $me [-d cvs_root_dir] [-v] file\n";
+	print STDERR "    -v : verbose\n";
+	print STDERR "    -d : cvsroot, if not using CVSROOT\n";
+	exit 2;
+}
+
+# can't release it if you've got it checked out
+my $path = getcwd();
+my ($project, $subdir, $module) = cvs::parse_module("$path/$file");
+if (cvs::user_is_a_locker($module))
+{
+	print STDERR "$me: can't release a file you currently have checked out\n";
+	exit 1;
+}
+
+# probably _shouldn't_ release it if anyone else has it checked out
+if (cvs::lockers($module))
+{
+	print STDERR "$me: others have this module checked out\n";
+	exit 1 unless get_yn("Release it anyway?");
+}
+
+# write access to the file is suspicious enough to vomit on
+if (-w $module)
+{
+	print STDERR "$me: won't release a file unless it is read-only\n";
+	print STDERR "  (check permissions and run cdiff)\n";
+	exit 1;
+}
+
+
+
+#################################
+# MAIN
+#################################
+
+
+my $dir = $project . ($subdir ? "/$subdir" : "");
+my $module_date = (stat $file)[9];
+
+my ($suffix, $release_paths) = find_control_directives(cvs::RELEASE_FILE,
+		"$dir/$module", qw<proj method machine relpath> );
+$_->{method} ||= 'LOCAL' foreach @$release_paths;
+$_->{machine} ||= "local host" foreach @$release_paths;
+
+# now do a release for every path listed
+print $info_only ? "release info for" : "releasing", " file $file ...\n";
+foreach my $rp (@$release_paths)
+{
+	die("$me: don't understand release method $rp->{method}\n")
+			unless exists $cp_file->{$rp->{method}};
+
+	unless (defined release($suffix, $rp))
+	{
+		print "Release of $file to $rp->{machine} failed!!\n";
+		exit 1 unless get_yn("Continue?");
+	}
+}
+
+
+#################################
+# SUBS
+#################################
+
+
+# return value:
+#	($suffix, $directives)
+# where suffix is what must be tacked on to any paths in the directives
+# and directives is an array ref to an array of hash refs
+# each hash ref has the fields specified as the final parameter(s)
+sub find_control_directives
+{
+	my ($control_file, $module, @fields) = @_;
+
+	my $orig_path = getcwd();
+
+	# find control dir and make sure control file is current
+	chdir(cvs::WORKING_DIR) or die("$me: can't change to working dir root\n");
+	unless (chdir(cvs::CONTROL_DIR))
+	{
+		cvs::execute_and_discard_output("checkout " . cvs::CONTROL_DIR);
+		chdir(cvs::CONTROL_DIR)
+				or die("$me: failed build of CONTROL directory\n");
+	}
+	cvs::execute_and_discard_output("update");
+	die("$me: can't read control file: $control_file\n")
+			unless -r $control_file;
+
+	# get path(s) from control file
+	my $possible_directives = [];
+	open(CTL, $control_file)
+			or die("$me: can't open control file $control_file\n");
+	while ( <CTL> )
+	{
+		chomp;
+
+		my $directive = {};
+		@$directive{ @fields } = split(':');
+
+		# don't bother to save it unless it could apply to us
+		print STDERR "comparing $module to ^$directive->{proj}\n" if DEBUG >= 3;
+		next unless $module =~ m@^$directive->{proj}@;
+
+		# prioritize by how many /'s the proj has (that's how specific it is)
+		my $priority = string::count($directive->{proj}, '/');
+		push @{ $possible_directives->[$priority] }, $directive;
+	}
+	close(CTL);
+
+	# if no possibles, fail right here
+	die("$me: no directives apply to module $module in control file "
+			. "$control_file\n") unless @$possible_directives;
+
+	# go back to original directory
+	chdir($orig_path);
+
+	# most specific is the largest priority, a.k.a. the last index
+	my $directives = $possible_directives->[$#$possible_directives];
+
+	# suffix is the module path with the proj that matched it removed from
+	# the front ... theoretically, it's impossible for this sub to fail
+	# note that suffix might be the empty string, if line in the control
+	# file refers to a single module rather than a path
+	my $suffix = $module;
+	$suffix =~ s@^$directives->[0]->{proj}@@;
+
+	# return suffix and directives (note: this is an array ref, not an array!)
+	return ($suffix, $directives);
+}
+
+
+# return value:
+#	true: file was successfully released
+#	false: file was not released with user approval
+#	undef: system error while trying to release
+sub release
+{
+	my ($suffix, $rp) = @_;
+	print STDERR Dumper($rp) if DEBUG >= 4;
+
+	print "\t", $info_only ? "on:" : "now releasing to:", " $rp->{machine}\n";
+	my $old_file = "$rp->{relpath}$suffix";
+	print STDERR "production file is $old_file\n" if DEBUG >= 2;
+
+	# make sure existing file is older
+	my $old_file_date
+			= $get_mtime->{$rp->{method}}->($rp->{machine}, $old_file);
+	print STDERR "comparing old date $old_file_date to new date $module_date\n"
+			if DEBUG >= 4;
+	if ($info_only)
+	{
+		print "\t\t";
+		if ($old_file_date == 0)
+		{
+			print "File does not exist in production.\n";
+		}
+		elsif ($old_file_date == $module_date)
+		{
+			print "Production file has same date; no need to release.\n";
+		}
+		elsif ($old_file_date > $module_date)
+		{
+			print "Production file is newer; check for ",
+					"unauthorized modification.\n";
+		}
+		else					# file in production is indeed older
+		{
+			print "Production file is old; need to release.\n";
+		}
+		return true;
+	}
+	unless ($old_file_date < $module_date)
+	{
+		print "\t\tCurrent production file is ", $old_file_date == $module_date
+				? "the same age as" : "newer than", " the development file.\n";
+		return true if $info_only;
+		unless (get_yn("\t\tRelease it anyway?"))
+		{
+			return false;
+		}
+	}
+
+	# remove old file
+	$rm_file->{$rp->{method}}->($rp->{machine}, $old_file);
+
+	# copy new file
+	print STDERR "trying to copy $file to $old_file\n" if DEBUG >= 3;
+	$cp_file->{$rp->{method}}->($rp->{machine}, $file, $old_file);
+
+	# successfully released
+	return true;
+}
+
+
+sub local_mtime
+{
+	return (stat($_[1]))[9] || 0;
+}
+
+sub rsh_mtime
+{
+	return `rsh $_[0] mtime $_[1]`;
+}
+
+sub ssh_mtime
+{
+	return `ssh $_[0] mtime $_[1]`;
+}
+
+
+sub local_rm
+{
+	unlink($_[1]);
+}
+
+sub rsh_rm
+{
+	system("rsh $_[0] rm -f $_[1]");
+}
+
+sub ssh_rm
+{
+	system("ssh $_[0] rm -f $_[1]");
+}
+
+
+sub local_cp
+{
+	system("cp -p $_[1] $_[2]");
+}
+
+sub rcp
+{
+	system("rcp -p $_[1] $_[0]:$_[2]");
+}
+
+sub scp
+{
+	system("scp -p $_[1] $_[0]:$_[2]");
+}
