@@ -2,99 +2,44 @@
 
 use strict;
 
-# use Barefoot::debug;							# comment out for production
+use Geek::Dev::Debug(1);
 
-use Getopt::Std;
 use Cwd qw(getcwd);
-use Barefoot::cvs;
 
-my $me = $0;
-$me =~ s@^.*/@@;
-
-
-# default values
-my $verbose=0;
-my $cvsroot=$::ENV{CVSROOT};
+use VCtools::common;
 
 
 #################################
-# OPTIONS AND ENVIRONMENT VARS
+# OPTIONS AND ARGUMENTS
 #################################
 
-my $opt = {};
-getopts('vd:', $opt);
-$verbose = 1 if defined $opt->{v};
-$cvsroot = $opt->{d} if defined $opt->{d};
+VCtools::process_args("project");
+
+my $project = $ARGV[0];
 
 #################################
 # CHECK FOR ERRORS
 #################################
 
-if (!$cvsroot)
-{
-	print STDERR "$me: variable CVSROOT must be set\n";
-	exit 2;
-}
+VCtools::fatal_error("must be run from top-level personal testing directory")
+		if getcwd() ne VCtools::WORKING_DIR;
+VCtools::fatal_error("project $project does not exist in VC")
+		unless VCtools::proj_exists_in_vc($project);
+VCtools::fatal_error("project $project already exists") if -e $project;
 
-my $offsite = cvs::is_offsite($cvsroot);
-my $project = $ARGV[0];
-
-if (!$project)
-{
-	print STDERR "usage: $me project\n";
-	exit 2;
-}
-
-if (-e $project)
-{
-	print STDERR "$me: project $project already exists\n";
-	exit 2;
-}
-
-if ( !$offsite )
-{
-	my $pwd = getcwd();
-	if ($pwd ne cvs::WORKING_DIR)
-	{
-		print STDERR "$me: must be run from home proj directory\n";
-		exit 2;
-	}
-
-	if (!-e "$cvsroot/$project")
-	{
-		print STDERR "$me: project $project does not exist in CVS\n";
-		exit 2;
-	}
-
-	# check for proper group
-	chomp (my $current_gid = `id -g`);
-	my $project_gid = (stat("$cvsroot/$project"))[5];
-	if ($current_gid != $project_gid)
-	{
-		my $current_grname = getgrgid($current_gid);
-		my $project_grname = getgrgid($project_gid);
-		print STDERR "$me: current group doesn't match project (is ",
-				"$current_grname, should be $project_grname)\n";
-		exit 2;
-	}
-}
+# check for proper group
+VCtools::verify_gid($project);
 
 
 #################################
 # MAIN
 #################################
 
-system("cvs -r -d $cvsroot checkout $project");
-if ( !$offsite )
-{
-	# directories named Debug or Release are for nmake and need to be accessible
-	# by guestpc (the Samba share user)
-	system('find '. $project . ' -type d \( -name Release -o -name Debug \) ' .
-			'-exec chgrp guestpc {} \; -exec chmod 770 {} \;');
-
-	# this _seemed_ like a good idea, but with the commit-mail script running,
-	# it results in double mail, so we took it out
-	#system("cvs watch add -a commit $project");
-}
+# leaving second argument blank indicates we want the entire project
+VCtools::get_tree($project, "", $project);
 print "done\n" unless $?;
 
+
+#################################
+# SUBS
+#################################
