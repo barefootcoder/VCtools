@@ -146,6 +146,7 @@ exit(not $retval);
 sub print_file
 {
 	my ($file, $trailer) = @_;
+	$trailer ||= '';
 
 	$file =~ s/$projdir_qr//;
 	$file .= "/" if -d $file;
@@ -174,8 +175,19 @@ sub grep_file
 			if ( /$pattern/ )
 			{
 				$retval = 1;
-				print_file($file, ":");
-				print;
+
+				# using -grep and -print at the same time indicates that we only want the file name
+				if (VCtools::print())
+				{
+					print_file($file);
+					print "\n";
+					last;
+				}
+				else
+				{
+					print_file($file, ":");
+					print;
+				}
 			}
 		}
 		close(IN);
