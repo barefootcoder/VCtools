@@ -8,6 +8,8 @@ use VCtools::Args;
 use VCtools::Common;
 
 
+sub needs_to_be_released();
+
 # dispatch tables for release methods
 our $dispatch =
 {
@@ -37,7 +39,8 @@ our $dispatch =
 #################################
 
 VCtools::switch('info_only', 'I', 'only show release information');
-VCtools::args('files', 'list', 'file(s) to release');
+VCtools::switch('determine', 'd', 'determine (recursively) which files to release (only if released previously)');
+VCtools::args('files', 'optlist', 'file(s) to release (with -d defaults to . ; without -d may not be omitted)');
 VCtools::getopts();
 
 my @files = VCtools::files();
@@ -47,10 +50,16 @@ my @files = VCtools::files();
 # CHECK FOR ERRORS
 #################################
 
+VCtools::fatal_error("files to release must be specified unless -d is used")
+		if not VCtools::determine() and not VCtools::files();
+
+@files = ('.') unless @files;
+
 our $proj = VCtools::verify_files_and_group(@files);
 
 # can't release a directory (at least at this time)
-if (grep { -d } @files)
+# however, directories are okay with -d
+if (not VCtools::determine() and grep { -d } @files)
 {
 	VCtools::fatal_error("can only release files (not directories)");
 }
@@ -61,34 +70,37 @@ our $rmethod = VCtools::get_proj_directive($proj, 'ReleaseMethod',
 VCtools::fatal_error("unknown release method $rmethod")
 		unless exists $dispatch->{$rmethod};
 
-# get statuses for everything at once (quicker that way)
-VCtools::cache_file_status(@files);
-
-# all files must have status "nothing"
-# any other status should block release
-# quick method for checking this: number of files with status 'nothing'
-# should exactly == total number of files
-unless (@files == VCtools::get_all_with_status('nothing'))
+unless (VCtools::determine())
 {
-	VCtools::fatal_error("not all files are properly checked in");
-}
+	# get statuses for everything at once (quicker that way)
+	VCtools::cache_file_status(@files, { DONT_RECURSE => 1 });
+
+	# all files must have status "nothing"
+	# any other status should block release
+	# quick method for checking this: number of files with status 'nothing'
+	# should exactly == total number of files
+	unless (@files == VCtools::get_all_with_status('nothing'))
+	{
+		VCtools::fatal_error("not all files are properly checked in");
+	}
 
 =not_working_with_svn_yet
-# probably _shouldn't_ release it if anyone else has it checked out
-if (cvs::lockers($module))
-{
-	print STDERR "$me: others have this module checked out\n";
-	exit 1 unless get_yn("Release it anyway?");
-}
+	# probably _shouldn't_ release it if anyone else has it checked out
+	if (cvs::lockers($module))
+	{
+		print STDERR "$me: others have this module checked out\n";
+		exit 1 unless get_yn("Release it anyway?");
+	}
 
-# write access to the file is suspicious enough to vomit on
-if (-w $module)
-{
-	print STDERR "$me: won't release a file unless it is read-only\n";
-	print STDERR "  (check permissions and run cdiff)\n";
-	exit 1;
-}
+	# write access to the file is suspicious enough to vomit on
+	if (-w $module)
+	{
+		print STDERR "$me: won't release a file unless it is read-only\n";
+		print STDERR "  (check permissions and run cdiff)\n";
+		exit 1;
+	}
 =cut
+}
 
 
 
@@ -97,9 +109,27 @@ if (-w $module)
 #################################
 
 
+if (VCtools::determine())
+{
+	@files = grep { needs_to_be_released } VCtools::get_all_files(@files);
+	if (@files)
+	{
+		VCtools::list_files($proj, "need to be released", @files);
+		exit unless VCtools::yesno("Proceed with release(s)?");
+	}
+	else
+	{
+		print "\n";
+		VCtools::info_msg("no files were found that should be released");
+		exit;
+	}
+}
+
 foreach my $file (@files)
 {
 	my $rpath = VCtools::release_path($file);
+	fatal_error("don't have a release path for $file") unless $rpath;
+
 	VCtools::info_msg(VCtools::info_only() ? "release info for" : "releasing",
 			"file $file ...");
 
@@ -109,10 +139,29 @@ foreach my $file (@files)
 	}
 }
 
+print "\ndone\n";
+
 
 #################################
 # SUBS
 #################################
+
+
+# return values:
+#	1: VC file is newer than prod file
+#	0: VC file and prod file have same date
+#	-1: VC file is older than prod file
+#	undef: prod file doesn't exist
+sub cmp_dates
+{
+	my ($vc_file, $machine, $prod_path) = @_;
+
+	my $vc_date = (stat $vc_file)[9];
+	my $prod_file_date = $dispatch->{$rmethod}->{get_mtime}->($machine, $prod_path);
+	print STDERR "comparing prod date $prod_file_date to vc date $vc_date\n" if DEBUG >= 4;
+
+	return $prod_file_date == 0 ? undef : $vc_date <=> $prod_file_date;
+}
 
 
 # return value:
@@ -128,23 +177,19 @@ sub release
 	VCtools::info_msg(-INDENT => VCtools::info_only() ? "on:" : "now releasing to:", $machine, "path", $rpath);
 
 	# make sure existing file is older
-	my $vc_date = (stat $file)[9];
-	my $prod_file_date
-			= $dispatch->{$rmethod}->{get_mtime}->($machine, $rpath);
-	print STDERR "comparing prod date $prod_file_date to vc date $vc_date\n"
-			if DEBUG >= 4;
+	my $cmp = cmp_dates($file, $machine, $rpath);
 	if (VCtools::info_only())
 	{
-		if ($prod_file_date == 0)
+		if (not defined $cmp)
 		{
 			VCtools::info_msg(-INDENT => "file does not yet exist in production",
 					"(needs to be released)");
 		}
-		elsif ($prod_file_date == $vc_date)
+		elsif ($cmp == 0)
 		{
 			VCtools::info_msg(-INDENT => "production file has same date; no need to release");
 		}
-		elsif ($prod_file_date > $vc_date)
+		elsif ($cmp == -1)
 		{
 			VCtools::info_msg(-INDENT => "production file is newer; check for unauthorized modification");
 		}
@@ -154,10 +199,10 @@ sub release
 		}
 		return 1;
 	}
-	unless ($prod_file_date < $vc_date)
+	unless (not defined $cmp or $cmp == 1)
 	{
 		VCtools::info_msg(-INDENT => "current production file is",
-				$prod_file_date == $vc_date ? "the same age as" : "newer than", "the development file");
+				$cmp == 0 ? "the same age as" : "newer than", "the development file");
 		return 0 unless VCtools::yesno("Release it anyway?");
 	}
 
@@ -175,6 +220,37 @@ sub release
 
 	# successfully released
 	return 1;
+}
+
+
+sub needs_to_be_released ()
+{
+	# we expect filename to be in $_
+
+	# never try to release dirs
+	return 0 if -d;
+
+	my $rpath = VCtools::release_path($_);
+	return 0 unless $rpath;
+
+	my $machine = $rpath =~ s/^(\w+):// ? $1 : "localhost";
+	my $cmp = cmp_dates($_, $machine, $rpath);
+	return 0 unless defined $cmp;							# if no production file, don't try to release it
+	if ($cmp == 1)
+	{
+		if (VCtools::modified_from_vc($_))
+		{
+			# can't release stuff that isn't checked in
+			VCtools::info_msg("$_ would be releaseable if it were checked in");
+			return 0;
+		}
+
+		# else it's newer than production so should be released
+		return 1;
+	}
+
+	# if we get here, production is the same age as (or newer than, for some bizarre reason), so don't release
+	return 0;
 }
 
 
