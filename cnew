@@ -66,10 +66,65 @@ if ( !$offsite )
 # MAIN
 #################################
 
-system("cvs add $module") unless $?;
+if ( $^O =~ /MSWin32/ )
+{
+	open(ADD, "cvs -d $cvsroot add $module |") or 
+								die "can't execute cvs add\n"; 
+}
+else
+{
+	open(ADD, "cvs -d $cvsroot add $module 2>&1 |") or 
+								die "can't execute cvs add\n"; 
+}
+
+while ( <ADD> )
+{
+	chomp;
+	next if ( /use \'cvs commit\'/ || /^done/ );
+	
+	if ( /server\: (.*)/ )
+	{
+		print "$me: $1\n";
+	}
+	else
+	{
+		# don't know what this line is
+		print "$me: $_\n";
+	}
+}
+close(ADD);
+
+
+# commit is not needed for directories
 unless (-d $module)
 {
-	system("cvs -r -d $cvsroot commit -m\"initial version\" $module") unless $?;
+	if ( $^O =~ /MSWin32/ )
+	{
+		open(COM, "cvs -r -d $cvsroot commit -m\"initial version\" $module |") 
+			unless $?;
+	}
+	else
+	{
+		open(COM, "cvs -r -d $cvsroot commit -m\"initial version\" $module 2>&1 |") 
+			unless $?;
+	}
+
+	while ( <COM> )
+	{
+		chomp;
+		next if ( /^done/ );
+			
+		if ( /server\: (.*)/ )
+		{
+			print "$me: $1\n";
+		}
+		else
+		{
+			# don't know what this line is
+			print "$me: $_\n";
+		}
+	}
+	close(COM);
 
 	# don't think this is needed with -r above, regardless won't work offsite
 	if ( !$offsite )
