@@ -15,7 +15,7 @@ use VCtools::Base;
 use constant CONFIG_FILE => '/usr/local/etc/VCtools/VCtools.conf';
 BEGIN { $ENV{VCTOOLS_CONFIG} = CONFIG_FILE; }
 
-use VCtools::Common;
+use VCtools::Config;
 
 
 # parends on CONFIG_FILE below are necessary
@@ -26,9 +26,9 @@ my $params = <<END;
 	--config		show master configuration file
 					{ print CONFIG_FILE(), "\n"; }
 	--working		show working directory
-					{ print VCtools::WORKING_DIR, "\n"; }
+					{ print "$VCtools::config->{PersonalDir}\n"; }
 	--bin			show working directory
-					{ print VCtools::VCTOOLS_BINDIR, "\n"; }
+					{ print "$VCtools::config->{VCtoolsBinDir}\n"; }
 END
 my $opts = Getopt::Declare->new($params);
 
