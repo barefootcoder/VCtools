@@ -61,7 +61,7 @@ else
 	}
 }
 
-# assume falise
+# assume false
 my $retval = 0;
 
 # do this one outside the loop since it really only needs to be done once
