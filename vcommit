@@ -6,7 +6,6 @@ use warnings;
 use Geek::Dev::Debug(1);
 
 use Getopt::Std;
-use Cwd qw<getcwd>;
 
 use VCtools::common;
 
@@ -15,7 +14,7 @@ use VCtools::common;
 # OPTIONS AND ARGUMENTS
 #################################
 
-VCtools::process_args("file_or_dir [...]");
+VCtools::process_args("file_or_dir", "[...]");
 
 # remember, directories are files too
 my @files = @ARGV;
@@ -25,22 +24,27 @@ my @files = @ARGV;
 # CHECK FOR ERRORS
 #################################
 
-foreach my $file (@files)
-{
-	VCtools::fatal_error("$file does not exist")
-			unless -e $file;
-	VCtools::fatal_error("$file is not in VC working dir")
-			unless VCtools::parse_module($file);
-}
+VCtools::verify_files_and_group(@files);
 
 # get statuses for everything at once (quicker that way)
 VCtools::cache_file_status(@files);
 # right here, think of a way to do similar for lockers
 
+my @files_to_add;
 foreach my $file (@files)
 {
-	VCtools::fatal_error("$file is not checked in to VC")
-			unless VCtools::exists_in_vc($file);
+	unless (VCtools::exists_in_vc($file))
+	{
+		if (VCtools::yesno("$file does not exist in VC; add it?"))
+		{
+			push @files_to_add, $file;
+		}
+		else
+		{
+			VCtools::fatal_error("$file is not in VC")
+		}
+	}
+
 =not_working_with_svn_yet
 	VCtools::fatal_error("you did a 'get' on $file")
 			unless VCtools::user_is_a_locker($file);
@@ -58,7 +62,7 @@ foreach my $file (@files)
 	}
 =cut
 
-	VCtools::fatal_error("file unchanged "
+	VCtools::fatal_error("no changes to commit "
 			. "(vunget to remove your editing status)")
 					unless VCtools::modified_from_vc($file);
 }
@@ -71,6 +75,7 @@ foreach my $file (@files)
 # for CVS, at a minimum, would need to check for sticky tags here
 # not sure what to in a generic fashion
 
+VCtools::add_files(@files_to_add) if @files_to_add;
 VCtools::commit_files(@files);
 =not_working_with_svn_yet
 VCtools::release_edit_flag(@files);
