@@ -47,7 +47,7 @@ use vars qw<$AUTOLOAD>;
 
 
 my @spec = ();
-my $spec_position = 0;	# 0 == switches, 1 == arguments, 2 == actions
+my $spec_position = 0;	# 0 == switches, 1 == arguments, 1.5 == arguments after a list, 2 == actions
 
 our $args = {};
 our ($me, $command_line);
@@ -243,8 +243,26 @@ sub args
 		$args->{$name} = undef;
 		$command_line = "$command_line $name";
 
-		$arg_spec = "<$name>";
-		$action = "\$VCtools::args->{$name} = \$$name";
+		if ($spec_position == 1.5)
+		{
+			# special case: args after a list have to be tacked on to the preceding spec
+			my ($prev_spec_line, $prev_req, $prev_action) = splice @spec, -3;
+			my ($prev_spec, $prev_comment) = split(' ', $prev_spec_line, 2);
+			$prev_spec =~ /<(.*?)>/;
+			my $prev_name = $1;
+			chomp $prev_comment;
+			$prev_action =~ /{ (.*) }/;
+			$prev_action = $1;
+
+			$arg_spec = $prev_spec;
+			$comment = "$prev_comment (last arg must be $comment)";
+			$action = "\$VCtools::args->{$name} = pop \@$prev_name ; $prev_action";
+		}
+		else
+		{
+			$arg_spec = "<$name>";
+			$action = "\$VCtools::args->{$name} = \$$name";
+		}
 	}
 	elsif ($type eq 'list')
 	{
@@ -253,6 +271,9 @@ sub args
 
 		$arg_spec = "<$name>...";
 		$action = "\$VCtools::args->{$name} = \\\@$name";
+
+		# set up for special case of list followed by single:
+		$spec_position = 1.5;
 	}
 	elsif ($type eq 'optlist')
 	{
@@ -298,7 +319,7 @@ sub action
 
 	# if this is the first action, adjust the command line accordingly
 	# and stick a small header in the spec
-	if ($spec_position == 1)
+	if ($spec_position >= 1 and $spec_position < 2)
 	{
 		$command_line .= " [one_action]";
 		push @spec, "\nActions:\n";
@@ -336,7 +357,6 @@ sub getopts
 			or fatal_error("illegal command line", 'usage');
 
 	print STDERR Dumper($args), "\n" if DEBUG >= 2;
-
 }
 
 

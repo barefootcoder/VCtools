@@ -30,6 +30,7 @@ use Perl6::Form;
 use Date::Parse;
 use Date::Format;
 use Data::Dumper;
+use File::Basename;
 use Mail::Sendmail;
 use Cwd qw<realpath>;
 use Fcntl qw<F_SETFD>;
@@ -71,9 +72,9 @@ use constant LOG_OUTPUT_FORMAT => <<END;
 END
 
 
-###########################
+#=#########################
 # Private Subroutines:
-###########################
+#=#########################
 
 
 sub _really_realpath
@@ -84,7 +85,7 @@ sub _really_realpath
 	# (as opposed to directories) aren't paths, and it chokes
 	# on them
 	# thus, the algorithm is to break it up into dir / file
-	# (using File::Spec routines), then relpath() the dir, then
+	# (using File::Spec routines), then realpath() the dir, then
 	# put it all back together again.  yuck.
 	my ($path) = @_;
 
@@ -93,6 +94,33 @@ sub _really_realpath
 			if DEBUG >= 4;
 	my $realpath = realpath(File::Spec->catpath($vol, $dir));
 	return File::Spec->catfile($realpath, $file);
+}
+
+
+sub _file_dest
+{
+	my ($src, $dst) = @_;
+
+	# remove trailing / (unless it's the root dir, of course)
+	$src =~ s@/$@@ unless $src eq '/';
+	$dst =~ s@/$@@ unless $dst eq '/';
+
+	# if dest is a dir, tack basename of source onto it
+	if (-d $dst)
+	{
+		$dst .= '/' unless $dst eq '/';
+		$dst .= basename($src);
+	}
+
+	# ditch any initial ./'s
+	$src =~ s@^\./@@;
+	$dst =~ s@^\./@@;
+
+	# make sure they didn't turn into the same path after all that
+	return (undef, undef) if _really_realpath($src) eq _really_realpath($dst);
+
+	# finally! looks like they're okay now
+	return ($src, $dst);
 }
 
 
@@ -422,7 +450,7 @@ sub _interpret_svn_update_output
 	}
 	elsif ( /^C (.*)/ )
 	{
-		print "warning! conflict on file $1 (please attend to immediately)\n";
+		warning("warning! conflict on file $1 (please attend to immediately)");
 		# this should probably email something to people as well
 	}
 	else
@@ -463,11 +491,17 @@ sub _interpret_svn_log_output
 		$log->{message} = '';					# this gets filled in later
 		push @log_cache, $log;
 	}
-	else
+	elsif (@log_cache > 0)
 	{
 		# assume everything else is just an actual log commit message line
 		# it must belong to the last log in the cache, so just tack it on there
 		$log_cache[-1]->{message} .= $_;
+	}
+	else
+	{
+		# got something that like looks like a log commit message line, but no logs to attach it to
+		# punt!
+		print STDERR;
 	}
 }
 
@@ -511,8 +545,8 @@ sub _make_vc_command
 
 sub _make_cvs_command
 {
-	my $command = shift;
 	my $opts = @_ && ref $_[$#_] eq "HASH" ? pop : {};
+	my ($command, @files) = @_;
 
 	my $quiet = $opts->{VERBOSE} ? "" : "-q";
 	my $local = $opts->{DONT_RECURSE} ? "-l" : "";
@@ -532,14 +566,14 @@ sub _make_cvs_command
 	);
 	$command = $cmd_subs{$command} if exists $cmd_subs{$command};
 
-	$_ = '"' . $_ . '"' foreach @_;
-	return "cvs -r $quiet -d $vcroot $command $local @_ $err_redirect ";
+	$_ = '"' . $_ . '"' foreach @files;
+	return "cvs -r $quiet -d $vcroot $command $local @files $err_redirect ";
 }
 
 sub _make_svn_command
 {
-	my $command = shift;
 	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
+	my ($command, @files) = @_;
 
 	my $quiet = $opts->{VERBOSE} ? "-v" : "";
 	my $local = $opts->{DONT_RECURSE} ? "-N" : "";
@@ -562,8 +596,8 @@ sub _make_svn_command
 	);
 	$command = $cmd_subs{$command} if exists $cmd_subs{$command};
 
-	$_ = '"' . $_ . '"' foreach @_;
-	return "svn $command $quiet $local @_ $err_redirect ";
+	$_ = '"' . $_ . '"' foreach @files;
+	return "svn $command $quiet $local @files $err_redirect ";
 }
 
 
@@ -680,7 +714,7 @@ sub _log_format
 
 
 ###########################
-# Subroutines:
+# Input Subroutines
 ###########################
 
 
@@ -718,6 +752,11 @@ sub page_output
 	print PAGER <$tmpfile>;			# dumps the whole file into PAGER
 	close(PAGER);
 }
+
+
+###########################
+# General Project Subroutines
+###########################
 
 
 sub auth_check
@@ -880,6 +919,11 @@ sub project_script
 }
 
 
+###########################
+# File Status Subroutines
+###########################
+
+
 sub cache_file_status
 {
 	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop
@@ -925,7 +969,7 @@ sub exists_in_vc
 	cache_file_status($file) unless exists $status_cache{$file};
 	print "file status for $file is $status_cache{$file}\n" if DEBUG >= 3;
 
-	return $status_cache{$file} ne 'unknown';
+	return $status_cache{$file} and $status_cache{$file} ne 'unknown';
 }
 
 
@@ -982,6 +1026,11 @@ sub get_all_with_status
 	return grep { $status_cache{$_} eq $status and /^\Q$prefix\E/ }
 			keys %status_cache;
 }
+
+
+###########################
+# Project Info Subroutines
+###########################
 
 
 sub get_all_files
@@ -1063,9 +1112,9 @@ sub parse_vc_file
 
 	# let's make sure we have an absolute, canonical path
 	# (_really_realpath() provided up above in helpers)
-	print STDERR "fullpath before is $fullpath, " if DEBUG >= 3;
+	print STDERR "fullpath before is $fullpath, " if DEBUG >= 4;
 	$fullpath = _really_realpath($fullpath);
-	print STDERR "after is $fullpath\n" if DEBUG >= 3;
+	print STDERR "after is $fullpath\n" if DEBUG >= 4;
 
 	# also possible for WORKING_DIR to contain symlinks
 	my $wdir = realpath(WORKING_DIR);
@@ -1095,6 +1144,11 @@ sub parse_vc_file
 	# in scalar context, return just project; in list context, return all parts
 	return wantarray ? ($project, $path, $file) : $project;
 }
+
+
+###########################
+# File Info Subroutines
+###########################
 
 
 sub get_diffs
@@ -1149,6 +1203,23 @@ sub log_lines
 }
 
 
+###########################
+# This routine returns the same as log_lines($proj, 0), but _only_ if that log was created by
+# the currently running script.  If no such log exists, it returns undef.
+sub log_we_created
+{
+	my ($proj) = @_;
+
+	# $^T is the time the script started running
+	if (@log_cache and $log_cache[0]->{date} > $^T)
+	{
+		return log_lines($proj, 0);
+	}
+	
+	return undef;
+}
+
+
 sub log_field
 {
 	my ($which_log, $which_field) = @_;
@@ -1157,6 +1228,11 @@ sub log_field
 			if DEBUG >= 3;
 	return $log_cache[$which_log]->{$which_field};
 }
+
+
+###########################
+# Project Action Subroutines
+###########################
 
 
 sub print_status
@@ -1281,6 +1357,42 @@ sub add_files
 }
 
 
+sub move_files
+{
+	my ($proj, $dest, @files) = @_;
+
+	# moves have to be done one file at a time
+	my @dest_files;
+	foreach (@files)
+	{
+		my $output = _execute_and_collect_output("move", $_, $dest);
+
+		my ($src_file, $dest_file) = _file_dest($_, $dest);
+		fatal_error("cannot move file onto itself: $src_file -> $dest_file") unless $src_file and $dest_file;
+
+		my $qr_src_file = quotemeta($src_file);
+		my $qr_dest_file = quotemeta($dest_file);
+
+		# HACK: Subversion specific
+		my $expected = qr{
+				\A
+					A	\s+		$qr_dest_file	\n
+					D	\s+		$qr_src_file	\n
+				\Z
+		}x;
+		fatal_error("failed to move $_ to $dest:\n$output") unless $output =~ /$expected/;
+
+		print "$src_file -> $dest_file\n" if verbose();
+		push @dest_files, $dest_file;
+	}
+	print STDERR "after move, files are @files\n" if DEBUG >= 3;
+
+	# have to put the destination files (which are really there) before the source files (which aren't any more)
+	# otherwise, the commit email stuff (which just grabs the first commit file) will freak out
+	commit_files($proj, @dest_files, @files);
+}
+
+
 sub revert_files
 {
 	my (@files) = @_;
@@ -1355,21 +1467,29 @@ sub commit_files
 		if ($config->{EmailsFrom})
 		{
 			# commit message will be the same for all files, so we'll just grab the first one
-			get_log($files[0]);
-			my $log_message = log_lines($proj, 0);
+			# note: can't use $files[0] here; it might be a -m option from above
+			get_log($filenames[0]);
+			my $log_message = log_we_created($proj);
 
-			foreach (split(',', $email_list))
+			if ($log_message)
 			{
-				my $mail = {};
-				$mail->{To} = $_;
-				$mail->{From} = $config->{EmailsFrom};
-				$mail->{Subject} = "Commit Notification: project $proj";
-				$mail->{Body} = "The following files were committed: @filenames\n\n$log_message";
-
-				unless (sendmail(%$mail))
+				foreach (split(',', $email_list))
 				{
-					VCtools::warning("failed to send commit email to $_ ($Mail::Sendmail::error)", );
+					my $mail = {};
+					$mail->{To} = $_;
+					$mail->{From} = $config->{EmailsFrom};
+					$mail->{Subject} = "Commit Notification: project $proj";
+					$mail->{Body} = "The following files were committed: @filenames\n\n$log_message";
+
+					unless (sendmail(%$mail))
+					{
+						VCtools::warning("failed to send commit email to $_ ($Mail::Sendmail::error)", );
+					}
 				}
+			}
+			else
+			{
+				fatal_error("commit message abandoned; cannot send email");
 			}
 		}
 		else
@@ -1408,8 +1528,8 @@ sub edit_commit_log
 }
 
 
-###########################
+#=#########################
 # Return a true value:
-###########################
+#=#########################
 
 1;

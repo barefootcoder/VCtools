@@ -1,0 +1,98 @@
+#! /usr/bin/perl
+
+use strict;
+use warnings;
+
+use VCtools::Base;
+use VCtools::Args;
+use VCtools::Common;
+
+
+#################################
+# OPTIONS AND ARGUMENTS
+#################################
+
+VCtools::switch('dont_ask', 'n', 'do not ask if it is necessary to pass off to standard mv, just do it');
+VCtools::switch('force', 'f', 'force (for passthrough to mv)');
+VCtools::switch('interactive', 'I', 'interactive (for passthrough to mv)');
+VCtools::args('files', 'list', 'file(s) (or directory/ies) to move/rename');
+VCtools::args('dest', 'single', 'directory (or filename) to move to');
+VCtools::getopts();
+
+# remember, @files could contain directories
+my @files = VCtools::files();
+my $dest = VCtools::dest();
+
+
+#################################
+# CHECK FOR ERRORS
+#################################
+
+if (@files > 1 and not -d $dest)
+{
+	VCtools::fatal_error("cannot move multiple files to a file (must be a dir)");
+}
+
+# if any of our files are not in VC, this will never return
+in_or_out();
+
+my $proj = VCtools::verify_files_and_group(@files);
+
+if (-e $dest and not -d $dest)
+{
+	VCtools::fatal_error("sorry; cannot overwrite $dest in VC mode");
+}
+
+
+#################################
+# MAIN
+#################################
+
+VCtools::move_files($proj, $dest, @files);
+
+print "done\n";
+
+
+#################################
+# SUBS
+#################################
+
+
+sub in_or_out
+{
+	# this sub checks to see whether all files supplied are in VC or out
+	# if they're all out, we'll just pass through to regular mv
+	# if some are in and some are out, that's a fatal error
+
+	# no recursion allowed for moving files
+	# also, we'll capture what files actually got cached; if someone's running this completely outside of
+	# our working dir (in the hopes that it will just pass through to mv), our files won't be in there at all
+	my %files = map { $_ => 1 } VCtools::cache_file_status(@files, { DONT_RECURSE => 1} );
+
+	my $number_in = 0;
+	foreach (@files)
+	{
+		++$number_in if $files{$_} and VCtools::exists_in_vc($_);
+	}
+
+	if ($number_in == 0)
+	{
+		VCtools::prompt_to_continue("your files are not in VC; passing files off to standard mv")
+				unless VCtools::dont_ask();
+
+		my @opts;
+		push @opts, '-v' if VCtools::verbose();
+		push @opts, '-i' if VCtools::interactive();
+		push @opts, '-f' if VCtools::force();
+		push @opts, '--';
+
+		print STDERR "cmd: mv @opts @files\n" if DEBUG >= 2;
+		exec("mv", @opts, @files, $dest);
+	}
+	elsif ($number_in < @files)
+	{
+		VCtools::fatal_error("cannot move when some files are in VC and some are not");
+	}
+
+	# else they're all in and all is well with the world
+}

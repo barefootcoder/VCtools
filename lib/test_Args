@@ -12,8 +12,10 @@ use VCtools::Args;
 
 VCtools::switch('recursive', 'r', 'operate recursively');
 VCtools::args('files', 'list', 'file(s) to operate on');
+VCtools::args('dest', 'single', 'destination of file(s)');
 VCtools::getopts();
 
 print "verbose is ", VCtools::verbose() ? "on" : "off", "\n";
 print "rootpath is ", VCtools::rootpath(), "\n";
 print "file(s) is/are ", join(' ', VCtools::files()), "\n";
+print "dest is ", VCtools::dest(), "\n";
