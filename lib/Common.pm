@@ -1265,7 +1265,7 @@ sub add_files
 	my $fh = _execute_and_get_output("add", @files, $opts);
 	while ( <$fh> )
 	{
-		if ( / ^ A \s+ (.*) \s* $ /x )
+		if ( / ^ A \s+ (?: \Q(bin)\E \s* )? (.*) \s* $ /x )
 		{
 			push @surprise_files, $1 unless exists $files->{$1};
 		}
