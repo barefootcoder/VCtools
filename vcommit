@@ -14,6 +14,7 @@ use VCtools::Common;
 
 VCtools::switch('recursive', 'r', 'operate recursively');
 VCtools::switch('fix_log', 'f', 're-edit the last commit log for the file(s) to fix some mistake');
+VCtools::switch('message', 'm', 'specify commit message instead of using editor (does not work with -f)', 'commit_message');
 VCtools::args('files', 'list', 'file(s) (or directory/ies) to commit');
 VCtools::getopts();
 
@@ -113,8 +114,8 @@ if (VCtools::fix_log())
 }
 else
 {
-	VCtools::add_files(@files_to_add, { DONT_RECURSE => 1} ) if @files_to_add;
-	VCtools::commit_files($proj, @files);
+	VCtools::add_files(@files_to_add, { DONT_RECURSE => 1 } ) if @files_to_add;
+	VCtools::commit_files($proj, @files, { MESSAGE => VCtools::message() } );
 =not_working_with_svn_yet
 	VCtools::release_edit_flag(@files);
 =cut

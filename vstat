@@ -13,6 +13,7 @@ use VCtools::Common;
 #################################
 
 VCtools::switch('recursive', 'r', 'operate recursively');
+VCtools::switch('show_branches', 'b', 'show the branch (if TRUNK if no branch) for all files');
 VCtools::args('files', 'optlist', 'file(s) (or directory/ies) to show status of (default .)');
 VCtools::getopts();
 
@@ -26,14 +27,14 @@ print STDERR "status for files: @files\n" if DEBUG >= 3;
 # CHECK FOR ERRORS
 #################################
 
-VCtools::verify_files_and_group(@files);
+my $proj = VCtools::verify_files_and_group(@files);
 
 
 #################################
 # MAIN
 #################################
 
-my $retval = VCtools::print_status(@files);
+my $retval = VCtools::print_status($proj, @files, { SHOW_BRANCHES => VCtools::show_branches() });
 
 exit $retval;							# should be 1 if any errors
 

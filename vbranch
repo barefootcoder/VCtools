@@ -83,7 +83,7 @@ if (VCtools::create())
 }
 else
 {
-	VCtools::move_to_branch($proj, VCtools::branch(), @files);
+	VCtools::switch_to_branch($proj, VCtools::branch(), @files);
 }
 
 print "done\n" unless $?;

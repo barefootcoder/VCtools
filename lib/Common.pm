@@ -605,8 +605,17 @@ sub _make_cvs_command
 	my $opts = @_ && ref $_[$#_] eq "HASH" ? pop : {};
 	my ($command, @files) = @_;
 
-	my $quiet = $opts->{VERBOSE} ? "" : "-q";
-	my $local = $opts->{DONT_RECURSE} ? "-l" : "";
+	my (@global_options, @local_options);
+	push @global_options, "-q" unless $opts->{VERBOSE};
+	push @local_options, "-l" if $opts->{DONT_RECURSE};
+	push @local_options, "-b -c" if $opts->{IGNORE_BLANKS};
+	push @local_options, "-m '$opts->{MESSAGE}'" if $opts->{MESSAGE};
+	# a bit hack-ish, but functional
+	unless ($command eq 'changelog')										# changelog handles REVNO in a special way
+	{
+		push @local_options, "-r $opts->{REVNO}" if $opts->{REVNO};
+	}
+	push @local_options, "-b" if $opts->{BRANCH_ONLY};						# really not sure this will work properly!!
 	my $err_redirect = $opts->{IGNORE_ERRORS} ? "2>/dev/null" : "";
 
 	# command substitutions
@@ -620,11 +629,13 @@ sub _make_cvs_command
 		update		=>	'update -d -P -A',
 		# this should work for a revert
 		revert		=>	'update -A',
+		# this is sort of right, but not quite (note that REVNO isn't really optional here)
+		changelog	=>	"admin -m$opts->{REVNO}:",
 	);
 	$command = $cmd_subs{$command} if exists $cmd_subs{$command};
 
 	$_ = '"' . $_ . '"' foreach @files;
-	return "cvs -r $quiet -d $vcroot $command $local @files $err_redirect ";
+	return "cvs -r @global_options -d $vcroot $command @local_options @files $err_redirect ";
 }
 
 sub _make_svn_command
@@ -632,16 +643,22 @@ sub _make_svn_command
 	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
 	my ($command, @files) = @_;
 
-	my $quiet = $opts->{VERBOSE} ? "-v" : "";
-	my $local = $opts->{DONT_RECURSE} ? "-N" : "";
-	my $ignore_blanks = $opts->{IGNORE_BLANKS} ? "--diff-cmd diff -x -bc" : "";
-	my $err_redirect = $opts->{IGNORE_ERRORS} ? "2>/dev/null" : "";
-
+	my @options;
+	push @options, "-v" if $opts->{VERBOSE};
 	# there is probably a cleaner way to do this, but I don't know what it is
 	if ($command eq 'revert')
 	{
-		$local = $opts->{DONT_RECURSE} ? "" : "-R";
+		push @options, "-R" unless $opts->{DONT_RECURSE};
 	}
+	else
+	{
+		push @options, "-N" if $opts->{DONT_RECURSE};
+	}
+	push @options, "--diff-cmd diff -x -bc" if $opts->{IGNORE_BLANKS};
+	push @options, "-m '$opts->{MESSAGE}'" if $opts->{MESSAGE};
+	push @options, "-r $opts->{REVNO}" if $opts->{REVNO};
+	push @options, "--stop-on-copy" if $opts->{BRANCH_ONLY};
+	my $err_redirect = $opts->{IGNORE_ERRORS} ? "2>/dev/null" : "";
 
 	# command substitutions
 	my %cmd_subs =
@@ -651,11 +668,13 @@ sub _make_svn_command
 		status		=>	'status -uv',
 		# for lists, this is quicker than svn list because it doesn't go out to the server
 		list		=>	'status -v',
+		# doesn't do REVNO specially, like CVS, but will still bomb spectacularly if REVNO not supplied
+		changelog	=>	'propedit svn:log --revprop',
 	);
 	$command = $cmd_subs{$command} if exists $cmd_subs{$command};
 
 	$_ = '"' . $_ . '"' foreach @files;
-	return "svn $command $quiet $local $ignore_blanks @files $err_redirect ";
+	return "svn $command @options @files $err_redirect ";
 }
 
 
@@ -1236,6 +1255,16 @@ sub parse_vc_file
 }
 
 
+# probably wouldn't work for CVS
+sub branch_point_revno
+{
+	my ($proj, $branch) = @_;
+
+	get_log(_project_path($proj, 'branch', $branch), { BRANCH_ONLY => 1 });
+	return log_field(-1, 'rev');									# -1 meaning the last log, which is the earliest one
+}
+
+
 ###########################
 # This routine returns the path *in* the project of the supplied file (don't confuse with _project_path(),
 # above).  More specifically, it returns the given file as a path relative to the TLD of the project's
@@ -1255,6 +1284,25 @@ sub projpath
 ###########################
 
 
+###########################
+# Returns the branch that a file in the local copy refers to.  Returns undef if the file does not refer to
+# a branch (which generally means it refers to the trunk).  Note that the file must exist, and must exist in the
+# repository for this to work.
+sub get_branch
+{
+	my ($proj, $file) = @_;
+
+	my $spath = _server_path($file);
+	my $bpath = _project_path($proj, 'branch');
+	print STDERR "server path of $spath, branch path of $bpath\n" if DEBUG >= 4;
+
+	$spath =~ m@^$bpath/?([^/]+)/@;
+	# if $spath doesn't start with $bpath, then $1 will be undefined, which is what we want to return
+	print STDERR "looks like branch is $1\n" if DEBUG >= 4;
+	return $1;
+}
+
+
 sub get_diffs
 {
 	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
@@ -1267,9 +1315,10 @@ sub get_diffs
 
 sub get_log
 {
+	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
 	my ($file) = @_;
 
-	my $fh = _execute_and_get_output("log", $file);
+	my $fh = _execute_and_get_output("log", $file, $opts);
 	while ( <$fh> )
 	{
 		_interpret_log_output;
@@ -1343,7 +1392,8 @@ sub log_field
 
 sub print_status
 {
-	my (@files) = @_;
+	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
+	my ($project, @files) = @_;
 
 	use constant ALWAYS => 1;
 	my %statuses =
@@ -1411,7 +1461,13 @@ sub print_status
 				$cur_status = $status;
 			}
 
-			print "    => $file\n";
+			printf "    => %-60s", $file;
+			if ($opts->{'SHOW_BRANCHES'} and exists_in_vc($file))
+			{
+				my $branch = get_branch($project, $file);
+				print $branch ? " {BRANCH:$branch}" : " {TRUNK}";
+			}
+			print "\n";
 		}
 	}
 
@@ -1544,7 +1600,6 @@ sub commit_files
 {
 	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
 	my ($proj, @files) = @_;
-	my @filenames = @files;
 
 	# if a debugging regex is specified, we need to search each file for that pattern.  if we find it,
 	# we ask the user if they're really sure they want to commit a file which apparently still has some
@@ -1576,37 +1631,30 @@ sub commit_files
 		}
 	}
 
-	# sending -m switch as if it were a file is cheating a bit, but it will work
-	# note that since filenames are automatically quoted, we don't have to quote the commit message itself
-	unshift @files, "-m$opts->{'MESSAGE'}" if $opts->{'MESSAGE'};
-
 	# we expect that our filelist has already been expanded for purposes of recursion,
 	# so we're not going to do any recursion here
-	_execute_normally("commit", @files, { DONT_RECURSE => 1 } );
+	$opts->{DONT_RECURSE} = 1;
+	_execute_normally("commit", @files, $opts);
 
 	# now let's send out an email to whoever's on the list (if anyone is)
 	if (my $email_list = get_proj_directive($proj, 'CommitEmails'))
 	{
 		if ($config->{EmailsFrom})
 		{
-			# commit message will be the same for all files, so we'll just grab the first one
-			# note: can't use $files[0] here; it might be a -m option from above
-			# further note: in a move, we need to grab the first _destination_ file; the source files are gone and
-			# the log command will fail on them
-			# extra further note: in a remove, we have to do things totally differently because _all_ the files are gone
-			if (exists $opts->{DEL})
+			# commit message will be the same for all files, so we'll just grab the last one
+			# (the first one wouldn't work in a move operation, since that's the old filename)
+			# however, in a remove, we have to do things totally differently because _all_ the files are gone
+			unless (exists $opts->{DEL})
+			{
+				get_log($files[-1]);
+			}
+			else
 			{
 				# (this is probably a Subversion-only solution, unfortunately)
 				# get the server path for a file (any file will do)
 				# then take away the basename so that we're looking at the log for the directory the file was removed from
-				print STDERR "getting log for ", _server_path(dirname($filenames[0])), "\n" if DEBUG >= 2;
-				get_log(_server_path(dirname($filenames[0])));
-			}
-			else
-			{
-				# not a remove, just distinguish between move and "regular"
-				my $index = exists $opts->{MOVE} ? $opts->{MOVE} : 0;
-				get_log($filenames[$index]);
+				print STDERR "getting log for ", _server_path(dirname($files[0])), "\n" if DEBUG >= 2;
+				get_log(_server_path(dirname($files[0])));
 			}
 			my $log_message = log_we_created($proj);
 
@@ -1614,7 +1662,7 @@ sub commit_files
 			{
 				# the person receiving the email has no clue what directory you were in at the time, so let's
 				# make those filenames a bit more useful
-				$_ = projpath($_) foreach @filenames;
+				$_ = projpath($_) foreach @files;
 
 				foreach (split(',', $email_list))
 				{
@@ -1625,20 +1673,20 @@ sub commit_files
 					if (exists $opts->{DEL})
 					{
 						# remove commits have a special message
-						$mail->{Body} = "The following files were removed from VC: @filenames\n\n$log_message";
+						$mail->{Body} = "The following files were removed from VC: @files\n\n$log_message";
 					}
 					elsif (exists $opts->{MOVE})
 					{
 						# move commits are a bit trickier:
 						$mail->{Body} = "The following files were renamed/moved:\n"
 								. join("\n",
-										map { "\t$filenames[$_] -> $filenames[$_ + $opts->{MOVE}]" } 0..($opts->{MOVE} - 1)
+										map { "\t$files[$_] -> $files[$_ + $opts->{MOVE}]" } 0..($opts->{MOVE} - 1)
 								) . "\n\n$log_message";
 					}
 					else
 					{
 						# "regular" commit message
-						$mail->{Body} = "The following files were committed: @filenames\n\n$log_message";
+						$mail->{Body} = "The following files were committed: @files\n\n$log_message";
 					}
 					print "commit email => ", Dumper($mail) if DEBUG >= 3;
 
@@ -1675,34 +1723,31 @@ sub update_files
 }
 
 
-# this couldn't possibly work with CVS
+# this _might_ work with CVS, but the _server_path bit might throw it off
 sub edit_commit_log
 {
 	my ($file, $rev) = @_;
 
 	my $server_path = _server_path($file);
 
-	# passing command options as if they were part of the command itself is a slight perversion of the spirit of
-	# _make_vc_command, but it _will_ work
-	_execute_normally("propedit svn:log --revprop -r $rev", $server_path);
+	_execute_normally('changelog', $server_path, { REVNO => $rev });
 }
 
 
-# this couldn't possibly work with CVS either
-sub move_to_branch
+# this couldn't _possibly_ work with CVS
+sub switch_to_branch
 {
 	my ($proj, $branch, @files) = @_;
 
-	my $old = _project_path($proj);
 	my $new = _project_path($proj, 'branch', $branch);
-
-	# make the subs a bit faster
-	$old = qr/^\Q$old\E/;
 
 	foreach my $file (@files)
 	{
+		my $branch = get_branch($proj, $file);
+		my $old = $branch ? _project_path($proj, 'branch', $branch) : _project_path($proj);
+
 		my $spath = _server_path($file);
-		$spath =~ s/$old/$new/;
+		$spath =~ s/\Q$old\E/$new/;
 		_execute_normally("switch", $spath, $file);
 	}
 }
