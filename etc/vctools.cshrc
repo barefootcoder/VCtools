@@ -8,7 +8,7 @@ alias vcshell "exec $shellexec"
 if ( ! $?VCTOOLS_SHELL ) then
 	alias vbuild "$shellexec -b --"
 else
-	switch ($VCTOOLS_SHELL)
+	switch ("$VCTOOLS_SHELL")
 		case "proj:*":
 			# $shellexec seems to have found something it's happy with
 			setenv PATH `$shellexec -p`

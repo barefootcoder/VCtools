@@ -9,7 +9,7 @@ if [ -z "$VCTOOLS_SHELL" ]
 then
 	alias vbuild="$shellexec -b --"
 else
-	case $VCTOOLS_SHELL in 
+	case "$VCTOOLS_SHELL" in 
 		proj:*)
 			# $shellexec seems to have found something it's happy with
 			export PATH=`$shellexec -p`
