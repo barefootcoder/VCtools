@@ -2,7 +2,7 @@
 
 use strict;
 
-#use Barefoot::debug(3);							# comment out for production
+#use Barefoot::debug(4);							# comment out for production
 
 use Getopt::Std;
 use Data::Dumper;
@@ -181,7 +181,7 @@ sub find_control_directives
 
 		# don't bother to save it unless it could apply to us
 		print STDERR "comparing $module to ^$directive->{proj}\n" if DEBUG >= 3;
-		next unless $module =~ m@^$directive->{proj}@;
+		next unless $module =~ m@^$directive->{proj}\b@;
 
 		# prioritize by how many /'s the proj has (that's how specific it is)
 		my $priority = string::count($directive->{proj}, '/');
@@ -266,12 +266,12 @@ sub release
 	$rm_file->{$rp->{method}}->($rp->{machine}, $old_file);
 
 	# copy new file
-	print STDERR "trying to copy $file to $old_file\n" if DEBUG >= 3;
+	print "copying $file to $old_file\n" if $verbose;
 	$cp_file->{$rp->{method}}->($rp->{machine}, $file, $old_file);
 
 	# make sure file has the correct group
 	my $group = getgrgid((stat $file)[5]);
-	print STDERR "trying to change group on $file to $group\n" if DEBUG >= 3;
+	print STDERR "changing group on $file to $group\n" if $verbose;
 	$fix_group->{$rp->{method}}->($rp->{machine}, $old_file, $group);
 
 	# successfully released
