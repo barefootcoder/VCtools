@@ -10,8 +10,9 @@ else
 	else
 		setenv PATH `$shellexec -p`
 
-		alias commit vcommit
 		alias get vget
+		alias sync vsync
+		alias commit vcommit
 
 		alias vcd 'cd `vprojdir \!^`'
 
