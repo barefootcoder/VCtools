@@ -5,9 +5,13 @@ use warnings;
 
 use Cwd;
 use Getopt::Std;
+use File::Basename;
 
 use VCtools::Base;
 use VCtools::Common;
+
+
+our $BINDIR = DEBUG ? dirname($0) : VCtools::VCTOOLS_BINDIR;
 
 
 my $opts = {};
@@ -18,7 +22,7 @@ getopts('pb', $opts);
 if (defined $opts->{p})
 {
 	# return adjusted path
-	my @addpath = ( VCtools::VCTOOLS_BINDIR, VCtools::SUBVERSION_BINDIR );
+	my @addpath = ( $BINDIR, VCtools::SUBVERSION_BINDIR );
 
 	my @path = split(':', $ENV{PATH});
 	if ($path[-1] eq ".")
@@ -47,11 +51,10 @@ if (not exists $ENV{VCTOOLS_SHELL})
 	my $project;
 	if ($buildit)
 	{
-		# if no args, or if final arg starts with a dash (ie, is a switch),
-		# just call vbuild right here
+		# if no args, or if final arg starts with a dash (ie, is a switch), just call vbuild right here
 		unless (@ARGV and $ARGV[-1] !~ /^-/)
 		{
-			my $vbuild = VCtools::VCTOOLS_BINDIR . "/vbuild";
+			my $vbuild = "$BINDIR/vbuild";
 			exec $vbuild, @ARGV;
 		}
 
@@ -110,7 +113,7 @@ if (not exists $ENV{VCTOOLS_SHELL})
 	$ENV{VCTOOLS_SHELL} = $buildit ? "b:$buildit" : "proj:$project";
 	print STDERR "about to newgrp to $group ",
 			"with shellvar $ENV{VCTOOLS_SHELL}\n" if DEBUG >= 4;
-	exec "newgrp", $group or error("cannot execute newgrp");
+	exec("newgrp", $group) or error("cannot execute newgrp");
 }
 # being called by newgrp, but originally came from vbuild alias
 elsif ($ENV{VCTOOLS_SHELL} =~ /^b:(.*)$/)
@@ -122,7 +125,8 @@ elsif ($ENV{VCTOOLS_SHELL} =~ /^b:(.*)$/)
 	chdir VCtools::WORKING_DIR;
 
 	$ENV{PATH} .= ":" . VCtools::SUBVERSION_BINDIR;
-	my $vbuild = VCtools::VCTOOLS_BINDIR . "/vbuild";
+	my $vbuild = "$BINDIR/vbuild";
+	print STDERR "about to call $vbuild with @args\n" if DEBUG >= 3;
 	exec $vbuild, @args;
 }
 # being called by ourselves, essentially, from newgrp

@@ -3,6 +3,7 @@
 use strict;
 use warnings;
 
+use File::Basename;
 use Getopt::Declare;
 
 use VCtools::Base;
@@ -18,6 +19,10 @@ BEGIN { $ENV{VCTOOLS_CONFIG} = CONFIG_FILE; }
 use VCtools::Config;
 
 
+our $BINDIR = DEBUG ? dirname($0) : $VCtools::config->{VCtoolsBinDir};
+print STDERR "vctools-config: set bin dir to $BINDIR\n" if DEBUG >= 3;
+
+
 # parends on CONFIG_FILE below are necessary
 # elsewise Getopt::Declare seems to think it's a filehandle
 my $params = <<END;
@@ -28,7 +33,7 @@ my $params = <<END;
 	--working		show working directory
 					{ print "$VCtools::config->{PersonalDir}\n"; }
 	--bin			show working directory
-					{ print "$VCtools::config->{VCtoolsBinDir}\n"; }
+					{ print "$BINDIR\n"; }
 END
 my $opts = Getopt::Declare->new($params);
 
