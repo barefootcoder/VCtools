@@ -1,4 +1,4 @@
-###########################################################################
+##########################################################################
 #
 # VCtools::Args
 #
@@ -6,122 +6,21 @@
 #
 # This module sets up argument processing for all the VCtools programs.
 # To use it, it should first be set up with zero or more allowable command
-# line switches:
-#
-#	VCtools::switch('long', 'l', 'force a longer display');
-#	VCtools::switch('bmoogle', 'b', 'specify the bmoogle argument', 'arg');
-#
-# These two lines tell the Args module to accept a -l or --long switch,
-# and also to take a -b or --bmoogle switch which itself will accept an
-# argument (the name of this argument--'arg' in the example above--is
-# significant only in the usage message).
-#
-# In addition to whatever switches the client program defines, VCtools::Args
-# itself defines the following ones:
-#
-#	[ 'help', 'h', 'display this help' ]
-#	[ 'verbose', 'v', 'verbose output' ]
-#	[ 'ignore_errors', 'i', 'ignore errors' ]
-#	[ 'rootpath', 'R', 'override default VC root path', 'rootpath' ]
-#
-# Each of the switches will turn into to a function with no arguments
-# that returns either 1 or 0 (for boolean switches), or a value (possibly
-# undefined) (for switches with parameters).  The name of this function
-# will be the same as the long version of the switch.  So, for instance,
-# your code can do this:
-#
-#	if (VCtools::verbose())
-#	{
-#		print "some extra info\n";
-#	}
-#
-#	get_stuff_from(VCtools::rootpath() . "/wherever");
-#
-# After you set up the switches, you can also have the Args module verify
-# the remainder of the arguments.  For instance:
-#
-#	VCtools::args('pattern', 'single', 'pattern to search for');
-#	VCtools::args('files', 'optlist',
-#			'files to search (search STDIN if no files given)');
-#
-# would be a series of calls to set up a command line just like grep(1).
-# The first (non-switch) argument would have to be a pattern; it would be
-# a mandatory single argument.  Any remaining arguments would all be
-# considered files: they would be an optional list of arguments.
-#
-# There are three "argument types" (the second argument to args()):
-#
-#	'single'	-- one mandatory argument
-#	'list'		-- a list of arguments which must contain at least one arg
-#	'optlist'	-- a list of arguments which is completely optional
-#
-# Like switches, arguments also turn into functions with no arguments
-# that may be called:
-#
-#	if (VCtools::files())
-#	{
-#		foreach my $file (VCtools::files())
-#		{
-#			check_for_pattern(VCtools::pattern());
-#		}
-#	}
-#	else
-#	{
-#		check_for_pattern_in_stdin(VCtools::pattern());
-#	}
-#
-# Note that files() returns an array, whereas pattern() returns a scalar.
-#
-# After you specify all the calls to switch() and args() that you need
-# (which certainly could be no calls at all, if you're happy with the
-# default switches and don't require any args), call getopts() to do
-# the actual command line processing:
-#
-#	VCtools::getopts();
-#
-# If there is an error in the command line, getopts() will never return.
-# It will print the usage message and exit with a return value of 2.
-#
-# As one bizarre twist (that will probably never be used by anything other
-# one program), you can also specify "actions", which are a bit like switches
-# that come _after_ the arguments.  This allows you to create a command
-# which works like find(1):
-#
-#	VCtools::args('dir', 'list', 'directories to search');
-#	VCtools::action('name', 'only find names matching pattern', 'pattern');
-#	VCtools::action('print', 'print filenames found');
-#
-# Note that the Args module doesn't really distinguish between conditions
-# and actions.  Also note that this doesn't allow you to do anything as
-# complex as find's -exec (to name but one obvious example).
+# line switches using the switch() function, then zero or more non-switch
+# arguments using the args() function, then call the getopts() function.
+# See the individual function descriptions for more info.
 #
 #
 # Since the Args module is the keeper of all information about the command
 # line, including the name of the program, it is also responsible for
-# handling fatal program errors:
+# handling all errors, warnings, etc.
 #
-#	# print error message and exit w/ error value of 1
-#	VCtools::fatal_error("can't find the flooberbloob");
-#	# or specify your own error value
-#	VCtools::fatal_error("compltely schnozzed up", 3);
-#	# add "(-h for usage)" to the message, and exit w/ error of 2
-#	VCtools::fatal_error("didn't specify a wangdoodle", "usage");
-#
-# and also program warnings:
-#
-#	# print error exactly like fatal_error, but don't exit
-#	# however, don't print if --ignore_errors switch was given
-#	VCtools::warning("Warning! slobberhead was twizzled");
-#
-# and also program information messages:
-#
-#	# print message preceded by program name
-#	VCtools::info_msg("some stuff:", $stuff_var, "to print");
-#
-# #########################################################################
+###########################################################################
 #
 # All the code herein is released under the Artistic License
-#		( http://www.perl.com/language/misc/Artistic.html )
+#
+#		http://www.perl.com/language/misc/Artistic.html
+#
 # Copyright (c) 1999-2003 Barefoot Software, Copyright (c) 2004 ThinkGeek
 #
 ###########################################################################
@@ -157,9 +56,9 @@ _set_defaults();
 
 
 
-###########################
+#=#########################
 # Private helper subs:
-###########################
+#=#########################
 
 
 sub AUTOLOAD
@@ -215,11 +114,43 @@ sub _set_defaults
 }
 
 
+
 ###########################
-# Subroutines:
+# CLI Subroutines:
 ###########################
 
 
+###########################
+# First, set up any command line switches you will need:
+#
+#	VCtools::switch('long', 'l', 'force a longer display');
+#	VCtools::switch('bmoogle', 'b', 'specify the bmoogle argument', 'arg');
+#
+# These two lines tell the Args module to accept a -l or --long switch,
+# and also to take a -b or --bmoogle switch which itself will accept an
+# argument (the name of this argument--'arg' in the example above--is
+# significant only in the usage message).
+#
+# In addition to whatever switches the client program defines, VCtools::Args
+# itself defines the following ones:
+#
+#	[ 'help', 'h', 'display this help' ]
+#	[ 'verbose', 'v', 'verbose output' ]
+#	[ 'ignore_errors', 'i', 'ignore errors' ]
+#	[ 'rootpath', 'R', 'override default VC root path', 'rootpath' ]
+#
+# Each of the switches will turn into to a function with no arguments
+# that returns either 1 or 0 (for boolean switches), or a value, possibly
+# undefined (for switches with parameters).  The name of this function
+# will be the same as the long version of the switch.  So, for instance,
+# your code can do this:
+#
+#	if (VCtools::verbose())
+#	{
+#		print "some extra info\n";
+#	}
+#
+#	get_stuff_from(VCtools::rootpath() . "/wherever");
 BEGIN
 {
 	my %short_forms;
@@ -260,6 +191,41 @@ BEGIN
 }
 
 
+###########################
+# After you set up the switches, you can also have the Args module verify
+# the remainder of the arguments.  For instance:
+#
+#	VCtools::args('pattern', 'single', 'pattern to search for');
+#	VCtools::args('files', 'optlist',
+#			'files to search (search STDIN if no files given)');
+#
+# would be a series of calls to set up a command line just like grep(1).
+# The first (non-switch) argument would have to be a pattern; it would be
+# a mandatory single argument.  Any remaining arguments would all be
+# considered files: they would be an optional list of arguments.
+#
+# There are three "argument types" (the second argument to args()):
+#
+#	'single'	-- one mandatory argument
+#	'list'		-- a list of arguments which must contain at least one arg
+#	'optlist'	-- a list of arguments which is completely optional
+#
+# Like switches, arguments also turn into functions with no arguments
+# that may be called:
+#
+#	if (VCtools::files())
+#	{
+#		foreach my $file (VCtools::files())
+#		{
+#			check_for_pattern(VCtools::pattern());
+#		}
+#	}
+#	else
+#	{
+#		check_for_pattern_in_stdin(VCtools::pattern());
+#	}
+#
+# Note that files() returns an array, whereas pattern() returns a scalar.
 sub args
 {
 	my ($name, $type, $comment) = @_;
@@ -310,6 +276,22 @@ sub args
 }
 
 
+###########################
+# As one bizarre twist (that will probably never be used by anything other
+# one program), you can also specify "actions", which are a bit like switches
+# that come _after_ the arguments.  This allows you to create a command
+# which works like find(1):
+#
+#	VCtools::args('dir', 'list', 'directories to search');
+#	VCtools::action('name', 'only find names matching pattern', 'pattern');
+#	VCtools::action('print', 'print filenames found');
+#
+# Unlike a switch, there is no long and short version of an action.  The "name"
+# action above would be specified on the command line as "-name" (only).
+#
+# Note that the Args module doesn't really distinguish between conditions
+# and actions.  Also note that this doesn't allow you to do anything as
+# complex as find's -exec (to name but one obvious example).
 sub action
 {
 	my ($name, $comment, $arg) = @_;
@@ -329,6 +311,15 @@ sub action
 }
 
 
+###########################
+# After you specify all the calls to switch() and args() (and action(), I suppose) that you need
+# (which certainly could be no calls at all, if you're happy with the default switches and don't
+# require any args), call getopts() to do the actual command line processing:
+#
+#	VCtools::getopts();
+#
+# If there is an error in the command line, getopts() will never return.
+# It will print the usage message and exit with a return value of 2.
 sub getopts
 {
 	print STDERR Dumper($args), "\n" if DEBUG >= 4;
@@ -349,6 +340,21 @@ sub getopts
 }
 
 
+
+###########################
+# User Notification Subroutines:
+###########################
+
+
+###########################
+# Consistent printing of error messages with immediate exit.
+#
+#	# print error message and exit w/ error value of 1
+#	VCtools::fatal_error("can't find the flooberbloob");
+#	# or specify your own error value
+#	VCtools::fatal_error("compltely schnozzed up", 3);
+#	# add "(-h for usage)" to the message, and exit w/ error of 2
+#	VCtools::fatal_error("didn't specify a wangdoodle", "usage");
 sub fatal_error
 {
 	my ($err_msg, $exit_code) = @_;
@@ -365,6 +371,13 @@ sub fatal_error
 }
 
 
+###########################
+# Consistent printing of error messages _without_ immediate exit.
+# Also takes -i switch into account.
+#
+#	# print error exactly like fatal_error, but don't exit
+#	# however, don't print if --ignore_errors switch was given
+#	VCtools::warning("Warning! slobberhead was twizzled");
 sub warning
 {
 	my ($warning) = @_;
@@ -373,6 +386,12 @@ sub warning
 }
 
 
+###########################
+# Consistent printing of informational (i.e., non-error) messages.
+# Note that all args to info_msg() are joined together onto one line.
+#
+#	# print message preceded by program name
+#	VCtools::info_msg("some stuff:", $stuff_var, "to print");
 sub info_msg
 {
 	my $indent = 0;
@@ -386,6 +405,11 @@ sub info_msg
 }
 
 
+###########################
+# Print an informational message which also includes a list of files that meet some criteria.
+#
+#	VCtools::list_files($project, "are really wacked out", @wacked_out_files);
+#	# prints "the following files or directories are really wacked out" and then lists the files
 sub list_files
 {
 	my ($proj, $msg, @files) = @_;
@@ -407,6 +431,14 @@ sub list_files
 }
 
 
+###########################
+# Print a multi-line message, then ask the user if they wish to continue.
+# If they don't, immediately exit the program.
+#
+#	# not necessarily a fatal error, but best bring it up
+#	# (note: default answer is always "no")
+#	VCtools::prompt_to_continue("You have some problems here.",
+#			"Your hard drive might explode if you keep going like this.");
 sub prompt_to_continue
 {
 	my ($first_line, @other_lines) = @_;
@@ -420,8 +452,8 @@ sub prompt_to_continue
 }
 
 
-###########################
+#=#########################
 # Return a true value:
-###########################
+#=#########################
 
 1;
