@@ -212,12 +212,6 @@ sub _set_defaults
 	switch('verbose', 'v', 'verbose output');
 	switch('ignore_errors', 'i', 'ignore errors');
 	switch('rootpath', 'R', 'override default VC root path', 'rootpath');
-
-	# recursive is a special case
-	# even when the program won't allow a recursive option, some of the library
-	# routines need to check it.  so we'll just provide a default here and then
-	# VCtools::recursive() will just return 0 when no -r switch is allowed.
-	$args->{'recursive'} = 0;
 }
 
 
