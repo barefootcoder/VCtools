@@ -24,7 +24,8 @@ if (defined $opts->{p})
 	# return adjusted path
 	my @addpath = ( $BINDIR, VCtools::SUBVERSION_BINDIR );
 
-	my @path = split(':', $ENV{PATH});
+	# as newgrp will occasionally trash the PATH, provide a reasonable default JIC
+	my @path = split(':', $ENV{PATH} ? $ENV{PATH} : '/bin:/usr/bin:/usr/local/bin');
 	if ($path[-1] eq ".")
 	{
 		splice @path, -1, 0, @addpath;
@@ -129,9 +130,10 @@ elsif ($ENV{VCTOOLS_SHELL} =~ /^b:(.*)$/)
 	print STDERR "about to call $vbuild with @args\n" if DEBUG >= 3;
 	exec $vbuild, @args;
 }
-# being called by ourselves, essentially, from newgrp
+# this should never happen, theoretically
 else
 {
+	error("unknown value for shell var: $ENV{VCTOOLS_SHELL}");
 }
 
 
