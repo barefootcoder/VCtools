@@ -39,6 +39,7 @@ if (!$cvsroot )
 
 my $offsite = cvs::is_offsite($cvsroot);
 my $module = $ARGV[0];
+print $module . "\n";
 
 if (!$module)
 {
@@ -70,9 +71,23 @@ if ( !$offsite )
 # MAIN
 #################################
 
+my $user = $::ENV{USER};
+$user = $::ENV{USERNAME} if !$user;
+
 my @lockers = cvs::getLockers($cvsroot, $module);
 if (@lockers)
 {
+	# check to see if the user is already editing the file
+	foreach my $editor (@lockers) 
+	{
+		if ( $editor =~/\b$user\b/ )
+		{
+			print "$me info:  you are already editing the file.\n";
+			exit 1;
+		}
+	}
+
+	# inform user that others are editing the file
 	print "$me info: $module is currently being edited by: @lockers\n";
 	if ( !$offsite )
 	{
@@ -83,6 +98,7 @@ if (@lockers)
 	}
 }
 
+system("cvs -r -d $cvsroot update $module");
 system("cvs -d $cvsroot edit $module");
 system("cvs -d $cvsroot watch add -a edit $module");
 if ( !$offsite )
