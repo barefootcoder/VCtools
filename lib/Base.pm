@@ -63,7 +63,7 @@ use strict;
 use Carp;
 use FileHandle;
 
-#use constant BASE_DIR => '/geek/lib';
+# print STDERR "at top of Base: PATH is $ENV{PATH}\n";
 
 
 ###########################
@@ -149,10 +149,10 @@ sub redirect_modules_to_testing
 	# we really need to do is make sure we have a secure path before
 	# calling vctools-config.  so the "untainting" below isn't necessary
 	# right now.  comments left for edification of future generations.
-	my $old_path = $ENV{PATH};
 	my $working_dir = `vctools-config --working`;
-	die("can't determine VCtools working dir") unless $working_dir;
 	chomp $working_dir;
+	# print STDERR "PATH is $ENV{PATH}\n" unless $working_dir;
+	die("can't determine VCtools working dir") unless $working_dir;
 	my $lib_testing_dir = "$working_dir/VCtools/lib";
 
 	unshift @INC, sub
