@@ -17,6 +17,7 @@ use VCtools::Common;
 VCtools::switch('current_dir', 'c', 'start from . (default: start from root project dir)');
 VCtools::args('dirs', 'optlist', 'directory/ies to search (default: search all from starting dir)');
 VCtools::action('print', 'print filename (only)  (this is the default action)');
+VCtools::action('file', 'consider a file only if its basename contains this string', 'string');
 VCtools::action('grep', 'search file for (Perl regex) pattern (also prints filename)', 'pattern');
 VCtools::action('dirfind', 'find closest matching dirname (exact matches and least depth preferred)', 'dirname');
 VCtools::getopts();
@@ -81,8 +82,19 @@ if ($dirmatch)
 }
 our %possible_dirs;
 
+# and ditto again
+my $filematch = VCtools::file();
+if ($filematch)
+{
+	eval { $filematch = qr{[^/]*\Q$filematch\E[^/]*$} }
+			# even less likely for this to happen IMHO
+			or VCtools::fatal_error("can't turn filename into a pattern: $@");
+}
+
 foreach (VCtools::get_all_files(@files))
 {
+	next if $filematch and not /$filematch/;
+
 	if ($grep_pattern)
 	{
 		$retval |= grep_file($_, $grep_pattern);
