@@ -1,4 +1,6 @@
-set vcbindir=`perl -F'/\s*=\s*/' -lane 'print $F[1] if $F[0] eq "VCtoolsBinDir"' /usr/local/etc/VCtools/VCtools.conf`
+setenv VCTOOLS_CONFIG `vctools-config --config`
+
+set vcbindir=`vctools-config --bin`
 set shellexec=$vcbindir/vcshellexec
 
 if ( ! $?VCTOOLS_SHELL ) then

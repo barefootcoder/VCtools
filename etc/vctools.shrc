@@ -1,4 +1,6 @@
-vcbindir=`perl -F'/\s*=\s*/' -lane 'print $F[1] if $F[0] eq "VCtoolsBinDir"' /usr/local/etc/VCtools/VCtools.conf`
+export VCTOOLS_CONFIG=`vctools-config --config`
+
+vcbindir=`vctools-config --bin`
 shellexec=$vcbindir/vcshellexec
 
 if [ -z "$VCTOOLS_SHELL" ]
@@ -21,10 +23,10 @@ else
 			cd `vprojdir $1`
 		}
 
-		if [ $?VCTOOLS_SHELL_STARTDIR ]
+		if [ -n "$VCTOOLS_SHELL_STARTDIR" ]
 		then
 			cd $VCTOOLS_SHELL_STARTDIR
-			unsetenv VCTOOLS_SHELL_STARTDIR
+			unset VCTOOLS_SHELL_STARTDIR
 		fi
 		umask 2
 	fi
