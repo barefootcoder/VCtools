@@ -1,8 +1,9 @@
-#! /usr/bin/perl -w
+#! /usr/bin/perl
 
 use strict;
+use warnings;
 
-use Geek::Dev::Debug(1);
+use Geek::Dev::Debug(0);
 
 use Cwd;
 use Getopt::Std;
