@@ -1,0 +1,23 @@
+#! /usr/bin/perl
+
+use strict;
+use warnings;
+
+use Geek::Dev::Debug(0);
+
+use Getopt::Declare;
+
+use VCtools::common;
+
+
+my $params = <<END;
+	[strict]
+
+	--working		show working directory
+					{ print VCtools::WORKING_DIR, "\n"; }
+END
+my $opts = Getopt::Declare->new($params);
+
+
+# all the work is actually done by Getopt::Declare,
+# so there's nothing to do here
