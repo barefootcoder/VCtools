@@ -3,9 +3,10 @@ export VCTOOLS_CONFIG=`vctools-config --config`
 vcbindir=`vctools-config --bin`
 shellexec=$vcbindir/vcshellexec
 
+alias vcshell="exec $shellexec"
+
 if [ -z "$VCTOOLS_SHELL" ]
 then
-	alias vcshell="exec $shellexec"
 	alias vbuild="$shellexec -b --"
 else
 	if [ "$VCTOOLS_SHELL" != 1 ]

@@ -3,8 +3,9 @@ setenv VCTOOLS_CONFIG `vctools-config --config`
 set vcbindir=`vctools-config --bin`
 set shellexec=$vcbindir/vcshellexec
 
+alias vcshell "exec $shellexec"
+
 if ( ! $?VCTOOLS_SHELL ) then
-	alias vcshell "exec $shellexec"
 	alias vbuild "$shellexec -b --"
 else
 	if ( "$VCTOOLS_SHELL" != 1 ) then
