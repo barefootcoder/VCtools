@@ -29,6 +29,8 @@ use File::Spec;
 use Perl6::Form;
 use Data::Dumper;
 use Cwd qw<realpath>;
+use Fcntl qw<F_SETFD>;
+use File::Temp qw<tempfile>;
 
 use VCtools::Base;
 use VCtools::Args;
@@ -424,6 +426,43 @@ sub _interpret_svn_update_output
 }
 
 
+sub _interpret_log_output
+{
+	# use 1st arg, or $_ if no args
+	local $_ = $_[0] if @_;
+
+	# pass through to Subversion ATM
+	# could be changed back to CVS (theoretically)
+	&_interpret_svn_log_output
+}
+
+sub _interpret_cvs_log_output
+{
+	# this was never done for CVS
+}
+
+sub _interpret_svn_log_output
+{
+	# ignore the blank lines and the separator lines
+	return if /^\s*$/ or /^-+$/;
+
+	# bit of a shortcut here for the field separators
+	my $SEP = qr/\s*\|\s*/;
+	if ( / ^ r(\d+) $SEP (\w+) $SEP (.*?) \s+ (.*?) \s+ /x )
+	{
+		my $rev = $1;
+		my $author = $2;
+		my $date = $3;
+		my $time = $4;
+
+		return "\n=> $rev (by $author on $date at $time)\n";
+	}
+
+	# assume everything else is just an actual message line and pass it back with just a bit of indentation
+	return "   $_";
+}
+
+
 # this doesn't work for Subversion yet
 sub _get_lockers
 {
@@ -621,6 +660,35 @@ sub yesno
 {
 	print "$_[0]  [y/N] ";
 	return <STDIN> =~ /^y/i;
+}
+
+
+sub page_output
+{
+	my $tmpfile_suffix = shift;
+
+	# first of all, forget the whole paging thing if STDOUT isn't a terminal
+	if (not -t STDOUT)
+	{
+		print @_;
+		return;
+	}
+
+	# create a temporary filename
+	my $tmpfile = tempfile(SUFFIX => $tmpfile_suffix) or fatal_error("cannot create tempfile");
+
+	# stick output we were given into the tmpfile
+	print $tmpfile @_;
+
+	# get the tmpfile ready for reading by the pager
+	fcntl($tmpfile, F_SETFD, 0) or die("cannot clear close-on-exec bit on tempfile");
+	$tmpfile->seek(0,0);
+
+	# view the diff
+	my $pager = $ENV{PAGER} || "less";
+	open(PAGER, "| $pager") or die("can't open pager");
+	print PAGER <$tmpfile>;			# dumps the whole file into PAGER
+	close(PAGER);
 }
 
 
@@ -992,6 +1060,24 @@ sub get_diffs
 
 	# nice and simple here
 	return _execute_and_collect_output("diff", $file);
+}
+
+
+sub get_log
+{
+	my ($file) = @_;
+
+	my @output = ();
+
+	my $fh = _execute_and_get_output("log", $file);
+	while ( <$fh> )
+	{
+		my $line = _interpret_log_output;
+		push @output, $line if $line;
+	}
+	close($fh);
+
+	return @output;
 }
 
 
