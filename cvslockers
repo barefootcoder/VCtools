@@ -107,8 +107,18 @@ sub printlockers
 		return 1;
 	}
 
-	my ($project, $subdir, $module) = cvs::parse_module(getcwd() . "/$path");
-	# print "module is $module, project is $project, subdir is $subdir\n";
+	my ($project, $subdir, $module);
+	if ( !cvs::is_offsite($cvsroot) )
+	{
+		($project, $subdir, $module) = cvs::parse_module(getcwd() . "/$path");
+		# print "module is $module, project is $project, subdir is $subdir\n";
+   	}
+	else
+ 	{
+		# this is an offsite hack
+		$path =~ s/\.\///;
+		$module = $path;
+	}
 
 	if (-d $path)
 	{
@@ -131,7 +141,7 @@ sub printlockers
 		return 1;
 	}
 
-	if (!-e "$cvsroot/$project/$subdir/$module,v")
+	if (!cvs::is_offsite($cvsroot) && !-e "$cvsroot/$project/$subdir/$module,v")
 	{
 		# print "$cvsroot/$project/$subdir/$module,v\n";
 		print STDERR "$me: $module does not appear to be checked into CVS\n"
