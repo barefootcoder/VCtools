@@ -1,0 +1,67 @@
+#! /usr/bin/perl
+
+use strict;
+
+# use Barefoot::debug;							# comment out for production
+
+use DirHandle;
+use Getopt::Std;
+use Cwd qw(getcwd);
+use Barefoot::cvs;
+
+my $me = $0;
+$me =~ s@^.*/@@;
+
+
+# default values
+my $verbose=0;
+my $cvsroot=$::ENV{CVSROOT};
+
+
+#################################
+# OPTIONS AND ENVIRONMENT VARS
+#################################
+
+my $opt = {};
+getopts('vd:', $opt);
+$verbose = 1 if defined $opt->{v};
+$cvsroot = $opt->{d} if defined $opt->{d};
+
+
+#################################
+# CHECK FOR ERRORS
+#################################
+
+if (!$cvsroot)
+{
+	print STDERR "$me: variable CVSROOT must be set\n";
+	exit 2;
+}
+
+my $offsite = cvs::is_offsite($cvsroot);
+
+my $path = $ARGV[0] if $ARGV[0];
+if ($path)
+{
+	if (!-e $path)
+	{
+		print STDERR "$me: argument is not a valid path or file, $ARGV[0]\n";
+		print STDERR "usage: $me [options] [path]\n";
+		print STDERR "         default path is .\n";
+		print STDERR "         -v : verbose\n";
+		print STDERR "         -d : cvsroot, if not using CVSROOT\n";
+		exit 2;
+	}
+}
+else
+{
+	$path = ".";
+}
+
+
+#################################
+# MAIN
+#################################
+
+system("cvs -d $cvsroot log $path");
+print "done\n";
