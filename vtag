@@ -1,0 +1,180 @@
+#! /usr/bin/perl
+
+use strict;
+use warnings;
+
+use File::Copy;
+
+use VCtools::Base;
+use VCtools::Args;
+use VCtools::Common;
+use VCtools::Config;
+
+
+our $BAK_EXT = ".tagbak";
+
+our @bak_files;
+
+
+#################################
+# OPTIONS AND ENVIRONMENT VARS
+#################################
+
+VCtools::args('tag', 'single', 'name of tag (often a version number)');
+VCtools::getopts();
+
+# remember, directories are files too
+my $tag = VCtools::tag();
+print STDERR "tag is $tag\n" if DEBUG >= 3;
+
+
+#################################
+# CHECK FOR ERRORS
+#################################
+
+my $proj = VCtools::check_common_errors();
+print STDERR "project is $proj\n" if DEBUG >= 2;
+
+# in order to make sure we have a complete set of statuses for all
+# files in the project, we need to call this first (although we don't
+# particularly care about the return list)
+VCtools::get_all_files(VCtools::project_dir($proj));
+
+check_file_status($proj, 'locked', "are locked", sub
+	{ VCtools::fatal_error("cannot tag a project with locked files"); }
+);
+
+check_file_status($proj, 'conflict', "have merge conflicts", sub
+	{ VCtools::fatal_error("cannot tag a project with broken files"); }
+);
+
+check_file_status($proj, 'broken', "have an unknown problem", sub
+	{ VCtools::fatal_error("cannot tag a project with broken files"); }
+);
+
+check_file_status($proj, 'outdated', "have newer versions in the repository", sub
+	{ VCtools::prompt_to_continue("it could be wrong to tag with outdated files",
+			"(the older versions will be the ones tagged)"); }
+);
+
+check_file_status($proj, 'unknown', "are not in VC", sub
+	{ VCtools::prompt_to_continue("it could be wrong to tag a project containing unknown files",
+			"(these files will be skipped during tagging--they will *not* be part of the snapshot)"); }
+);
+
+check_file_status($proj, 'modified', "have local modifications", sub
+	{
+		VCtools::prompt_to_continue("you can't tag a project with files that haven't been checked in",
+				"however, if you like, I can back up these files,",
+				"replace them with their latest version in the repository,",
+				"take the snapshot, then restore the backed-up versions after tagging is complete",
+				"if for any reason this process is interrupted,",
+				"you can look for files like 'somefile.c$BAK_EXT' and just put them back yourself",
+		);
+
+		# function args will be modified files, so save them here
+		@bak_files = @_;
+
+		foreach (@bak_files)
+		{
+			move($_, "$_$BAK_EXT");
+			copy("$_$BAK_EXT", $_);
+		}
+
+		VCtools::revert_files(@bak_files);
+	}
+);
+
+
+#################################
+# MAIN
+#################################
+
+# update any file containing the version (tag)
+if (my $tagfile = VCtools::get_proj_directive($proj, 'TagFile'))
+{
+	my $full_tagfile = VCtools::project_dir($proj) . "/$tagfile";
+
+	my $tagcode = VCtools::get_proj_directive($proj, 'TagCode');
+	fatal_error("TagFile specified, but no TagCode to process it with")
+			unless $tagcode;
+	$tagcode =~ s/%TAGFILE/$full_tagfile/g;
+	$tagcode =~ s/%TAG/$tag/g;
+	print STDERR "will try to eval:\n$tagcode\n" if DEBUG >= 3;
+	$tagcode = eval "sub { $tagcode }"
+			or VCtools::fatal_error("illegal code in TagCode directive: $@");
+
+	rename($full_tagfile, "$full_tagfile.bak");
+	open(OUT, ">$full_tagfile") or die("can't open new copy of $tagfile");
+	open(IN, "$full_tagfile.bak") or die("can't open backup copy of $tagfile");
+	while ( <IN> )
+	{
+		&$tagcode;
+		print OUT;
+	}
+	close(IN);
+	close(OUT);
+
+	my $commit_msg = VCtools::get_proj_directive($proj, 'TagFileCommitMessage', '');
+	$commit_msg =~ s/%TAGFILE/$full_tagfile/g;
+	$commit_msg =~ s/%TAG/$tag/g;
+
+	VCtools::info_msg("made the following changes to $tagfile:");
+	print VCtools::get_diffs($full_tagfile);
+	VCtools::prompt_to_continue("original file was saved as $tagfile.bak",
+			"this will be deleted if you continue, and saved if you do not",
+			"if you continue, these changes will be committed",
+			$commit_msg
+				? "with the following message: $commit_msg"
+				: "with a message that you specify"
+			);
+
+	if ($commit_msg)
+	{
+		# 
+		VCtools::commit_files($proj, "-m'$commit_msg'", $full_tagfile);
+	}
+	else
+	{
+		VCtools::commit_files($proj, $full_tagfile);
+	}
+
+	unlink("$full_tagfile.bak");
+}
+
+VCtools::create_tag($proj, VCtools::tag());
+
+# put back any files we temporarily reverted
+if (@bak_files)
+{
+	foreach my $file (@bak_files)
+	{
+		# just double check and make sure the backup is there
+		# before we go deleting stuff
+		if (! -r "$file$BAK_EXT" or -s _ == 0)
+		{
+			fatal_error("backup for file $file missing or corrupted");
+		}
+
+		unlink($file);
+		move("$file$BAK_EXT", $file);
+	}
+} 
+
+#################################
+# SUBS
+#################################
+
+
+sub check_file_status
+{
+	my ($proj, $status, $msg, $action) = @_;
+	# note that action must be a coderef
+
+	if (my @problem_files = VCtools::get_all_with_status($status))
+	{
+		VCtools::list_files($proj, $msg, @problem_files);
+		$action->(@problem_files);
+		print STDERR "\n";
+	}
+}
