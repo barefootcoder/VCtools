@@ -149,6 +149,7 @@ sub redirect_modules_to_testing
 	# we really need to do is make sure we have a secure path before
 	# calling vctools-config.  so the "untainting" below isn't necessary
 	# right now.  comments left for edification of future generations.
+	$ENV{PATH} = "/bin:/usr/bin:/usr/local/bin";
 	my $working_dir = `vctools-config --working`;
 	chomp $working_dir;
 	# print STDERR "PATH is $ENV{PATH}\n" unless $working_dir;
