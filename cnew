@@ -1,0 +1,57 @@
+#! /usr/bin/perl
+
+use strict;
+
+# use Barefoot::debug;							# comment out for production
+
+use Cwd qw(getcwd);
+use Barefoot::cvs;
+use Barefoot::input qw(get_yn);
+
+my $me = $0;
+$me =~ s@^.*/@@;
+
+
+#################################
+# CHECK FOR ERRORS
+#################################
+
+if (!$::ENV{CVSROOT})
+{
+	print STDERR "$me: variable CVSROOT must be set\n";
+	exit 2;
+}
+
+my $module = $ARGV[0];
+
+if (!$module)
+{
+	print STDERR "usage: $me module\n";
+	exit 2;
+}
+
+if (!-r $module)
+{
+	print STDERR "$me: $module does not exist or is not readable\n";
+	exit 2;
+}
+
+my ($project, $subdir) = cvs::parse_module(getcwd());
+
+if (-e "$::ENV{CVSROOT}/$project/$subdir/$module,v")
+{
+	print STDERR "$me: $module appears to be already checked into CVS\n";
+	exit 2;
+}
+
+
+#################################
+# MAIN
+#################################
+
+system("cvs add $module") unless $?;
+unless (-d $module)
+{
+	system("cvs commit -m'initial version' $module") unless $?;
+	system("chmod a-w $module") unless $?;
+}

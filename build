@@ -1,0 +1,76 @@
+#! /usr/bin/perl
+
+use strict;
+
+# use Barefoot::debug;							# comment out for production
+
+use Cwd qw(getcwd);
+use Barefoot::cvs;
+
+my $me = $0;
+$me =~ s@^.*/@@;
+
+
+#################################
+# CHECK FOR ERRORS
+#################################
+
+if (!$::ENV{CVSROOT})
+{
+	print STDERR "$me: variable CVSROOT must be set\n";
+	exit 2;
+}
+
+my $pwd = getcwd();
+if ($pwd ne cvs::WORKING_DIR)
+{
+	print STDERR "$me: must be run from home proj directory\n";
+	exit 2;
+}
+
+my $project = $ARGV[0];
+
+if (!$project)
+{
+	print STDERR "usage: $me project\n";
+	exit 2;
+}
+
+if (-e $project)
+{
+	print STDERR "$me: project $project already exists\n";
+	exit 2;
+}
+
+if (!-e "$::ENV{CVSROOT}/$project")
+{
+	print STDERR "$me: project $project does not exist in CVS\n";
+	exit 2;
+}
+
+# check for proper group
+chomp (my $current_gid = `id -g`);
+my $project_gid = (stat("$::ENV{CVSROOT}/$project"))[5];
+if ($current_gid != $project_gid)
+{
+	my $current_grname = getgrgid($current_gid);
+	my $project_grname = getgrgid($project_gid);
+	print STDERR "$me: current group doesn't match project (is ",
+			"$current_grname, should be $project_grname)\n";
+	exit 2;
+}
+
+
+#################################
+# MAIN
+#################################
+
+system("cvs -r checkout $project");
+# directories named Debug or Release are for nmake and need to be accessible
+# by guestpc (the Samba share user)
+system('find '. $project . ' -type d \( -name Release -o -name Debug \) ' .
+		'-exec chgrp guestpc {} \; -exec chmod 770 {} \;');
+
+# this _seemed_ like a good idea, but with the commit-mail script running,
+# it results in double mail, so we took it out
+#system("cvs watch add -a commit $project");

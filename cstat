@@ -1,0 +1,174 @@
+#! /usr/bin/perl
+
+use strict;
+
+# use Barefoot::debug;							# comment out for production
+
+use DirHandle;
+use Getopt::Std;
+use Cwd qw(getcwd);
+use Barefoot::cvs;
+
+my $me = $0;
+$me =~ s@^.*/@@;
+
+$| = 1;									# autoflush STDOUT
+
+# default values
+my $recurse=0;
+my $only_newer=0;
+
+
+#################################
+# OPTIONS AND ENVIRONMENT VARS
+#################################
+
+my $opt = {};
+getopts('t:rn', $opt);
+my $show_tag = $opt->{t};
+$recurse = 1 if defined $opt->{r};
+$only_newer = 1 if defined $opt->{n};
+
+
+#################################
+# CHECK FOR ERRORS
+#################################
+
+if (!$::ENV{CVSROOT})
+{
+	print STDERR "$me: variable CVSROOT must be set\n";
+	exit 2;
+}
+
+
+#################################
+# MAIN
+#################################
+
+my $retval = 0;							# default to no errors
+
+if (@ARGV == 0)							# no args passed, default to *
+{
+	handle_all_files();
+}
+else
+{
+	foreach my $file (@ARGV)
+	{
+		$retval |= printstatus($file);
+	}
+}
+
+exit $retval;							# will be 1 if any errors
+
+
+#################################
+# SUBS
+#################################
+
+sub handle_all_files
+{
+	my ($dir) = @_;
+	$dir = "." unless defined $dir;
+	# print "processing dir $dir ...\n";
+
+	opendir(DIR, $dir) or die("can't get dir filehandle for $dir");
+	foreach my $file ( readdir(DIR) )
+	{
+		# print "processing file $dir/$file ...\n";
+		if (-f "$dir/$file")					# don't process dirs, pipes, &c
+		{
+			next if $file =~ "^\.#";			# these are special CVS files
+			$retval |= printstatus("$dir/$file");
+		}
+		elsif (-d "$dir/$file" and $recurse)	# recurse into dirs
+		{
+			next if $file eq "CVS";				# but not the CVS dir
+			next if $file eq "Attic";			# also Attic dirs are special
+			next if $file =~ /^\.\.?$/;			# skip . and ..
+			handle_all_files("$dir/$file");
+		}
+	}
+	closedir(DIR);
+}
+
+sub printstatus
+{
+	my ($path) = @_;
+
+	if (!-r $path)
+	{
+		print STDERR "$me: $path does not exist or is not readable\n";
+		return 1;
+	}
+
+	if (-d $path)
+	{
+		if ($recurse)
+		{
+			handle_all_files($path);
+		}
+		return 0;
+	}
+
+	my ($project, $subdir, $module) = cvs::parse_module(getcwd() . "/$path");
+	# print "module is $module, project is $project, subdir is $subdir\n";
+
+	# ignore files in the CVS directory
+	return 0 if $subdir =~ /\bCVS\b/;
+
+	# no status for things that aren't checked into CVS
+	return 0 unless -e "$::ENV{CVSROOT}/$project/$subdir/$module,v";
+
+	my ($status, %revs);
+	open(STAT, "cvs status -v $path|") or die("can't open pipe for status");
+	while ( <STAT> )
+	{
+		if ( /File:\s*.*?\s+Status:\s*(.*)/ )
+		{
+			$status = $1;
+			next;
+		}
+
+		if ( /(Working|Repository) revision:\s*([\d.]+)/ )
+		{
+			$revs{" $1"} = $2;
+			next;
+		}
+
+		if ( /(\w+)\s+\(revision: ([\d.]+)\)/ )
+		{
+			$revs{$1} = $2;
+			next;
+		}
+	}
+	close(STAT);
+
+	# okay, we're going to print if any one of 3 things is true
+	# (we need to evaluate these in this order too ... the fact that we move
+	# from one condition to the next implies that all the previous conditions
+	# are false ... important to remember)
+	# 1) -n not specified (meaning always print)
+	# 2) -t tag does not exist for this file ... this implies that the whole
+	#		file is newer than the requested tag, so definitely print
+	# 3) "Repository" revision is newer (greater) than -t tag revision
+	if ( !$only_newer or not exists $revs{$show_tag}
+			or $revs{' Repository'} > $revs{$show_tag} )
+	{
+		print "$path   ( $status )\n";
+		foreach my $tag (sort keys %revs)
+		{
+			# similarly, we show a tag if any of 3 things is true
+			# (same deal on ordering as above)
+			# 1) tags beginning with spaces are special and always get printed
+			# 2) -t not specified
+			# 3) current tag equals -t tag
+			if ( $tag =~ /^ / or !$show_tag or $tag eq $show_tag )
+			{
+				print "\t$tag : $revs{$tag}\n";
+			}
+		}
+	}
+
+	return 0;
+}

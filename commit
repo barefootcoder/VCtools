@@ -1,0 +1,86 @@
+#! /usr/bin/perl
+
+use strict;
+
+# use Barefoot::debug;							# comment out for production
+
+use Cwd qw(getcwd);
+use Barefoot::cvs;
+use Barefoot::input qw(get_yn);
+
+my $me = $0;
+$me =~ s@^.*/@@;
+
+
+#################################
+# CHECK FOR ERRORS
+#################################
+
+if (!$::ENV{CVSROOT})
+{
+	print STDERR "$me: variable CVSROOT must be set\n";
+	exit 2;
+}
+
+if (!$ARGV[0])
+{
+	print STDERR "usage: $me module\n";
+	exit 2;
+}
+
+my $path = $ARGV[0];
+# add the current directory to the front of it unless it's an absolute path
+$path = getcwd() . '/' . $path unless $path =~ m@^/@;
+
+my ($project, $subdir, $module) = cvs::parse_module($path);
+
+if (!defined($project))
+{
+	print STDERR "$me: path does not appear to be a private CVS directory\n";
+	exit 2;
+}
+
+if (!-e "$::ENV{CVSROOT}/$project/$subdir/$module,v")
+{
+	print STDERR "$me: module does not appear to be checked into CVS\n";
+	exit 2;
+}
+
+my @lockers = cvs::getLockers($path);
+if (!@lockers or !grep { /\b$::ENV{USER}\b/ } @lockers)
+{
+	print STDERR "$me: you did not do a get on this module\n";
+	exit 2;
+}
+
+
+#################################
+# MAIN
+#################################
+
+if (@lockers > 1)
+{
+	# user must be in the list, else would have err'ed out above
+	# but more than one name is in the list, so ...
+	print STDERR "$me: other people are currently editing this module!\n";
+	print STDERR "     $module is currently being edited by: @lockers\n";
+	if (!get_yn("Do you want to proceed anyway?"))
+	{
+		exit 1;
+	}
+}
+
+system("cvs diff $path >/dev/null");
+if (!$?)										# no differences
+{
+	print STDERR "$me: you have not changed the file\n";
+	if (get_yn("Do you want to break your edit lock?"))
+	{
+		system("cvs unedit $path");
+	}
+	exit 1;
+}
+
+system("cvs commit $path");
+system("cvs watch remove -a edit $path");	# don't watch edits any more
+system("chmod a-w $path");
