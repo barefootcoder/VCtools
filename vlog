@@ -25,7 +25,7 @@ print STDERR "log for files: @files\n" if DEBUG >= 3;
 # CHECK FOR ERRORS
 #################################
 
-VCtools::verify_files_and_group(@files);
+my $proj = VCtools::verify_files_and_group(@files);
 
 # get statuses for everything at once (quicker that way)
 VCtools::cache_file_status(@files, { DONT_RECURSE => 1 });
@@ -45,15 +45,14 @@ foreach (@files)
 {
 	my $header_line = @files > 1 ? "\n---> $_ <---\n" : "";
 
+	VCtools::get_log($_);
 	if (VCtools::latest())
 	{
-		my @log_lines = VCtools::get_log($_);
-		print $header_line, shift @log_lines;
-		/^\n/ ? last : print foreach @log_lines;
+		print $header_line, VCtools::log_lines($proj, 0);
 	}
 	else
 	{
-		VCtools::page_output('.vclog', $header_line, VCtools::get_log($_));
+		VCtools::page_output('.vclog', $header_line, VCtools::log_lines($proj));
 		print "\n";
 		VCtools::prompt_to_continue("$count more files to view") if --$count;
 	}
