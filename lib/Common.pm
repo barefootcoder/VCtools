@@ -1462,7 +1462,7 @@ sub print_status
 			}
 
 			printf "    => %-60s", $file;
-			if ($opts->{'SHOW_BRANCHES'} and exists_in_vc($file) and -f $file)
+			if ($opts->{'SHOW_BRANCHES'} and exists_in_vc($file) and -e $file)
 			{
 				my $branch = get_branch($project, $file);
 				print $branch ? " {BRANCH:$branch}" : " {TRUNK}";
