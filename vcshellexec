@@ -1,0 +1,89 @@
+#! /usr/bin/perl -w
+
+use strict;
+
+use Geek::Dev::Debug(1);
+
+use Cwd;
+use Getopt::Std;
+
+use VCtools::common;
+
+
+my $opts = {};
+getopts('p:', $opts);
+
+if (defined $opts->{p})
+{
+	# return adjusted path
+	my @addpath = ( VCtools::VCTOOLS_BINDIR, VCtools::SUBVERSION_BINDIR);
+
+	my @path = split(':', $opts->{p});
+	if ($path[-1] eq ".")
+	{
+		splice @path, -1, 0, @addpath;
+	}
+	else
+	{
+		@path = (@path, @addpath);
+	}
+
+	print join(':', @path);
+	exit;
+}
+
+
+if (not exists $ENV{VCTOOLS_SHELL})
+{
+	my $group;
+	if ($ARGV[0])
+	{
+		my $pdir = VCtools::proj_dir($ARGV[0]);
+		if (-d $pdir)
+		{
+			$group = (stat $pdir)[5];
+		}
+		else
+		{
+			error("no such directory $pdir");
+		}
+		$ENV{VCTOOLS_SHELL_STARTDIR} = $pdir;
+	}
+	else
+	{
+		# no argument; use current directory
+		my $pwd = getcwd();
+		if (substr($pwd, 0, length(VCtools::WORKING_DIR))
+				ne VCtools::WORKING_DIR)
+		{
+			error("current dir not part of personal testing tree\n"
+					. "   (specify project name or cd into tree)");
+		}
+		$group = (stat $pwd)[5];
+	}
+	$group = getgrgid($group);
+	$ENV{VCTOOLS_SHELL} = "-$group";
+
+	exec $ENV{SHELL};
+}
+elsif ($ENV{VCTOOLS_SHELL} =~ /^-(.*)$/)
+{
+	my $group = $1;
+
+	$ENV{VCTOOLS_SHELL} = "1";
+	exec "newgrp", $group;
+}
+else
+{
+}
+
+
+sub error
+{
+	my $me = $0;
+	$me =~ s@^.*/@@;
+
+	print STDERR "$me: $_[0]\n";
+	delete $ENV{VCTOOLS_SHELL};
+	exec $ENV{SHELL};
+}
