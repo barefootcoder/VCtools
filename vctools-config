@@ -8,14 +8,14 @@ use Getopt::Declare;
 use VCtools::Base;
 
 
-# have to do this stuff up here, before VCtools::common
+# have to do this stuff up here, before VCtools::Common
 # has a chance to freak out
 # theoretically, the following line is the only place
 # this hardcoded path should ever exist
 use constant CONFIG_FILE => '/usr/local/etc/VCtools/VCtools.conf';
 BEGIN { $ENV{VCTOOLS_CONFIG} = CONFIG_FILE; }
 
-use VCtools::common;
+use VCtools::Common;
 
 
 # parends on CONFIG_FILE below are necessary
