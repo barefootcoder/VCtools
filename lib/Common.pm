@@ -26,6 +26,7 @@ use warnings;
 use Carp;
 use FileHandle;
 use File::Spec;
+use File::Copy;
 use Perl6::Form;
 use Date::Parse;
 use Date::Format;
@@ -86,11 +87,9 @@ sub _really_realpath
 	# ah, if only Cwd::realpath actually worked as advertised ....
 	# but, since it doesn't, here we have this
 	# the problem is that realpath seems to believe that files
-	# (as opposed to directories) aren't paths, and it chokes
-	# on them
-	# thus, the algorithm is to break it up into dir / file
-	# (using File::Spec routines), then realpath() the dir, then
-	# put it all back together again.  yuck.
+	# (as opposed to directories) aren't paths, and it chokes on them
+	# thus, the algorithm is to break it up into dir / file (using File::Spec routines),
+	# then realpath() the dir, then put it all back together again.  yuck.
 	my ($path) = @_;
 
 	my ($vol, $dir, $file) = File::Spec->splitpath(File::Spec->rel2abs($path));
@@ -189,6 +188,7 @@ sub _project_path
 
 	my %subdirs =
 	(
+		root	=>	'',						# this always remains blank, regardless of BranchPolicy
 		trunk	=>	'',
 		branch	=>	'',
 		tag		=>	'',
@@ -218,9 +218,9 @@ sub _project_path
 	{
 		fatal_error("unknown branch policy $branch_policy specified");
 	}
-	# if trunk is blank, that's okay; otherwise, it's a fatal error
+	# if trunk or root is blank, that's okay; otherwise, it's a fatal error
 	fatal_error("don't know how to make a $which directory for this project")
-			if $subdirs{$which} eq '' and $which ne 'trunk';
+			if $subdirs{$which} eq '' and $which ne 'trunk' and $which ne 'root';
 	print STDERR "project_path thinks which dir is $subdirs{$which}\n" if DEBUG >= 3;
 
 	my $projpath = $root . "/" . $proj . $subdirs{$which};
@@ -248,6 +248,7 @@ sub _server_path
 {
 	my ($file) = @_;
 	my $path;
+	local $_;
 
 	# we expect this to succeed, so make sure you've run exists_in_vc() on the file first
 	my $ed = _execute_and_get_output("info", $file);
@@ -1255,6 +1256,17 @@ sub parse_vc_file
 }
 
 
+# needs adjustment to work for CVS
+sub head_revno
+{
+	my ($proj) = @_;
+
+	my $ppath = _project_path($proj, 'root');
+	`svn log -r HEAD $ppath` =~ /r(\d+)/;
+	return $1;
+}
+
+
 # probably wouldn't work for CVS
 sub branch_point_revno
 {
@@ -1262,6 +1274,50 @@ sub branch_point_revno
 
 	get_log(_project_path($proj, 'branch', $branch), { BRANCH_ONLY => 1 });
 	return log_field(-1, 'rev');									# -1 meaning the last log, which is the earliest one
+}
+
+
+# completely fuxored for CVS
+sub prev_merge_point
+{
+	my ($proj, $branch, @files) = @_;
+	my $message;
+
+	my $merge_commit = get_proj_directive($proj, 'MergeCommit');
+	fatal_error("cannot look for previous merge points without a MergeCommit directive") unless $merge_commit;
+
+	foreach my $file (@files)
+	{
+		get_log($file, { BRANCH_ONLY => 1 });
+		my $msg = find_log($merge_commit, 'message') || '';
+		print STDERR "looking for previous merge point on $file, found $msg\n" if DEBUG >= 4;
+
+		if (not defined $message)
+		{
+			$message = $msg;
+		}
+		elsif ($msg ne $message)
+		{
+			fatal_error("found two different previous merge points");
+		}
+	}
+
+	unless ($message)
+	{
+		# try looking for a project-wide merge point
+		get_log(_project_path($proj, 'branch', $branch), { BRANCH_ONLY => 1 });
+		$message = find_log($merge_commit, 'message') || '';
+	}
+
+	if ($message)
+	{
+		$message =~ /revisions?\s+\d+:(\d+)\s/;
+		return $1;
+	}
+	else
+	{
+		return 0;
+	}
 }
 
 
@@ -1296,7 +1352,7 @@ sub get_branch
 	my $bpath = _project_path($proj, 'branch');
 	print STDERR "server path of $spath, branch path of $bpath\n" if DEBUG >= 4;
 
-	$spath =~ m@^$bpath/?([^/]+)/@;
+	$spath =~ m@^\Q$bpath\E/?([^/]+)@;
 	# if $spath doesn't start with $bpath, then $1 will be undefined, which is what we want to return
 	print STDERR "looks like branch is $1\n" if DEBUG >= 4;
 	return $1;
@@ -1317,6 +1373,9 @@ sub get_log
 {
 	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
 	my ($file) = @_;
+
+	# it's unlikely to retrieve logs for more than one file, but it is possible, so be safe
+	@log_cache = ();
 
 	my $fh = _execute_and_get_output("log", $file, $opts);
 	while ( <$fh> )
@@ -1382,6 +1441,119 @@ sub log_field
 	print STDERR "log_field: going to return [$which_log]{$which_field} : $log_cache[$which_log]->{$which_field}\n"
 			if DEBUG >= 3;
 	return $log_cache[$which_log]->{$which_field};
+}
+
+
+###########################
+# This works the same as log_field, except that you pass a string to search for in the logs as opposed to an index
+# number.  It starts at the beginning of the logs, which is the newest one, and works backward through time.  If
+# no matching log is found, returns undef.  Note that the string you pass is not treated as a regex.  If you don't
+# specify which field you're interested in, it returns the index of the found log.
+sub find_log
+{
+	my ($search_for, $which_field) = @_;
+
+	my $x = 0;
+	foreach (@log_cache)
+	{
+		print STDERR "searching for //$search_for// in //$_->{message}//\n" if DEBUG >= 4;
+		if ($_->{message} =~ /\Q$search_for\E/)
+		{
+			return $which_field ? $_->{$which_field} : $x;
+		}
+
+		++$x;
+	}
+
+	return undef;
+}
+
+
+###########################
+# File Support Subroutines
+###########################
+
+
+sub create_backup_files
+{
+	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
+	my (@files) = @_;
+
+	die("create_backup_files: must supply backup extension") unless $opts->{'ext'};
+
+	foreach (@files)
+	{
+		move($_, "$_$opts->{'ext'}");
+		copy("$_$opts->{'ext'}", $_);
+		print STDERR "now backing up file $_\n" if DEBUG >= 4;
+	}
+}
+
+
+sub restore_backup_files
+{
+	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
+	my (@files) = @_;
+
+	die("restore_backup_files: must supply backup extension") unless $opts->{'ext'};
+	$opts->{overwrite} ||= 0;
+
+	foreach my $file (@files)
+	{
+		# just double check and make sure the backup is there
+		# before we go deleting stuff
+		if (! -r "$file$opts->{'ext'}" or -s _ == 0)
+		{
+			fatal_error("backup for file $file missing or corrupted");
+		}
+
+		print STDERR "now restoring file $_\n" if DEBUG >= 4;
+		if (-e $file)
+		{
+			if ($opts->{overwrite})
+			{
+				unlink($file);
+			}
+			else
+			{
+				warning("will not overwrite $file; backup file $file$opts->{'ext'} has been retained");
+				next;
+			}
+		}
+		move("$file$opts->{'ext'}", $file);
+	} 
+}
+
+
+sub backup_full_project
+{
+	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
+	my ($proj) = @_;
+
+	die("backup_full_project: must supply backup extension") unless $opts->{'ext'};
+
+	my $backup_dir = project_dir($proj . $opts->{'ext'});
+	if (-d $backup_dir)
+	{
+		prompt_to_continue("a previous backup $backup_dir already exists; must remove it to continue");
+		system("rm", "-rf", $backup_dir);
+	}
+
+	system("cp", "-pri", project_dir($proj), project_dir($proj . $opts->{ext}));
+}
+
+
+sub restore_project_backup
+{
+	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
+	my ($proj) = @_;
+
+	die("restore_project_backup: must supply backup extension") unless $opts->{'ext'};
+	my $backup_dir = project_dir($proj . $opts->{'ext'});
+	die("restore_project_backup: no backup exists $proj$opts->{'ext'}") unless -d $backup_dir;
+
+	system("rm", "-rf", project_dir($proj));
+	system("mv", $backup_dir, project_dir($proj));
 }
 
 
@@ -1570,22 +1742,31 @@ sub remove_files
 }
 
 
+# this is not CVS safe
 sub revert_files
 {
+	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
 	my (@files) = @_;
+
+	# revert_files works differently than other functions regarding recursion
+	# (because recursive reversion is just _such_ a bad idea ...)
+	# to revert a full tree, call with { TREE_OPS => 1 }
+	# otherwise, you can only revert individual files
+	my $o = $opts->{TREE_OPS} ? {} : { DONT_RECURSE => 1 };
 
 	# for looking up files
 	my $files = _file_hash(@files);
 
 	# expand your recursions before calling this if you need them
-	# recursive reversion is just _such_ a bad idea ...
-	my $fh = _execute_and_get_output("revert", @files, { DONT_RECURSE => 1 } );
+	my $fh = _execute_and_get_output("revert", @files, $o);
 	while ( <$fh> )
 	{
 		if ( / ^ Reverted \s+ '(.*)' \s* $ /x )
 		{
-			warning("unexpectedly reverted file $1")
-					unless exists $files->{$1};
+			unless ($opts->{TREE_OPS})
+			{
+				warning("unexpectedly reverted file $1") unless exists $files->{$1};
+			}
 		}
 		else
 		{
@@ -1633,7 +1814,8 @@ sub commit_files
 
 	# we expect that our filelist has already been expanded for purposes of recursion,
 	# so we're not going to do any recursion here
-	$opts->{DONT_RECURSE} = 1;
+	# (to work around this, send TREE_OPS => 1 as an option)
+	$opts->{DONT_RECURSE} = $opts->{TREE_OPS} ? 0 : 1;
 	_execute_normally("commit", @files, $opts);
 
 	# now let's send out an email to whoever's on the list (if anyone is)
@@ -1749,6 +1931,39 @@ sub switch_to_branch
 		my $spath = _server_path($file);
 		$spath =~ s/\Q$old\E/$new/;
 		_execute_normally("switch", $spath, $file);
+	}
+}
+
+
+# ditto squared
+sub merge_from_branch
+{
+	my ($proj, $branch, $from, $to, @files) = @_;
+	print STDERR "action: merge_from_branch $proj, $branch, $from, $to, ", join(', ', @files), "\n" if DEBUG >= 5;
+
+	# we'll need the merge commit message for this project
+	my $merge_commit = get_proj_directive($proj, 'MergeCommit');
+	fatal_error("cannot safely vmerge without a merge commit message specified in the config") unless $merge_commit;
+
+	# no branch means merging from the trunk
+	my $merge_from = $branch ? _project_path($proj, 'branch', $branch) : _project_path($proj);
+	print STDERR "merge_from_branch: merging from $merge_from\n" if DEBUG >= 3;
+
+	foreach my $file (@files)
+	{
+		my $branch = get_branch($proj, $file);
+		my $current = $branch ? _project_path($proj, 'branch', $branch) : _project_path($proj);
+
+		my $spath = _server_path($file);
+		$spath =~ s/\Q$current\E/$merge_from/;
+
+		# merging is ALWAYS recursive
+		my $mrg = _execute_and_get_output("merge", $spath, $file, { DONT_RECURSE => 0, REVNO => "$from:$to" } );
+		while ( <$mrg> )
+		{
+			_interpret_update_output;							# merge and update have the same output style
+		}
+		close($mrg);
 	}
 }
 
