@@ -30,6 +30,7 @@ use Perl6::Form;
 use Date::Parse;
 use Date::Format;
 use Data::Dumper;
+use Mail::Sendmail;
 use Cwd qw<realpath>;
 use Fcntl qw<F_SETFD>;
 use File::Temp qw<tempfile>;
@@ -779,7 +780,7 @@ sub check_common_errors
 
 	if (exists $ENV{VCTOOLS_SHELL})
 	{
-		if (current_project() ne $project)
+		if (not ($project and current_project() eq $project))
 		{
 			prompt_to_continue("the project derived from your current dir",
 					"doesn't seem to match what your environment var says");
@@ -1310,6 +1311,7 @@ sub commit_files
 {
 	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
 	my ($proj, @files) = @_;
+	my @filenames = @files;
 
 	# if a debugging regex is specified, we need to search each file for
 	# that pattern.  if we find it, we ask the user if they're really
@@ -1346,6 +1348,35 @@ sub commit_files
 	# we expect that our filelist has already been expanded for purposes of recursion,
 	# so we're not going to do any recursion here
 	_execute_normally("commit", @files, { DONT_RECURSE => 1 } );
+
+	# now let's send out an email to whoever's on the list (if anyone is)
+	if (my $email_list = get_proj_directive($proj, 'CommitEmails'))
+	{
+		if ($config->{EmailsFrom})
+		{
+			# commit message will be the same for all files, so we'll just grab the first one
+			get_log($files[0]);
+			my $log_message = log_lines($proj, 0);
+
+			foreach (split(',', $email_list))
+			{
+				my $mail = {};
+				$mail->{To} = $_;
+				$mail->{From} = $config->{EmailsFrom};
+				$mail->{Subject} = "Commit Notification: project $proj";
+				$mail->{Body} = "The following files were committed: @filenames\n\n$log_message";
+
+				unless (sendmail(%$mail))
+				{
+					VCtools::warning("failed to send commit email to $_ ($Mail::Sendmail::error)", );
+				}
+			}
+		}
+		else
+		{
+			VCtools::warning("config file specifies commit emails, but no EmailsFrom directive");
+		}
+	}
 }
 
 
