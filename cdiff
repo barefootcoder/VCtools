@@ -8,7 +8,6 @@ use DirHandle;
 use Getopt::Std;
 use Cwd qw(getcwd);
 use Barefoot::cvs;
-use File::MkTemp;
 
 my $me = $0;
 $me =~ s@^.*/@@;
@@ -42,36 +41,28 @@ if (!$cvsroot)
 my $offsite = cvs::is_offsite($cvsroot);
 
 my $file = $ARGV[0];
-if (!$file)
+if (!$file || !-e $file)
 {
-	print STDERR "$me: argument is not a valid file, $ARGV[0]\n";
+	print STDERR "$me: argument is not a valid file, $file\n";
 	print STDERR "usage: $me [options] [file]\n";
 	print STDERR "         -v : verbose\n";
 	print STDERR "         -d : cvsroot, if not using CVSROOT\n";
 	exit 2;
 }
 
-my $options = "";
-
-if (-e $file)
-{
-	# this will delete the file if it exists
-	$options = "-f";
-}
-
 #################################
 # MAIN
 #################################
 
-# if ( $^O =~ /MSWin32/ )
-# {
-#     open(ADD, "cvs -d $cvsroot remove $options $file |") or
-#                                 die "can't execute cvs remove\n";
-# }
-# else
-# {
-#     open(ADD, "cvs -d $cvsroot remove $options $file 2>&1 |") or
-#                                 die "can't execute cvs remove\n";
-# }
+# create a temporary filename
+my $tmp_debug = "/tmp/" . $me . "_$$.out";
+$tmp_debug = "$::ENV{TEMP}/" . $me . "_$$.out" unless !length($::ENV{TEMP});
 
+# execute cvs diff and save to a file
+system("cvs -d $cvsroot diff $file > $tmp_debug");
 
+# view the diff
+system("less $tmp_debug");
+
+# remove the temp file
+unlink($tmp_debug);
