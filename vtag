@@ -20,6 +20,7 @@ our @bak_files;
 # OPTIONS AND ENVIRONMENT VARS
 #################################
 
+VCtools::switch('skip_tagfile', 's', 'skip changes to tagfile (if defined)');
 VCtools::args('tag', 'single', 'name of tag (often a version number)');
 VCtools::getopts();
 
@@ -91,7 +92,7 @@ check_file_status($proj, 'modified', "have local modifications", sub
 #################################
 
 # update any file containing the version (tag)
-if (my $tagfile = VCtools::get_proj_directive($proj, 'TagFile'))
+if (my $tagfile = VCtools::get_proj_directive($proj, 'TagFile') and not VCtools::skip_tagfile())
 {
 	my $full_tagfile = VCtools::project_dir($proj) . "/$tagfile";
 
