@@ -77,6 +77,11 @@ print STDERR "determined starting revision to be $start\n" if DEBUG >= 2;
 my $end = VCtools::revision() || VCtools::head_revno($proj);
 print STDERR "determined ending revision to be $end\n" if DEBUG >= 2;
 
+VCtools::prompt_to_continue("will merge revisions $start through $end from " . ($branch ? "branch $branch" : "trunk"),
+		"If this does not sound right, please do not continue.",
+		"Also, for maximum safety you should always vsync before you vmerge.",
+		"If you haven't vsync'ed lately, please stop now and do so before running again.");
+
 
 #################################
 # MAIN
