@@ -1,15 +1,12 @@
-#! /usr/bin/perl -w
+#! /usr/bin/perl
 
 use strict;
-
-use Geek::Dev::Debug(0);
+use warnings;
 
 use Cwd qw(getcwd);
 
-use VCtools::common;
-
-
-$| = 1;
+use VCtools::Base;
+use VCtools::Common;
 
 
 #################################
@@ -19,6 +16,7 @@ $| = 1;
 VCtools::process_args("project");
 
 my $project = $ARGV[0];
+
 
 #################################
 # CHECK FOR ERRORS
