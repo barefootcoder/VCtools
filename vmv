@@ -65,7 +65,7 @@ foreach (@files)
 # MAIN
 #################################
 
-VCtools::move_files($proj, $dest, @files);
+VCtools::move_files($proj, $dest, @files, { FORCE => VCtools::force() });
 
 print "done\n";
 

@@ -655,10 +655,11 @@ sub _make_svn_command
 	{
 		push @options, "-N" if $opts->{DONT_RECURSE};
 	}
-	push @options, "--diff-cmd diff -x -bc" if $opts->{IGNORE_BLANKS};
 	push @options, "-m '$opts->{MESSAGE}'" if $opts->{MESSAGE};
 	push @options, "-r $opts->{REVNO}" if $opts->{REVNO};
+	push @options, "--force" if $opts->{FORCE};
 	push @options, "--stop-on-copy" if $opts->{BRANCH_ONLY};
+	push @options, "--diff-cmd diff -x -bc" if $opts->{IGNORE_BLANKS};
 	my $err_redirect = $opts->{IGNORE_ERRORS} ? "2>/dev/null" : "";
 
 	# command substitutions
@@ -1687,13 +1688,14 @@ sub add_files
 
 sub move_files
 {
+	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
 	my ($proj, $dest, @files) = @_;
 
 	# moves have to be done one file at a time
 	my @dest_files;
 	foreach (@files)
 	{
-		my $output = _execute_and_collect_output("move", $_, $dest);
+		my $output = _execute_and_collect_output("move", $_, $dest, $opts);
 
 		my ($src_file, $dest_file) = _file_dest($_, $dest);
 		fatal_error("cannot move file onto itself: $src_file -> $dest_file") unless $src_file and $dest_file;
