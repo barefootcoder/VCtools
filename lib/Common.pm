@@ -88,25 +88,14 @@ sub _really_realpath
 # (check ~/.cvslogin, if not exists, call cvs login)
 sub _svn_auth_check
 {
-	my $auth_dir = "$ENV{HOME}/.subversion/auth";
-	print STDERR "auth_check: looking for $auth_dir and ",
-			-d $auth_dir ? "will" : "won't", " find it\n" if DEBUG >= 4;
+	my ($rootpath) = @_;
 
-	if (not -d $auth_dir)
-	{
-		print STDERR "auth_check: going to try to generate auth ",
-				"using $config->{DefaultRootPath}\n" if DEBUG >= 2;
+	print STDERR "auth_check: going to try to generate auth using $rootpath\n" if DEBUG >= 3;
 
-		# we'll use the default root path as an URL to get a log for
-		# however, if we don't have one, we're sorta screwed
-		fatal_error("not sure what server to log into")
-				unless exists $config->{DefaultRootPath};
-
-		# a short, simple log will ask the password question
-		# we'll throw away the output, but we can't redirect STDERR
-		# or we'd lose the password and certificate prompts
-		system("svn log -r HEAD $config->{DefaultRootPath} >/dev/null");
-	}
+	# a short, simple log will ask the password question, if necessary
+	# we'll throw away the output, but we can't redirect STDERR or we'd lose the password and certificate prompts
+	# and if no auth is necessary, this won't produce any visible output
+	system("svn log -r HEAD $rootpath >/dev/null");
 }
 
 
@@ -170,7 +159,13 @@ sub _project_path
 	print STDERR "project_path thinks which dir is $subdirs{$which}\n"
 			if DEBUG >= 2;
 
-	return $root . "/" . $proj . $subdirs{$which};
+	my $projpath = $root . "/" . $proj . $subdirs{$which};
+
+	# while we're here, do an auth check for this server
+	# (most stuff will fail, possibly silently and/or crashingly, if there's no auth for the server)
+	auth_check($projpath);
+
+	return $projpath;
 }
 
 
@@ -695,7 +690,7 @@ sub page_output
 sub auth_check
 {
 	# pass straight through to appropriate VC system
-	_svn_auth_check;
+	&_svn_auth_check;
 }
 
 
