@@ -91,15 +91,16 @@ else
 }
 open(TD, ">>$tmp_debug") or die("$me: can't save debugging output");
 
-# note that we catch cvs update's stderr as well
-if ( length($::ENV{SHELL}) )
+# can't do some command line stuff in windows
+if ( $^0 =~ /MSWin32/ )
 {
-	open(UPD, "cvs -r -d $cvsroot update -d -P . 2>&1 |") or 
+	open(UPD, "cvs -r -d $cvsroot update -d -P . |") or 
 										die("can't execute cvs update");
 }
 else
 {
-	open(UPD, "cvs -r -d $cvsroot update -d -P . |") or 
+	# note that we catch cvs update's stderr as well
+	open(UPD, "cvs -r -d $cvsroot update -d -P . 2>&1 |") or 
 										die("can't execute cvs update");
 }
 
