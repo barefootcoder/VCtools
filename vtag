@@ -130,16 +130,8 @@ if (my $tagfile = VCtools::get_proj_directive($proj, 'TagFile') and not VCtools:
 				: "with a message that you specify"
 			);
 
-	if ($commit_msg)
-	{
-		# sending -m switch as if it were a file is cheating a bit, but it will work
-		# note that since filenames are automatically quoted, we don't have to quote the commit message itself
-		VCtools::commit_files($proj, "-m$commit_msg", $full_tagfile);
-	}
-	else
-	{
-		VCtools::commit_files($proj, $full_tagfile);
-	}
+	# this will work even if commit message is blank
+	VCtools::commit_files($proj, $full_tagfile, { MESSAGE => $commit_msg });
 
 	unlink("$full_tagfile.bak");
 }
