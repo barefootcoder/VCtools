@@ -2,7 +2,7 @@
 
 ###########################################################################
 #
-# VCtools::common
+# VCtools::Common
 #
 ###########################################################################
 #
@@ -26,70 +26,16 @@ use warnings;
 use Carp;
 use FileHandle;
 use File::Spec;
-use Getopt::Std;
+use Perl6::Form;
 use Data::Dumper;
-use File::HomeDir;
-use Config::General;
 use Cwd qw<realpath>;
 
 use VCtools::Base;
+use VCtools::Args;
+use VCtools::Config;
 
 
-# for access to program arguments/switches
-our $args = {};
-
-# for establishing the switches allowed for a given program
-# we'll fill in the common ones here
-my $switches =
-{
-	h	=>	{
-				name	=>	'help',
-				usage	=>	'[-h]',
-				comment	=>	'this help message',
-			},
-	v	=>	{
-				name	=> 	'verbose',
-				usage	=>	'[-v]',
-				comment	=>	'verbose',
-			},
-	i	=>	{
-				name	=>	'ignore_errors',
-				usage	=>	'[-i]',
-				comment	=>	'ignore errors',
-			},
-	R	=>	{
-				name	=>	'rootpath',
-				usage	=>	'[-R rootpath]',
-				arg		=>	1,
-				comment	=>	'override default VC root path',
-			},
-};
-
-# for error messages
-our $me;
-BEGIN
-{
-	$me = $0;
-	$me =~ s@^.*/@@;
-}
-
-# have to declare this one early, as it's used in a BEGIN block
-sub fatal_error
-{
-	my ($err_msg, $exit_code) = @_;
-	$exit_code ||= 1;
-
-	if ($exit_code eq 'usage')
-	{
-		$err_msg .= " (-h for usage)";
-		$exit_code = 2;
-	}
-
-	print STDERR "$me: $err_msg\n";
-	exit 1;
-}
-
-# change below by calling cvs::set_vcroot()
+# change below with the -R switch
 #our $vcroot = $ENV{CVSROOT};							# for CVS
 our $vcroot = $ENV{SVNROOT};							# for Subversion
 	# actually, I don't really think Subversion has anything like this,
@@ -97,26 +43,6 @@ our $vcroot = $ENV{SVNROOT};							# for Subversion
 
 # for internal use only (_get_lockers & cache_file_status, respectively)
 my (%lockers_cache, %status_cache);
-
-# suck in configuration file
-my $config;
-BEGIN
-{
-	fatal_error("required environment variable VCTOOLS_CONFIG is not set", 3)
-			unless exists $ENV{VCTOOLS_CONFIG};
-	$config = { ParseConfig($ENV{VCTOOLS_CONFIG}) };
-	# directives ending in "Dir" are allowed to include ~ expansion and env vars
-	foreach (keys %$config)
-	{
-		if ( /Dir$/ )
-		{
-			# $~ thoughtfully provided by File::HomeDir
-			$config->{$_} =~ s@^~(.*?)/@$~{$1}/@;
-			$config->{$_} =~ s/\$\{?(\w+)\}?/$ENV{$1}/;
-		}
-	}
-	print Data::Dumper->Dump( [$config], [qw<$config>] ) if DEBUG >= 3;
-}
 
 # help get messages out a bit more quickly
 $| = 1;
@@ -156,6 +82,32 @@ sub _really_realpath
 }
 
 
+# never implemented for CVS, but probably wouldn't be very hard
+# (check ~/.cvslogin, if not exists, call cvs login)
+sub _svn_auth_check
+{
+	my $auth_dir = "$ENV{HOME}/.subversion/auth";
+	print STDERR "auth_check: looking for $auth_dir and ",
+			-d $auth_dir ? "will" : "won't", " find it\n" if DEBUG >= 4;
+
+	if (not -d $auth_dir)
+	{
+		print STDERR "auth_check: going to try to generate auth ",
+				"using $config->{DefaultRootPath}\n" if DEBUG >= 2;
+
+		# we'll use the default root path as an URL to get a log for
+		# however, if we don't have one, we're sorta screwed
+		fatal_error("not sure what server to log into")
+				unless exists $config->{DefaultRootPath};
+
+		# a short, simple log will ask the password question
+		# we'll throw away the output, but we can't redirect STDERR
+		# or we'd lose the password and certificate prompts
+		system("svn log -r HEAD $config->{DefaultRootPath} >/dev/null");
+	}
+}
+
+
 sub _project_path
 {
 	# finds the server-side path for the given project
@@ -173,12 +125,12 @@ sub _project_path
 		$proj_root = $config->{Project}->{$proj}->{RootPath};
 	}
 
-	my $root = $args->{R} || $proj_root
+	my $root = rootpath() || $proj_root
 			|| $config->{DefaultRootPath} || $vcroot;
 	print STDERR "project_path thinks root is $root\n" if DEBUG >= 2;
 
-	my $branch_policy = $config->{Project}->{$proj}->{BranchPolicy}
-			|| $config->{DefaultBranchPolicy} || "NONE";
+	my $branch_policy = get_proj_directive($proj, 'BranchPolicy', 'NONE');
+
 	my $trunk;
 	if ($branch_policy eq "NONE")
 	{
@@ -290,45 +242,52 @@ sub _interpret_cvs_status_output
 
 sub _interpret_svn_status_output
 {
+	# as a special case, sometimes an unknown file will look like this:
+	if ( /svn: '(.*)' is not under version control/ )
+	{
+		my $file = $1;
+		$status_cache{$file} = 'unknown';
+		return $file;
+	}
+
 	return undef unless length > 40;
 	my $file = substr($_, 40);
 	print "interpreting status output: file is <$file>\n" if DEBUG >= 4;
 
-	# if it's not in our cache hash (haha!), it's probably not a filename
-	# at all (status output can include lots o' funky stuff)
-	if (exists $status_cache{$file})
+	my $status = substr($_, 0, 1);
+	# have to check locked and outdated (in that order) before everything
+	# else, because they override other statuses
+	if (substr($_, 2, 1) eq 'L')
 	{
-		my $status = substr($_, 0, 1);
-		# have to check outdated before everything else, because it
-		# "overrides" other statuses
-		if (substr($_, 7, 1) eq '*')
-		{
-			$status_cache{$file} = 'outdated';
-		}
-		elsif ($status eq 'M' or $status eq 'A' or $status eq 'D')
-		{
-			$status_cache{$file} = 'modified';
-		}
-		elsif ($status eq ' ')
-		{
-			$status_cache{$file} = 'nothing';
-		}
-		elsif ($status eq 'C')
-		{
-			$status_cache{$file} = 'conflict';
-		}
-		elsif ($status eq '?' or $status eq 'I')
-		{
-			$status_cache{$file} = 'unknown';
-		}
-		elsif ($status eq '!' or $status eq '~')
-		{
-			$status_cache{$file} = 'broken';
-		}
-		else
-		{
-			fatal_error("can't figure out status line: $_", 3);
-		}
+		$status_cache{$file} = 'locked';
+	}
+	elsif (substr($_, 7, 1) eq '*')
+	{
+		$status_cache{$file} = 'outdated';
+	}
+	elsif ($status eq 'M' or $status eq 'A' or $status eq 'D')
+	{
+		$status_cache{$file} = 'modified';
+	}
+	elsif ($status eq ' ')
+	{
+		$status_cache{$file} = 'nothing';
+	}
+	elsif ($status eq 'C')
+	{
+		$status_cache{$file} = 'conflict';
+	}
+	elsif ($status eq '?')
+	{
+		$status_cache{$file} = 'unknown';
+	}
+	elsif ($status eq '!' or $status eq '~')
+	{
+		$status_cache{$file} = 'broken';
+	}
+	else
+	{
+		fatal_error("can't figure out status line: $_", 3);
 	}
 
 	# somebody might want this for something
@@ -351,9 +310,9 @@ sub _interpret_cvs_update_output
 	next if /^cvs update: Updating/;	# ignore these
 	if ( /^([UPM]) (.*)/ )				# ignore unless verbose is on
 	{
-		if ($args->{verbose})
+		if (verbose())
 		{
-			print "$me: ", $1 eq "M" ? "merged" : "updated", " file $2\n";
+			info_msg($1 eq "M" ? "merged" : "updated", "file $2");
 		}
 	}
 	elsif ( /^[AR\?]/ )
@@ -416,19 +375,19 @@ sub _interpret_svn_update_output
 	return if /^At revision/;				# ignore these
 	if ( /^([ADUG]) (.*)/ )				# ignore unless verbose is on
 	{
-		if ($args->{verbose})
+		if (verbose())
 		{
 			my %action = ( A => 'added', R => 'removed',
 					U => 'updated', G => 'merged' );
 
-			print "$me: ", "$action{$1} file $2\n";
+			info_msg("$action{$1} file $2");
 		}
 	}
 	elsif ( /^Restored '(.*)'/ )		# also ignore unless verbose
 	{
-		if ($args->{verbose})
+		if (verbose())
 		{
-			print "$me: restored file $1\n";
+			info_msg("restored file $1");
 		}
 	}
 	elsif ( /^C (.*)/ )
@@ -458,7 +417,7 @@ sub _get_lockers
 		while ( <$ed> )
 		{
 			my ($cvs_file, $user) = _interpret_editors_output();
-			die("$me: unknown file $file (not in VC)\n") unless $user;
+			fatal_error("unknown file $file (not in VC)") unless $user;
 			croak("illegal cvs editors output ($_)")
 					if defined $cvs_file and $cvs_file ne $file;
 
@@ -537,7 +496,22 @@ sub _execute_and_discard_output
 	print STDERR "will discard output of: $cmd\n" if DEBUG >= 2;
 
 	my $err = system("$cmd >/dev/null 2>&1");
-	die("$me: call to VC command $_[0] failed with $! ($err)\n") if $err;
+	if ($err)
+	{
+		# as per the perlvar manpage, we really shouldn't do this ...
+		# but we're going to anyway
+		# we want to use fatal_error() to get a graceful exit in most cases,
+		# but we also need a way to be able to call this inside an eval block
+		# without exiting the entire program.  this works.  so sue us.
+		if ($^S)							# i.e., if inside an eval
+		{
+			die("call to VC command $cmd failed with $! ($err)");
+		}
+		else
+		{
+			fatal_error("call to VC command $cmd failed with $! ($err)", 3) if $err;
+		}
+	}
 }
 
 
@@ -548,8 +522,8 @@ sub _execute_and_get_output
 	my $cmd = &_make_vc_command;
 	print STDERR "will process output of: $cmd\n" if DEBUG >= 2;
 
-	my $fh = new FileHandle("$cmd |")
-			or die("$me: call to cvs command $_[0] failed with $!\n");
+	my $fh = new FileHandle("$cmd 2>&1 |")
+			or fatal_error("call to cvs command $cmd failed with $!", 3);
 	return $fh;
 }
 
@@ -562,7 +536,7 @@ sub _execute_and_collect_output
 	print STDERR "will collect output of: $cmd\n" if DEBUG >= 2;
 
 	my $output = `$cmd`;
-	die("$me: call to VC command $_[0] failed with $!\n")
+	fatal_error("call to VC command $cmd failed with $!", 3)
 			unless defined $output;
 	return $output;
 }
@@ -576,7 +550,7 @@ sub _execute_normally
 	print STDERR "will execute: $cmd\n" if DEBUG >= 2;
 
 	my $err = system($cmd);
-	die("$me: call to VC command $_[0] failed with $! ($err)\n") if $err;
+	fatal_error("call to VC command $cmd failed with $! ($err)", 3) if $err;
 }
 
 
@@ -585,66 +559,17 @@ sub _execute_normally
 ###########################
 
 
-sub process_args
-{
-	if (ref $_[0] eq 'HASH')
-	{
-		my $extra_switches = shift;
-
-		$switches = { %$switches, %$extra_switches };
-	}
-
-	# print STDERR "processing args\n";
-	getopts(join('', map { exists $switches->{$_}->{arg} ? "$_:" : $_ }
-			keys %$switches), $args);
-
-	if (defined $args->{h})
-	{
-		print STDERR "usage: $me "
-				. join(' ', map {$switches->{$_}->{usage}} keys %$switches)
-				. " @_\n";
-		print STDERR "       default arg is .\n"
-				if @_ == 1 and $_[0] eq "[file_or_dir ...]";
-		print STDERR "       -$_ : $switches->{$_}->{comment}\n"
-				foreach keys %$switches;
-		exit;
-	}
-
-	$args->{$switches->{$_}->{name}} = defined $args->{$_}
-			foreach keys %$switches;
-
-	unless (defined $args->{ignore_errors})
-	{
-		print STDERR "$me: Warning! not running under vcshell!\n"
-				unless exists $ENV{VCTOOLS_SHELL};
-	}
-
-	if ($_[-1] =~ /\Q...]\E$/)
-	{
-		fatal_error("incorrect number of arguments", 'usage') unless @ARGV >= @_ - 1;
-	}
-	else
-	{
-		fatal_error("incorrect number of arguments", 'usage') unless @ARGV == @_;
-	}
-}
-
-
-sub verbose ()
-{
-	return $args->{verbose};
-}
-
-sub ignore_errors ()
-{
-	return $args->{ignore_errors};
-}
-
-
 sub yesno
 {
 	print "$_[0]  [y/N] ";
 	return <STDIN> =~ /^y/i;
+}
+
+
+sub auth_check
+{
+	# pass straight through to appropriate VC system
+	_svn_auth_check;
 }
 
 
@@ -684,9 +609,16 @@ sub verify_gid
 }
 
 
+sub check_common_errors
+{
+	warning("Warning! not running under vcshell!")
+			unless exists $ENV{VCTOOLS_SHELL};
+}
+
+
 sub verify_files_and_group
 {
-	my (@files) = @_;
+	my @files = @_;
 
 	# all files must exist, be readable, be in the working dir,
 	# and all belong to the same project
@@ -694,6 +626,7 @@ sub verify_files_and_group
 	my $project;
 	foreach my $file (@files)
 	{
+		print STDERR "verifying file $file\n" if DEBUG >= 4;
 		fatal_error("$file does not exist") unless -e $file;
 		fatal_error("$file is not readable") unless -r _;
 
@@ -713,6 +646,9 @@ sub verify_files_and_group
 
 	# now make sure we've got the right GID for this project
 	verify_gid($project);
+
+	# in case someone needs to know what the project is
+	return $project;
 }
 
 
@@ -752,16 +688,8 @@ sub cache_file_status
 {
 	my (@files) = @_;
 
-	# sometimes (well, most of the time) a file is just omitted from the
-	# output entirely if it doesn't exist in VC, rather than having output
-	# that indicates it wasn't found (such as '?')
-	# therefore, default everything to notfound
-	# it also helps the output interpreter know what's a valid file and
-	# what's not (hopefully)
-	$status_cache{$_} = DEFAULT_STATUS foreach @files;
-
 	my $st = _execute_and_get_output("status", @files,
-			{ IGNORE_ERRORS => 1, DONT_RECURSE => 1 } );
+			{ DONT_RECURSE => not recursive() } );
 	while ( <$st> )
 	{
 		print STDERR "<file status>:$_" if DEBUG >= 5;
@@ -770,7 +698,7 @@ sub cache_file_status
 	close($st);
 
 	print Data::Dumper->Dump( [\%status_cache], [qw<%status_cache>] )
-			if DEBUG >= 5;
+			if DEBUG >= 4;
 }
 
 
@@ -828,6 +756,19 @@ sub modified_from_vc
 }
 
 
+# you must call cache_file_status first for this sub to work
+sub get_all_with_status
+{
+	my ($status, $prefix) = @_;
+	$prefix ||= '';
+
+	# return all files with the requested status
+	# that also begin with the requested prefix (usually a dirname)
+	return grep { $status_cache{$_} eq $status and /^\Q$prefix\E/ }
+			keys %status_cache;
+}
+
+
 sub get_tree
 {
 	my ($project, $dir, $dest) = @_;
@@ -840,7 +781,7 @@ sub get_tree
 	while ( <$ed> )
 	{
 		print "get_files output: $_" if DEBUG >= 5;
-		if ($args->{verbose})
+		if (verbose())
 		{
 			if ( /^[AU]\s+(.*)$/ )
 			{
@@ -929,21 +870,6 @@ sub print_status
 {
 	my (@files) = @_;
 
-	# prefill status cache as best we can
-	foreach my $file (@files)
-	{
-		$status_cache{$file} = DEFAULT_STATUS;
-		if (-d $file)
-		{
-			if (DEBUG >= 4)
-			{
-				print "   setting default status for $_\n"
-						foreach glob("$file/*");
-			}
-			$status_cache{$_} = DEFAULT_STATUS foreach glob("$file/*");
-		}
-	}
-
 	use constant ALWAYS => 1;
 	my %statuses =
 	(
@@ -960,7 +886,7 @@ sub print_status
 							is_error	=>	0,
 						},
 		'nothing'	=>	{
-							printif		=>	verbose,
+							printif		=>	verbose(),
 							comment		=>	"unchanged from repository",
 							is_error	=>	0,
 						},
@@ -970,13 +896,18 @@ sub print_status
 							to_fix		=>	"vcommit after manual correction",
 							is_error	=>	1,
 						},
+		'locked'	=>	{
+							printif		=>	ALWAYS,
+							comment		=>	"is currently locked",
+							is_error	=>	0,
+						},
 		'broken'	=>	{
-							printif		=>	(not ignore_errors),
+							printif		=>	(not ignore_errors()),
 							comment		=>	"has unknown error",
 							is_error	=>	1,
 						},
 		'unknown'	=>	{
-							printif		=>	(not ignore_errors),
+							printif		=>	(not ignore_errors()),
 							comment		=>	"doesn't appear to be in VC",
 							to_fix		=>	"vnew or vcommit",
 							is_error	=>	0,
@@ -985,31 +916,27 @@ sub print_status
 
 	my $errors = 0;
 
-	my $stat = _execute_and_get_output("status", @files,
-			{ DONT_RECURSE => not $args->{recursive} } );
-	while ( <$stat> )
+	cache_file_status(@files);
+	my $cur_status = '';
+	foreach my $file (sort { $status_cache{$a} cmp $status_cache{$b} or $a cmp $b } keys %status_cache)
 	{
-		my $file = _interpret_status_output;
 		my $status = $status_cache{$file};
 
-		if (exists $statuses{$status})
+		if ($statuses{$status}->{printif} == 1)
 		{
-			if ($statuses{$status}->{printif} == 1)
-			{
-				print "  $file => $statuses{$status}->{comment}";
-				print " (run $statuses{$status}->{to_fix} to fix)"
-						if verbose and exists $statuses{$status}->{to_fix};
-				print "\n";
+			$file .= "/" if -d $file;
 
-				$errors |= $statuses{$status}->{is_error};
+			if ($cur_status ne $status)
+			{
+				print "\n  $statuses{$status}->{comment}\n";
+				print "  (run $statuses{$status}->{to_fix} to fix)\n"
+						if verbose() and exists $statuses{$status}->{to_fix};
+				$cur_status = $status;
 			}
-		}
-		else
-		{
-			fatal_error("unknown status $status generated for $file", 3);
+
+			print "    => $file\n";
 		}
 	}
-	close($stat);
 
 	return $errors;
 }
@@ -1026,11 +953,39 @@ sub add_files
 
 sub commit_files
 {
-	my (@files) = @_;
+	my ($proj, @files) = @_;
 
-	# pretty basic
-	_execute_normally("commit", @files,
-			{ DONT_RECURSE => not $args->{recursive} } );
+	# if a debugging regex is specified, we need to search each file for
+	# that pattern.  if we find it, we ask the user if they're really
+	# sure they want to commit a file which apparently still has some
+	# debugging switch turned on
+	if (my $debug_pattern = get_proj_directive($proj, 'DebuggingRegex'))
+	{
+		foreach my $file (@files)
+		{
+			# this is a die() instead of a fatal_error() because you really
+			# should have already checked to make sure the file is readable
+			# (see the verify_files_and_group function)
+			open(IN, $file) or die("can't open file $file for reading");
+			while ( <IN> )
+			{
+				if ( /$debug_pattern/ )
+				{
+					warning("$file is apparently still in debugging mode:");
+					print ">>> $_";
+					unless (yesno("Continue anyway?"))
+					{
+						exit(1);
+					}
+				}
+			}
+			close(IN);
+		}
+	}
+
+	# we expect that our filelist has already been expanded for purposes of
+	# recursion, so we're not going to do any recursion here
+	_execute_normally("commit", @files, { DONT_RECURSE => 1 } );
 }
 
 
@@ -1039,7 +994,7 @@ sub update_files
 	my (@files) = @_;
 
 	my $upd = _execute_and_get_output("update", @files,
-			{ DONT_RECURSE => not $args->{recursive} } );
+			{ DONT_RECURSE => not recursive() } );
 	while ( <$upd> )
 	{
 		_interpret_update_output;
