@@ -1,74 +1,31 @@
 #! /usr/bin/perl
 
 use strict;
+use warnings;
 
-# use Barefoot::debug;							# comment out for production
-
-use Getopt::Std;
-use Cwd qw(getcwd);
-use Barefoot::cvs;
-use Barefoot::input qw(get_yn);
-
-my $me = $0;
-$me =~ s@^.*/@@;
-
-# default values
-my $verbose=0;
-my $cvsroot=$::ENV{CVSROOT};
+use VCtools::Base;
+use VCtools::Args;
+use VCtools::Common;
 
 
 #################################
 # OPTIONS AND ENVIRONMENT VARS
 #################################
 
-my $opt = {};
-getopts('vd:', $opt);
-$verbose = 1 if defined $opt->{v};
-$cvsroot = $opt->{d} if defined $opt->{d};
+VCtools::args('files', 'list', 'file(s) (or directory/ies) to commit');
+VCtools::getopts();
+
+# remember, directories are files too
+my @files = VCtools::files();
 
 
 #################################
 # CHECK FOR ERRORS
 #################################
 
-if (!$cvsroot)
-{
-	print STDERR "$me: variable CVSROOT must be set\n";
-	exit 2;
-}
+my $proj = VCtools::verify_files_and_group(@files);
 
-my $offsite = cvs::is_offsite($cvsroot);
-
-my $module = $ARGV[0];
-
-if (!$module)
-{
-	print STDERR "usage: $me module\n";
-	exit 2;
-}
-
-if (!-r $module)
-{
-	print STDERR "$me: $module does not exist or is not readable\n";
-	exit 2;
-}
-
-my ($project, $subdir) = cvs::parse_module(getcwd());
-if ( !$offsite )
-{
-	if (!-e "$cvsroot/$project/$subdir/$module,v")
-	{
-		print "$cvsroot/$project/$subdir/$module,v\n";
-		print STDERR "$me: $module does not appear to be checked into CVS\n";
-		exit 2;
-	}
-}
-
-
-#################################
-# MAIN
-#################################
-
+=not_working_with_subversion_yet
 my @lockers = cvs::getLockers($cvsroot, $module);
 my $username = $::ENV{USER};
 $username = $::ENV{USERNAME} if !$username;
@@ -77,16 +34,23 @@ if (!grep {$_ eq $username} @lockers)
 	print "$me: you didn't do a get on this module\n";
 	exit 1;
 }
+=cut
 
-
-system("cvs -d $cvsroot unedit $module");
-system("cvs -d $cvsroot watch remove -a edit $module");
-system("cvs -r -d $cvsroot update -A $module");
-if ( !$offsite )
+foreach my $file (@files)
 {
-	my $prgrp = cvs::project_group($project);
-	system("chgrp $prgrp $module") unless $?;
-	system("chmod a+r $module") unless $?;
+	if (VCtools::get_diffs($file))
+	{
+		VCtools::info_msg("file $file contains modifications!");
+		VCtools::info_msg("these changes will be lost forever!");
+		exit unless VCtools::yesno("Are you sure you want to do this?");
+	}
 }
+
+
+#################################
+# MAIN
+#################################
+
+VCtools::revert_files(@files);
 
 print "done\n" unless $?;
