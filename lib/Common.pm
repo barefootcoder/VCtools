@@ -889,6 +889,7 @@ sub cache_file_status
 	$opts->{IGNORE_ERRORS} = 0;
 	my (@files) = @_;
 
+	my @statfiles;
 	my $st = _execute_and_get_output("status", @files, $opts);
 	while ( <$st> )
 	{
@@ -901,11 +902,17 @@ sub cache_file_status
 		# directories sometimes come in with trailing slashes, so make sure
 		# lookups for those won't fail
 		$status_cache{"$file/"} = $status if $file and -d $file;
+
+		# and save in case anyone's looking at our return value
+		push @statfiles, $file;
 	}
 	close($st);
 
 	print Data::Dumper->Dump( [\%status_cache], [qw<%status_cache>] )
 			if DEBUG >= 4;
+
+	# in case someone needs to know what files we collected statuses (stati?) on
+	return @statfiles;
 }
 
 
