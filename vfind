@@ -1,0 +1,141 @@
+#! /usr/bin/perl
+
+use strict;
+use warnings;
+
+use File::Find;
+
+use VCtools::Base;
+use VCtools::Args;
+use VCtools::Common;
+
+
+#################################
+# OPTIONS AND ARGUMENTS
+#################################
+
+VCtools::switch('current_dir', 'c', 'start from . '
+		. '(default: start from root project dir)');
+VCtools::args('dirs', 'optlist', 'directory/ies to search '
+		. '(default: search all from starting dir)');
+VCtools::action('print', 'print filename (only)  '
+		. '(this is the default action)');
+VCtools::action('grep', 'search file for (Perl regex) pattern '
+		. '(also prints filename)', 'pattern');
+VCtools::getopts();
+
+# remember, directories are files too
+my @files = VCtools::dirs();
+
+
+#################################
+# CHECK FOR ERRORS
+#################################
+
+VCtools::check_common_errors();
+
+
+#################################
+# MAIN
+#################################
+
+my $proj = VCtools::current_project();
+my $projdir = VCtools::project_dir($proj);
+# this helps regex'es go faster
+my $projdir_qr = qr[^$projdir/];
+print STDERR "figuring proj is $proj and dir is $projdir\n" if DEBUG >= 2;
+
+if (VCtools::current_dir())
+{
+	if (not @files)
+	{
+		@files = ('.');
+	}
+}
+else
+{
+	if (@files)
+	{
+		$_ = "$projdir/$_" foreach @files;
+	}
+	else
+	{
+		@files = ($projdir);
+	}
+}
+
+# assume falise
+my $retval = 0;
+
+# do this one outside the loop since it really only needs to be done once
+my $grep_pattern = VCtools::grep();
+if ($grep_pattern)
+{
+	eval { $grep_pattern = qr/$grep_pattern/ }
+			or VCtools::fatal_error("illegal grep pattern: $@");
+}
+
+foreach (VCtools::get_all_files(@files))
+{
+	if ($grep_pattern)
+	{
+		$retval |= grep_file($_, $grep_pattern);
+	}
+	else
+	{
+		# doesn't really matter if they specified -print or not;
+		# this is the default action
+		$retval |= print_file($_, "\n");
+	}
+}
+
+# if everything is true, that means no errors,
+# so reverse the sense of our $retval
+exit(not $retval);
+
+
+#################################
+# SUBS
+#################################
+
+
+sub print_file
+{
+	my ($file, $trailer) = @_;
+
+	$file =~ s/$projdir_qr//;
+	$file .= "/" if -d $file;
+	print "$file$trailer";
+
+	# print is always true
+	return 1;
+}
+
+
+sub grep_file
+{
+	my ($file, $pattern) = @_;
+	my $retval = 0;
+
+	if (-f)
+	{
+		if (not open(IN, $_))
+		{
+			VCtools::warning("can't open file $_");
+			return;
+		}
+
+		while ( <IN> )
+		{
+			if ( /$pattern/ )
+			{
+				$retval = 1;
+				print_file($file, ":");
+				print;
+			}
+		}
+		close(IN);
+	}
+
+	return $retval;
+}

@@ -82,6 +82,20 @@
 # If there is an error in the command line, getopts() will never return.
 # It will print the usage message and exit with a return value of 2.
 #
+# As one bizarre twist (that will probably never be used by anything other
+# one program), you can also specify "actions", which are a bit like switches
+# that come _after_ the arguments.  This allows you to create a command
+# which works like find(1):
+#
+#	VCtools::args('dir', 'list', 'directories to search');
+#	VCtools::action('name', 'only find names matching pattern', 'pattern');
+#	VCtools::action('print', 'print filenames found');
+#
+# Note that the Args module doesn't really distinguish between conditions
+# and actions.  Also note that this doesn't allow you to do anything as
+# complex as find's -exec (to name but one obvious example).
+#
+#
 # Since the Args module is the keeper of all information about the command
 # line, including the name of the program, it is also responsible for
 # handling fatal program errors:
@@ -127,13 +141,14 @@ use Getopt::Declare;
 use VCtools::Base;
 
 
-use constant FIRST_SWITCH  => '    {<{32}<}    {<{40}<}';
+use constant FIRST_SWITCH  => '    {<{32}<}    {<{40+}<}';
 use constant SECOND_SWITCH => '    {<{32}<}    [ditto]';
 
 use vars qw<$AUTOLOAD>;
 
 
 my @spec = ();
+my $spec_position = 0;	# 0 == switches, 1 == arguments, 2 == actions
 
 our $args = {};
 our ($me, $command_line);
@@ -209,21 +224,25 @@ sub switch
 {
 	my ($name, $short_form, $comment, $arg) = @_;
 
+	# if short form defined, use that first and name as the long form (second)
+	# otherwise, we have to use name only
+	my ($first, $second) = $short_form ? ($short_form, $name) : ($name, undef);
+
 	if (defined $arg)
 	{
 		$args->{$name} = undef;
 
-		push @spec, form(FIRST_SWITCH, "-$short_form <$arg>", $comment);
+		push @spec, form(FIRST_SWITCH, "-$first <$arg>", $comment);
 		push @spec, "              { \$VCtools::args->{$name} = \$$arg }\n";
-		push @spec, form(SECOND_SWITCH, "--$name <$arg>");
+		push @spec, form(SECOND_SWITCH, "--$second <$arg>") if $second;
 	}
 	else
 	{
 		$args->{$name} = 0;
 
-		push @spec, form(FIRST_SWITCH, "-$short_form", $comment);
+		push @spec, form(FIRST_SWITCH, "-$first", $comment);
 		push @spec, "              { \$VCtools::args->{$name} = 1 }\n";
-		push @spec, form(SECOND_SWITCH, "--$name");
+		push @spec, form(SECOND_SWITCH, "--$second") if $second;
 	}
 }
 
@@ -231,6 +250,13 @@ sub switch
 sub args
 {
 	my ($name, $type, $comment) = @_;
+
+	# if this is the first argument, stick a small header in the spec
+	if ($spec_position == 0)
+	{
+		push @spec, "\nArguments:\n";
+		$spec_position = 1;
+	}
 
 	my ($arg_spec, $action);
 	if ($type eq 'single')
@@ -268,6 +294,25 @@ sub args
 	push @spec, form(FIRST_SWITCH, $arg_spec, $comment);
 	push @spec, "              [required]\n" unless $type =~ /^opt/;
 	push @spec, "              { $action }\n";
+}
+
+
+sub action
+{
+	my ($name, $comment, $arg) = @_;
+
+	# if this is the first action, adjust the command line accordingly
+	# and stick a small header in the spec
+	if ($spec_position == 1)
+	{
+		$command_line .= " [one_action]";
+		push @spec, "\nActions:\n";
+		$spec_position = 2;
+	}
+
+	# actions are just like switches anyways,
+	# so make switch() do all the hard work
+	switch($name, undef, $comment, $arg);
 }
 
 
