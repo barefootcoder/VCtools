@@ -68,6 +68,8 @@ if (not exists $ENV{VCTOOLS_SHELL})
 		{
 			error("no such directory $pdir");
 		}
+		print STDERR "group $group, start dir $pdir\n"
+				if DEBUG >= 3;
 		$ENV{VCTOOLS_SHELL_STARTDIR} = $pdir;
 	}
 	else
