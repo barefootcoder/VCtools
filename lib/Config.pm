@@ -145,8 +145,7 @@ sub release_path
 			$rpath = $_ if length($_) > length($rpath);
 		}
 	}
-	fatal_error("don't have a release path for $path/$file")
-			unless $rpath;
+	return undef unless $rpath;
 	print STDERR "release_path: found rpath $rpath\n" if DEBUG >= 2;
 
 	# now substitute the found release path in our particular file
