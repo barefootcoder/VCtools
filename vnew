@@ -3,35 +3,28 @@
 use strict;
 use warnings;
 
-use Geek::Dev::Debug(1);
-
-use Getopt::Std;
-use Cwd qw(getcwd);
-
-use VCtools::common;
+use VCtools::Base;
+use VCtools::Args;
+use VCtools::Common;
 
 
 #################################
 # OPTIONS AND ENVIRONMENT VARS
 #################################
 
-VCtools::process_args("file_or_dir [...]");
+VCtools::switch('recursive', 'r', 'operate recursively');
+VCtools::args('files', 'list', 'file(s) (or directory/ies) to commit');
+VCtools::getopts();
 
 # remember, directories are files too
-my @files = @ARGV;
+my @files = VCtools::files();
 
 
 #################################
 # CHECK FOR ERRORS
 #################################
 
-foreach my $file (@files)
-{
-	VCtools::fatal_error("$file does not exist")
-			unless -e $file;
-	VCtools::fatal_error("$file is not in VC working dir")
-			unless VCtools::parse_module($file);
-}
+my $proj = VCtools::verify_files_and_group(@files);
 
 # get statuses for everything at once (quicker that way)
 VCtools::cache_file_status(@files);
@@ -47,71 +40,23 @@ foreach my $file (@files)
 # MAIN
 #################################
 
-if ( $^O =~ /MSWin32/ )
-{
-	open(ADD, "cvs -d $cvsroot add $module |") or 
-								die "can't execute cvs add\n"; 
-}
-else
-{
-	open(ADD, "cvs -d $cvsroot add $module 2>&1 |") or 
-								die "can't execute cvs add\n"; 
-}
+my @new_files = VCtools::add_files(@files,
+		{ DONT_RECURSE => not VCtools::recursive() } );
 
-while ( <ADD> )
+# theoretically, we should only see new files in the case of a recursive add
+# let's ask the user if this is okay with them
+# (if not, we'll just revert the adds)
+if (@new_files)
 {
-	chomp;
-	next if ( /use \'cvs commit\'/ || /^done/ );
-	
-	if ( /server\: (.*)/ )
+	VCtools::list_files($proj, "have been added unexpectedly", @new_files);
+	unless (VCtools::yesno("is this okay?"))
 	{
-		print "$me: $1\n";
-	}
-	else
-	{
-		# don't know what this line is
-		print "$me: $_\n";
+		VCtools::revert_files(@new_files, @files);
+		VCtools::info_msg("no files have been added");
+		exit;
 	}
 }
-close(ADD);
 
-
-# commit is not needed for directories
-unless (-d $module)
-{
-	if ( $^O =~ /MSWin32/ )
-	{
-		open(COM, "cvs -r -d $cvsroot commit -m\"initial version\" $module |") 
-			unless $?;
-	}
-	else
-	{
-		open(COM, "cvs -r -d $cvsroot commit -m\"initial version\" $module 2>&1 |") 
-			unless $?;
-	}
-
-	while ( <COM> )
-	{
-		chomp;
-		next if ( /^done/ );
-			
-		if ( /server\: (.*)/ )
-		{
-			print "$me: $1\n";
-		}
-		else
-		{
-			# don't know what this line is
-			print "$me: $_\n";
-		}
-	}
-	close(COM);
-
-	# don't think this is needed with -r above, regardless won't work offsite
-	if ( !$offsite )
-	{
-		system("chmod a-w $module") unless $?;
-	}
-}
+VCtools::commit_files($proj, @files, @new_files);
 
 print "done\n" unless $?;
