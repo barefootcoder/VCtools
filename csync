@@ -2,6 +2,8 @@
 
 use strict;
 
+# use Barefoot::debug;							# comment out for production
+
 use Getopt::Std;
 use Cwd qw(getcwd);
 use Barefoot::cvs;
@@ -114,7 +116,7 @@ UPDATE_LINE: while ( <UPD> )
 			# if it's a directory, it just means that there's no CVS
 			# files _in_ that directory ... however, that's perfectly
 			# okay if that directory is also in cvsroot
-			my $wdir = cvs::working_dir();
+			my $wdir = cvs::WORKING_DIR;
 			my $cvsdir = "$wdir/$project/$subdir/$file";
 			$cvsdir =~ s/$wdir/$::ENV{CVSROOT}/;
 			next if -d $cvsdir;
