@@ -1525,6 +1525,13 @@ sub restore_backup_files
 }
 
 
+sub full_project_backup_name
+{
+	my ($proj, $opts) = @_;
+	return project_dir($proj . $opts->{'ext'});
+}
+
+
 sub backup_full_project
 {
 	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
@@ -1532,14 +1539,14 @@ sub backup_full_project
 
 	die("backup_full_project: must supply backup extension") unless $opts->{'ext'};
 
-	my $backup_dir = project_dir($proj . $opts->{'ext'});
+	my $backup_dir = full_project_backup_name($proj, $opts);
 	if (-d $backup_dir)
 	{
 		prompt_to_continue("a previous backup $backup_dir already exists; must remove it to continue");
 		system("rm", "-rf", $backup_dir);
 	}
 
-	system("cp", "-pri", project_dir($proj), project_dir($proj . $opts->{ext}));
+	system("cp", "-pri", project_dir($proj), $backup_dir);
 }
 
 
@@ -1549,7 +1556,7 @@ sub restore_project_backup
 	my ($proj) = @_;
 
 	die("restore_project_backup: must supply backup extension") unless $opts->{'ext'};
-	my $backup_dir = project_dir($proj . $opts->{'ext'});
+	my $backup_dir = full_project_backup_name($proj, $opts);
 	die("restore_project_backup: no backup exists $proj$opts->{'ext'}") unless -d $backup_dir;
 
 	system("rm", "-rf", project_dir($proj));
@@ -1787,7 +1794,9 @@ sub commit_files
 	# debugging switch turned on
 	# (note: we suspend this check for straight moves.  generally the contents of those files haven't changed)
 	# (further note: obviously no point in checking for removes, since the files aren't there any more anyway)
-	if (not exists $opts->{MOVE} and not exists $opts->{DEL}
+	# (further note: we _could_ check for merges, but some may be removes, and they shouldn't really contain
+	# debugging code unless it was previously checked in and that's what got merged ... let's just not bother)
+	if (not exists $opts->{MOVE} and not exists $opts->{DEL} and not exists $opts->{MERGE}
 			and my $debug_pattern = get_proj_directive($proj, 'DebuggingRegex'))
 	{
 		foreach my $file (@files)
