@@ -1,0 +1,51 @@
+#! /usr/bin/perl
+
+use strict;
+
+use File::Find;
+use Getopt::Std;
+
+use Barefoot::string;
+
+
+my $opt = {};
+getopts("u:", $opt);
+my $user = defined($opt->{u}) ? $opt->{u} : $ENV{USER};
+my $projdir = "/proj/$user";
+die("user $user has no personal CVS directory") unless -d $projdir;
+
+my $pattern = $ARGV[0];
+
+my %possible_dirs;
+find sub
+	{
+		if ($_ eq "CVS")
+		{
+			$File::Find::prune = 1;
+		}
+		else
+		{
+			is_possible($_, $File::Find::name)
+					if /^$pattern/o and -d $File::Find::name;
+		}
+	}, $projdir;
+my @dirs = sort {
+		$possible_dirs{$a} <=> $possible_dirs{$b} || $a cmp $b
+	} keys %possible_dirs;
+print "$dirs[0]\n";
+
+
+sub is_possible
+{
+	my ($subdir, $fulldir) = @_;
+
+	# count the number of subdirs
+	# this allows us to rank choices by how "deep" they are
+	my $depth = string::count($fulldir, '/');
+
+	# we want exact matches to rank higher than partials
+	# thus we add a large number to non-exact matches, making them drop
+	# low in the sorting
+	$possible_dirs{$fulldir} = string::count($fulldir, '/')
+			+ ($subdir eq $pattern ? 0 : 100);
+}
