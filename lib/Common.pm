@@ -1199,7 +1199,9 @@ sub print_status
 
 		if ($statuses{$status}->{printif} == 1)
 		{
-			$file .= "/" if -d $file;
+			# remember, directories have two entries in the status cache: one with a trailing / and one without
+			# here, we only want the one with
+			next if -d $file and substr($file, -1) ne "/";
 
 			if ($cur_status ne $status)
 			{
