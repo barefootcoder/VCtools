@@ -35,13 +35,16 @@ if (defined $opts->{p})
 }
 
 
+print STDERR "controlling shell var is $ENV{VCTOOLS_SHELL}\n" if DEBUG >= 2;
+print STDERR "current PATH is $ENV{PATH}\n" if DEBUG >= 3;
+
 # being called initially from alias vcshell
 if (not exists $ENV{VCTOOLS_SHELL})
 {
 	# are we going to transmogrify ourselves into vbuild?
 	my $buildit = exists $opts->{b};
 
-	my $group;
+	my $project;
 	if ($buildit)
 	{
 		# if no args, or if final arg starts with a dash (ie, is a switch),
@@ -52,23 +55,20 @@ if (not exists $ENV{VCTOOLS_SHELL})
 			exec $vbuild, @ARGV;
 		}
 
-		$group = VCtools::project_group($ARGV[-1]);
+		$project = $ARGV[-1];
 		# pass args through to next incarnation
 		$buildit = join(' ', @ARGV);
+		print STDERR "gonna buildit: $buildit\n" if DEBUG >= 4;
 	}
 	elsif ($ARGV[0])
 	{
-		my $pdir = VCtools::project_dir($ARGV[0]);
-		if (-d $pdir)
-		{
-			$group = VCtools::project_group($ARGV[0]);
-		}
-		else
+		$project = $ARGV[0];
+		my $pdir = VCtools::project_dir($project);
+		unless (-d $pdir)
 		{
 			error("no such directory $pdir");
 		}
-		print STDERR "group $group, start dir $pdir\n"
-				if DEBUG >= 3;
+		print STDERR "start dir $pdir\n" if DEBUG >= 3;
 		$ENV{VCTOOLS_SHELL_STARTDIR} = $pdir;
 	}
 	else
@@ -93,12 +93,24 @@ if (not exists $ENV{VCTOOLS_SHELL})
 		}
 
 		# so we're somewhere underneath a particular project
-		# just grab the group of the current dir (hope it's right!)
-		$group = getgrgid((stat $pwd)[5]);
+		$project = VCtools::parse_vc_file($pwd)
+				or error("can't figure out project of $pwd");
 	}
 
-	$ENV{VCTOOLS_SHELL} = $buildit ? "b:$buildit" : "1";
-	exec "newgrp", $group;
+	# now get the group for the discovered project
+	my $group = VCtools::project_group($project);
+
+	# crude but hopefully effective method to determine whether
+	# we actually can newgrp to this group
+	if (`id | fgrep $group` =~ /^\s*$/)
+	{
+		error("you are not a member of $group");
+	}
+
+	$ENV{VCTOOLS_SHELL} = $buildit ? "b:$buildit" : "proj:$project";
+	print STDERR "about to newgrp to $group ",
+			"with shellvar $ENV{VCTOOLS_SHELL}\n" if DEBUG >= 4;
+	exec "newgrp", $group or error("cannot execute newgrp");
 }
 # being called by newgrp, but originally came from vbuild alias
 elsif ($ENV{VCTOOLS_SHELL} =~ /^b:(.*)$/)
@@ -106,7 +118,7 @@ elsif ($ENV{VCTOOLS_SHELL} =~ /^b:(.*)$/)
 	# turn command line string back into individual args
 	my @args = split(' ', $1);
 
-	$ENV{VCTOOLS_SHELL} = "1";
+	$ENV{VCTOOLS_SHELL} = "build:$args[-1]";
 	chdir VCtools::WORKING_DIR;
 
 	$ENV{PATH} .= ":" . VCtools::SUBVERSION_BINDIR;
@@ -126,5 +138,10 @@ sub error
 
 	print STDERR "$me: $_[0]\n";
 	delete $ENV{VCTOOLS_SHELL};
-	exec $ENV{SHELL};
+	unless (exec $ENV{SHELL})
+	{
+		# JIC something goes wrong
+		print STDERR "$me: catastrophic error (can't start $ENV{SHELL})\n";
+		exit(-1);
+	}
 }

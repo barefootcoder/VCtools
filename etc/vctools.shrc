@@ -9,28 +9,37 @@ if [ -z "$VCTOOLS_SHELL" ]
 then
 	alias vbuild="$shellexec -b --"
 else
-	if [ "$VCTOOLS_SHELL" != 1 ]
-	then
-		exec $shellexec
-	else
-		export PATH=`$shellexec -p`
+	case $VCTOOLS_SHELL in 
+		proj:*)
+			# $shellexec seems to have found something it's happy with
+			export PATH=`$shellexec -p`
 
-		alias get=vget
-		alias sync=vsync
-		alias commit=vcommit
+			alias get=vget
+			alias sync=vsync
+			alias stat=vstat
+			alias commit=vcommit
 
-		function vcd
-		{
-			cd `vprojdir $1`
-		}
+			# these require a bit more work
+			alias vcshell="unset VCTOOLS_SHELL ; exec $shellexec"
+			function vcd
+			{
+				cd `vprojdir $1`
+			}
 
-		if [ -n "$VCTOOLS_SHELL_STARTDIR" ]
-		then
-			cd $VCTOOLS_SHELL_STARTDIR
-			unset VCTOOLS_SHELL_STARTDIR
-		fi
-		umask 2
-	fi
+			if [ -n "$VCTOOLS_SHELL_STARTDIR" ]
+			then
+				cd $VCTOOLS_SHELL_STARTDIR
+				unset VCTOOLS_SHELL_STARTDIR
+			fi
+			umask 2
+
+			;;
+		*)
+			# obviously $shellexec has more work to do
+			# let it try again
+			exec $shellexec
+			;;
+	esac
 fi
 
 if [ -e ~/.vctoolsrc ]

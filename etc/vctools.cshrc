@@ -8,23 +8,33 @@ alias vcshell "exec $shellexec"
 if ( ! $?VCTOOLS_SHELL ) then
 	alias vbuild "$shellexec -b --"
 else
-	if ( "$VCTOOLS_SHELL" != 1 ) then
-		exec $shellexec
-	else
-		setenv PATH `$shellexec -p`
+	switch ($VCTOOLS_SHELL)
+		case "proj:*":
+			# $shellexec seems to have found something it's happy with
+			setenv PATH `$shellexec -p`
 
-		alias get vget
-		alias sync vsync
-		alias commit vcommit
+			alias get vget
+			alias sync vsync
+			alias stat vstat
+			alias commit vcommit
 
-		alias vcd 'cd `vprojdir \!^`'
+			# these require a bit more work
+			alias vcshell "unsetenv VCTOOLS_SHELL ; exec $shellexec"
+			alias vcd 'cd `vprojdir \!^`'
 
-		if ( $?VCTOOLS_SHELL_STARTDIR ) then
-			cd $VCTOOLS_SHELL_STARTDIR
-			unsetenv VCTOOLS_SHELL_STARTDIR
-		endif
-		umask 2
-	endif
+			if ( $?VCTOOLS_SHELL_STARTDIR ) then
+				cd $VCTOOLS_SHELL_STARTDIR
+				unsetenv VCTOOLS_SHELL_STARTDIR
+			endif
+			umask 2
+			breaksw
+
+		default:
+			# obviously $shellexec has more work to do
+			# let it try again
+			exec $shellexec
+			breaksw
+	endsw
 endif
 
 if ( -e ~/.vctoolsrc ) then
