@@ -502,6 +502,7 @@ sub _make_cvs_command
 	);
 	$command = $cmd_subs{$command} if exists $cmd_subs{$command};
 
+	$_ = '"' . $_ . '"' foreach @_;
 	return "cvs -r $quiet -d $vcroot $command $local @_ $err_redirect ";
 }
 
@@ -523,6 +524,7 @@ sub _make_svn_command
 	);
 	$command = $cmd_subs{$command} if exists $cmd_subs{$command};
 
+	$_ = '"' . $_ . '"' foreach @_;
 	return "svn $command $quiet $local @_ $err_redirect ";
 }
 
