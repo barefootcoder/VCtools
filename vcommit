@@ -3,9 +3,8 @@
 use strict;
 use warnings;
 
-use Getopt::Std;
-
 use VCtools::Base;
+use VCtools::Args;
 use VCtools::Common;
 
 
@@ -13,20 +12,46 @@ use VCtools::Common;
 # OPTIONS AND ARGUMENTS
 #################################
 
-VCtools::process_args("file_or_dir", "[...]");
+VCtools::switch('recursive', 'r', 'operate recursively');
+VCtools::args('files', 'list', 'file(s) (or directory/ies) to commit');
+VCtools::getopts();
 
 # remember, directories are files too
-my @files = @ARGV;
+my @files = VCtools::files();
 
 
 #################################
 # CHECK FOR ERRORS
 #################################
 
-VCtools::verify_files_and_group(@files);
+VCtools::check_common_errors();
+my $proj = VCtools::verify_files_and_group(@files);
 
 # get statuses for everything at once (quicker that way)
 VCtools::cache_file_status(@files);
+
+# if we're doing recursive, we really need the list of
+# modified files for each directory in our list
+# so do that here
+if (VCtools::recursive())
+{
+	my @orig_files = @files;
+	@files = ();
+
+	foreach my $file (@orig_files)
+	{
+		if (-d $file)
+		{
+			$file .= '/' unless substr($file, -1) eq '/';
+			push @files, VCtools::get_all_with_status('modified', "$file/");
+		}
+		else
+		{
+			push @files, $file;
+		}
+	}
+}
+
 # right here, think of a way to do similar for lockers
 
 my @files_to_add;
@@ -75,7 +100,7 @@ foreach my $file (@files)
 # not sure what to in a generic fashion
 
 VCtools::add_files(@files_to_add) if @files_to_add;
-VCtools::commit_files(@files);
+VCtools::commit_files($proj, @files);
 =not_working_with_svn_yet
 VCtools::release_edit_flag(@files);
 =cut
