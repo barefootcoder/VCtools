@@ -1,0 +1,163 @@
+#! /usr/bin/perl
+
+use strict;
+
+use Getopt::Std;
+use Cwd qw(getcwd);
+use Barefoot::cvs;
+
+my $me = $0;
+$me =~ s@^.*/@@;
+
+# default values
+my $verbose=0;
+
+
+#################################
+# OPTIONS AND ENVIRONMENT VARS
+#################################
+
+my $opt = {};
+getopts('v', $opt);
+$verbose = 1 if defined $opt->{v};
+
+
+#################################
+# CHECK FOR ERRORS
+#################################
+
+if (!$::ENV{CVSROOT})
+{
+	print STDERR "$me: variable CVSROOT must be set\n";
+	exit 2;
+}
+
+if ($ARGV[0])
+{
+	if (!chdir($ARGV[0]))
+	{
+		print STDERR "$me: argument is not a valid path\n";
+		print STDERR "usage: $me [path]\n";
+		print STDERR "         default path is .\n";
+		exit 2;
+	}
+}
+
+my ($project, $subdir) = cvs::parse_module(getcwd());
+
+if (!defined($project))
+{
+	print STDERR "$me: path does not appear to be a private CVS directory\n";
+	exit 2;
+}
+
+if (!-d "$::ENV{CVSROOT}/$project/$subdir")
+{
+	print STDERR "$me: path does not appear to be checked into CVS\n";
+	exit 2;
+}
+
+#################################
+# MAIN
+#################################
+
+# for debugging, we'll save the original output in a tmp file
+my $tmp_debug = "/tmp/csync.out";
+if (-e $tmp_debug)
+{
+	# clear out the existing file
+	# this is probably going to fuck up big time if more than person
+	# is running at the same time, but it's all temporary, so who cares ...
+	open(TD, ">$tmp_debug") and close(TD);
+}
+else
+{
+	# create and make world-writable
+	system("touch $tmp_debug");
+	system("chmod 777 $tmp_debug");
+}
+open(TD, ">>$tmp_debug") or die("$me: can't save debugging output");
+
+# note that we catch cvs update's stderr as well
+open(UPD, "cvs -r update -d -P . 2>&1 |") or die("can't execute cvs update");
+UPDATE_LINE: while ( <UPD> )
+{
+	print TD;							# debugging
+	next if /^cvs update: Updating/;	# ignore these
+	if ( /^([UPM]) (.*)/ )				# ignore unless verbose is on
+	{
+		if ($verbose)
+		{
+			print "$me: ", $1 eq "M" ? "merged" : "updated", " file $2\n";
+		}
+		next;
+	}
+	if (/^A (.*)/)
+	{
+		print "file was cvs add'ed but never committed: $1\n";
+	}
+	elsif (/^R (.*)/)
+	{
+		print "file was cvs remove'd but never committed: $1\n";
+	}
+	elsif (/^C (.*)/)
+	{
+		print "warning! conflict on file $1 (please attend to immediately)\n";
+		# this should probably email something to people as well
+	}
+	elsif (/^\? (.*)/)
+	{
+		# this is trickier ...
+		my $file = $1;
+		if (-d $file)
+		{
+			# if it's a directory, it just means that there's no CVS
+			# files _in_ that directory ... however, that's perfectly
+			# okay if that directory is also in cvsroot
+			my $wdir = cvs::working_dir();
+			my $cvsdir = "$wdir/$project/$subdir/$file";
+			$cvsdir =~ s/$wdir/$::ENV{CVSROOT}/;
+			next if -d $cvsdir;
+		}
+		# if the dir isn't in cvs, or if it's a file (and that _definitely_
+		# isn't in cvs, else it wouldn't have popped up), that's a problem
+		print "file/dir isn't in CVS repository: $file\n";
+	}
+	elsif (/^RCS file:/)
+	{
+		# this is _probably_ a merge taking place ... we'll check the next
+		# few lines to be sure, but also save the lines in case something
+		# goes wrong and we need to put the entire output back out
+		my $save = $_;
+
+		# if it's just retrieving various revisions, it's still okay
+		do { $_ = <UPD> and $save .= $_ } while /^retrieving revision/;
+
+		# if it's a "merging" informational message, it's still okay
+		if ( /^Merging differences/ )
+		{
+			$save .= $_;
+			$_ = <UPD>;
+			# if it's a message that the merge is already done, it's okay
+			if ( /already contains the differences/ )
+			{
+				# and we're done ... back to outer loop
+				next UPDATE_LINE;
+			}
+			
+			# everything was okay up to here, but we read one line too many
+			redo UPDATE_LINE;
+		}
+
+		# at this point, the output has diverged from our pattern too much
+		print STDERR $save;
+		redo UPDATE_LINE;
+	}
+	else
+	{
+		# dunno what the hell _this_ is; better just print it out
+		print STDERR;
+	}
+}
+close(UPD);
+print "done\n" unless $?;
