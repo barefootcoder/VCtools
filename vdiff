@@ -3,9 +3,6 @@
 use strict;
 use warnings;
 
-use Fcntl qw<F_SETFD>;
-use File::Temp qw<tempfile>;
-
 use VCtools::Base;
 use VCtools::Args;
 use VCtools::Common;
@@ -32,18 +29,5 @@ VCtools::verify_files_and_group($file);
 # MAIN
 #################################
 
-# create a temporary filename
-my $tmpfile = tempfile(SUFFIX => '.vcdiff') or fatal_error("cannot create tempfile");
-
-# execute diff and put into the tmpfile
-print $tmpfile VCtools::get_diffs($file);
-
-# get the tmpfile ready for reading by the pager
-fcntl($tmpfile, F_SETFD, 0) or die("cannot clear close-on-exec bit on tempfile");
-$tmpfile->seek(0,0);
-
-# view the diff
-my $pager = $ENV{PAGER} || "less";
-open(PAGER, "| $pager") or die("can't open pager");
-print PAGER <$tmpfile>;			# dumps the whole file into PAGER
-close(PAGER);
+# execute diff and page it out to STDOUT
+VCtools::page_output('.vcdiff', VCtools::get_diffs($file));
