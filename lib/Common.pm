@@ -115,7 +115,9 @@ sub _project_path
 	# project name to the first RootPath it can find
 	# also will try to handle various branch policies
 	# returns a complete path (hopefully)
-	my ($proj) = @_;
+	my ($proj, $which) = @_;
+	# if no which specified, assume trunk
+	$which ||= 'trunk';
 
 	my $proj_root;
 	if (exists $config->{Project}->{$proj})
@@ -129,25 +131,44 @@ sub _project_path
 			|| $config->{DefaultRootPath} || $vcroot;
 	print STDERR "project_path thinks root is $root\n" if DEBUG >= 2;
 
+	my %subdirs =
+	(
+		trunk	=>	'',
+		branch	=>	'',
+		tag		=>	'',
+	);
+	die("_project_path: unknown path type $which")
+			unless exists $subdirs{$which};
+
 	my $branch_policy = get_proj_directive($proj, 'BranchPolicy', 'NONE');
 
-	my $trunk;
 	if ($branch_policy eq "NONE")
 	{
-		# no policy, so no trunk dir
-		$trunk = "";
+		# no policy, so defaults (i.e., nothing) are fine
 	}
-	elsif ($branch_policy =~ /^(\w+),\w+$/)
+	elsif ($branch_policy =~ /^(\w+),(\w+)$/)
 	{
-		# policy speficies "trunk_dir,branches_dir"
-		$trunk = $1;
+		# policy speficies "trunk_dir,branches_and_tags_dir"
+		$subdirs{trunk} = "/$1";
+		$subdirs{branch} = $subdirs{tag} = "/$2";
 	}
-	fatal_error("unknown branch policy $branch_policy specified")
-			unless defined $trunk;
-	$trunk = "/$trunk" if $trunk;
-	print STDERR "project_path thinks trunk is $trunk\n" if DEBUG >= 2;
+	elsif ($branch_policy =~ /^(\w+),(\w+),(\w+)$/)
+	{
+		$subdirs{trunk} = "/$1";
+		$subdirs{branch} = "/$2";
+		$subdirs{tag} = "/$3";
+	}
+	else
+	{
+		fatal_error("unknown branch policy $branch_policy specified");
+	}
+	# if trunk is blank, that's okay; otherwise, it's a fatal error
+	fatal_error("don't know how to make a $which directory for this project")
+			if $subdirs{$which} eq '' and $which ne 'trunk';
+	print STDERR "project_path thinks which dir is $subdirs{$which}\n"
+			if DEBUG >= 2;
 
-	return $root . "/" . $proj . $trunk;
+	return $root . "/" . $proj . $subdirs{$which};
 }
 
 
@@ -458,6 +479,8 @@ sub _make_cvs_command
 		# try to get cvs to get the dirs right (as best we can)
 		# and avoid the horror of sticky tags
 		update		=>	'update -d -P -A',
+		# this should work for a revert
+		revert		=>	'update -A',
 	);
 	$command = $cmd_subs{$command} if exists $cmd_subs{$command};
 
@@ -473,6 +496,12 @@ sub _make_svn_command
 	my $quiet = $opts->{VERBOSE} ? "-v" : "";
 	my $local = $opts->{DONT_RECURSE} ? "-N" : "";
 	my $err_redirect = $opts->{IGNORE_ERRORS} ? "2>/dev/null" : "";
+
+	# there is probably a cleaner way to do this, but I don't know what it is
+	if ($command eq 'revert')
+	{
+		$local = $opts->{DONT_RECURSE} ? "" : "-R";
+	}
 
 	# command substitutions
 	my %cmd_subs =
@@ -560,6 +589,29 @@ sub _execute_normally
 }
 
 
+sub file_hash
+{
+	my (@files) = @_;
+
+	my $files;
+	foreach (@files)
+	{
+		# trailing /'s for dirs will not be preserved in the output of
+		# the VC commands, so ditch them (else lookups will fail)
+		if (substr($_, -1) eq "/")
+		{
+			$files->{substr($_, 0, -1)} = 1;
+		}
+		else
+		{
+			$files->{$_} = 1;
+		}
+	}
+
+	return $files;
+}
+
+
 ###########################
 # Subroutines:
 ###########################
@@ -581,8 +633,9 @@ sub auth_check
 
 sub current_project
 {
-	# you probably ought to call check_common_errors() before this function
+	# you probably ought to call check_common_errors() instead of this function
 	# that will verify that the VCTOOLS_SHELL var is properly set
+	# and then call this for you
 	
 	$ENV{VCTOOLS_SHELL} =~ /proj:(\w+)/;
 	return $1;
@@ -627,8 +680,23 @@ sub verify_gid
 
 sub check_common_errors
 {
-	warning("Warning! not running under vcshell!")
-			unless exists $ENV{VCTOOLS_SHELL};
+	my $project = parse_vc_file(".");
+
+	if (exists $ENV{VCTOOLS_SHELL})
+	{
+		if (current_project() ne $project)
+		{
+			prompt_to_continue("the project derived from your current dir",
+					"doesn't seem to match what your environment var says");
+		}
+	}
+	else
+	{
+		warning("Warning! not running under vcshell!");
+	}
+
+	# in case someone needs to know what the project is
+	return $project;
 }
 
 
@@ -637,9 +705,11 @@ sub verify_files_and_group
 	my @files = @_;
 
 	# all files must exist, be readable, be in the working dir,
-	# and all belong to the same project
+	# and all belong to the same project (preferably the one we're in)
 
-	my $project;
+	my $project = check_common_errors();
+
+	my $file_project;
 	foreach my $file (@files)
 	{
 		print STDERR "verifying file $file\n" if DEBUG >= 4;
@@ -648,16 +718,30 @@ sub verify_files_and_group
 
 		my $proj = parse_vc_file($file);
 		fatal_error("$file is not in VC working dir") unless $proj;
-		if (defined $project)
+		if (defined $file_project)
 		{
 			fatal_error("all files do not belong to the same project")
-					unless $project eq $proj;
+					unless $file_project eq $proj;
 		}
 		else
 		{
 			# first file, so save project for future reference
-			$project = $proj;
+			$file_project = $proj;
 		}
+	}
+
+	# having the files be in a different project than the current directory
+	# and/or the environment var isn't necessarily fatal, but we should
+	# mention it (unless ignore errors is turned on)
+	if ($file_project ne $project)
+	{
+		prompt_to_continue("your files are all in project $file_project",
+				"but your environment seems to refer to project $project",
+				"(if you continue, the project of the files will override)")
+				unless VCtools::ignore_errors();
+
+		# like the text says, project of the files has to win
+		$project = $file_project;
 	}
 
 	# now make sure we've got the right GID for this project
@@ -714,7 +798,11 @@ sub cache_file_status
 	while ( <$st> )
 	{
 		print STDERR "<file status>:$_" if DEBUG >= 5;
-		_interpret_status_output;
+		my $file = _interpret_status_output;
+
+		# directories sometimes come in with trailing slashes, so make sure
+		# lookups for those won't fail
+		$status_cache{"$file/"} = $status_cache{$file} if $file and -d $file;
 	}
 	close($st);
 
@@ -985,12 +1073,73 @@ sub print_status
 }
 
 
+sub create_tag
+{
+	my ($proj, $tagname) = @_;
+
+	my $tagdir = _project_path($proj, 'tag');
+	$tagdir .= "/$tagname";
+
+	# this works for Subversion, but it would have to be
+	# radically different for CVS
+	_execute_normally("copy", project_dir($proj), $tagdir);
+}
+
+
 sub add_files
+{
+	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
+	my (@files) = @_;
+
+	# for looking up files
+	my $files = file_hash(@files);
+
+	# the process of adding may very well add files unexpectedly,
+	# if we add recursively.  so collect those filenames and return
+	# them to the client for their edification
+	my @surprise_files;
+
+	my $fh = _execute_and_get_output("add", @files, $opts);
+	while ( <$fh> )
+	{
+		if ( / ^ A \s+ (.*) \s* $ /x )
+		{
+			push @surprise_files, $1 unless exists $files->{$1};
+		}
+		else
+		{
+			fatal_error("unknown output from add command: $_");
+		}
+	}
+	close($fh);
+
+	return @surprise_files;
+}
+
+
+sub revert_files
 {
 	my (@files) = @_;
 
-	# pretty basic
-	_execute_normally("add", @files);
+	# for looking up files
+	my $files = file_hash(@files);
+
+	# expand your recursions before calling this if you need them
+	# recursive reversion is just _such_ a bad idea ...
+	my $fh = _execute_and_get_output("revert", @files, { DONT_RECURSE => 1 } );
+	while ( <$fh> )
+	{
+		if ( / ^ Reverted \s+ '(.*)' \s* $ /x )
+		{
+			warning("unexpectedly reverted file $1")
+					unless exists $files->{$1};
+		}
+		else
+		{
+			fatal_error("unknown output from revert command: $_");
+		}
+	}
+	close($fh);
 }
 
 
