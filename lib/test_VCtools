@@ -34,7 +34,7 @@ else
 }
 
 
-my $proper_working_dir = qx<awk -F= '/^PersonalDir/ { print \$2 }' /usr/local/etc/VCtools.conf>;
+my $proper_working_dir = qx<awk -F= '/^PersonalDir/ { print \$2 }' /usr/local/etc/VCtools/VCtools.conf>;
 $proper_working_dir = qx<csh -c "cd $proper_working_dir ; pwd">;
 chomp $proper_working_dir;
 
