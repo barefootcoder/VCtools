@@ -145,14 +145,25 @@ sub _svn_auth_check
 
 ###########################
 # This returns the path *of* the supplied project (don't confuse it with projpath(), below).  The project
-# need not exist as a working copy, but it must exist in the repository.  The path returned is the asbolute
-# path # that this project's local copy should reside in.  The most common use of this function is to
-# determine that path in the first place (i.e., it's called by vbuild).
+# need not exist as a working copy; it needn't even exist in the repository (in fact, this routine is used
+# by proj_exists_in_vc() to determine whether it does exist in the repository or not).  The path returned
+# is the absolute server path that this project should (or would, or does) reside in.  The most common
+# use of this function is to determine that path in the first place (i.e., it's called by vbuild).
 #
 # You can also specify a second argument of either 'trunk', 'branch', or 'tag' (if you don't supply a second
 # arg, it assumes you want the trunk).  If you supply 'branch' or 'tag', you may also wish to specify a third
 # argument to say _which_ branch or tag you're talking about.  The routine will take the BranchingPolicy into
 # account and return the appropriate path.
+#
+# In fact, _project_path() is not very much like projpath() at all; it's much more similar to _server_path().
+# Here are the relevant differences:
+#
+#		*	_project_path always returns a base path.  _server_path returns the path of a specific file.
+#		*	For _server_path to work, the file you reference must exist in the local copy, and it also must
+#			exist in the VC repository.  Neither is true for _project_path.
+#		*	For _project_path, you get to specify whether you want the trunk, a branch, or a tag.  With
+#			_server_path, since it references a specific file, you end up with wherever that file really is
+#			(in practice, this is almost always either the trunk or a branch).
 sub _project_path
 {
 	# finds the server-side path for the given project
@@ -224,6 +235,15 @@ sub _project_path
 
 
 # this definitely won't work with CVS
+# See _project_path for a definitive discussion of the differences between that and this.
+# There is only one difference between _server_path($file) and
+#
+#		my ($proj, $dir, $file) = parse_vc_file($file);
+#		join('/', _project_path($proj), $dir, $file);
+#
+# and that is that the above code would _always_ give you a server path on the trunk.  The actual
+# implementation of _server_path, however, returns the actual server path of the given file, whether
+# it's trunk, branch, or even tag.
 sub _server_path
 {
 	my ($file) = @_;
@@ -957,6 +977,26 @@ sub project_script
 }
 
 
+sub create_tag
+{
+	my ($proj, $tagname) = @_;
+
+	# this works for Subversion, but it would have to be
+	# radically different for CVS
+	_execute_normally("copy", project_dir($proj), _project_path($proj, 'tag', $tagname));
+}
+
+
+sub create_branch
+{
+	my ($proj, $branch) = @_;
+
+	# this works for Subversion, but it would have to be
+	# radically different for CVS
+	_execute_normally("copy", project_dir($proj), _project_path($proj, 'branch', $branch));
+}
+
+
 ###########################
 # File Status Subroutines
 ###########################
@@ -1376,19 +1416,6 @@ sub print_status
 	}
 
 	return $errors;
-}
-
-
-sub create_tag
-{
-	my ($proj, $tagname) = @_;
-
-	my $tagdir = _project_path($proj, 'tag');
-	$tagdir .= "/$tagname";
-
-	# this works for Subversion, but it would have to be
-	# radically different for CVS
-	_execute_normally("copy", project_dir($proj), $tagdir);
 }
 
 

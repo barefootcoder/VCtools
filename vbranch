@@ -13,13 +13,18 @@ use VCtools::Common;
 #################################
 
 #VCtools::switch('recursive', 'r', 'operate recursively');
-VCtools::args('branch', 'single', 'name of branch to switch to (must already exist)');
-VCtools::args('files', 'optlist', 'file(s) and/or directory/ies to switch over to branch (default: .)');
+VCtools::switch('create', 'c', 'create new branch with given name');
+VCtools::args('branch', 'single', 'name of branch to switch to (must exist) or create with -c (must not exist)');
+VCtools::args('files', 'optlist', 'file(s) and/or directory/ies to switch over to branch (default: .); not used with -c');
 VCtools::getopts();
 
 # remember, directories are files too
 my @files = VCtools::files();
-@files = (".") unless @files;
+if (not VCtools::create() and not @files)
+{
+	VCtools::prompt_to_continue("Your entire local copy from this directory down will be converted to the branch!");
+	@files = (".");
+}
 print STDERR "switch files: @files\n" if DEBUG >= 3;
 
 
@@ -27,32 +32,44 @@ print STDERR "switch files: @files\n" if DEBUG >= 3;
 # CHECK FOR ERRORS
 #################################
 
-my $proj = VCtools::verify_files_and_group(@files);
-unless (VCtools::branch_exists_in_vc($proj, VCtools::branch()))
+my $proj;
+if (VCtools::create())
 {
-	VCtools::fatal_error("no such branch " . VCtools::branch());
+	$proj = VCtools::check_common_errors();
+	if (VCtools::branch_exists_in_vc($proj, VCtools::branch()))
+	{
+		VCtools::fatal_error("branch " . VCtools::branch() . " already exists; cannot create");
+	}
 }
-
-# get statuses for everything at once (quicker that way)
-# remember, vbranch is always recursive
-my @all_files = VCtools::cache_file_status(@files, { DONT_RECURSE => 0 });
-
-foreach my $file (@files)
+else
 {
-	VCtools::fatal_error("$file is not in VC")
-			unless VCtools::exists_in_vc($file);
-}
+	$proj = VCtools::verify_files_and_group(@files);
+	unless (VCtools::branch_exists_in_vc($proj, VCtools::branch()))
+	{
+		VCtools::fatal_error("no such branch " . VCtools::branch());
+	}
 
-my @mod_files;
-foreach my $file (@all_files)
-{
-	push @mod_files, $file if VCtools::modified_from_vc($file);
-};
-if (@mod_files)
-{
-	VCtools::list_files($proj, "are modified from the repository versions", @mod_files);
-	VCtools::prompt_to_continue("If you want these mods to go into the branch, continue.",
-			"If you want the mods to stay in the trunk, stop now and vcommit before you vbranch.");
+	# get statuses for everything at once (quicker that way)
+	# remember, vbranch is always recursive
+	my @all_files = VCtools::cache_file_status(@files, { DONT_RECURSE => 0 });
+
+	foreach my $file (@files)
+	{
+		VCtools::fatal_error("$file is not in VC")
+				unless VCtools::exists_in_vc($file);
+	}
+
+	my @mod_files;
+	foreach my $file (@all_files)
+	{
+		push @mod_files, $file if VCtools::modified_from_vc($file);
+	};
+	if (@mod_files)
+	{
+		VCtools::list_files($proj, "are modified from the repository versions", @mod_files);
+		VCtools::prompt_to_continue("If you want these mods to go into the branch, continue.",
+				"If you want the mods to stay in the trunk, stop now and vcommit before you vbranch.");
+	}
 }
 
 
@@ -60,7 +77,14 @@ if (@mod_files)
 # MAIN
 #################################
 
-VCtools::move_to_branch($proj, VCtools::branch(), @files);
+if (VCtools::create())
+{
+	VCtools::create_branch($proj, VCtools::branch());
+}
+else
+{
+	VCtools::move_to_branch($proj, VCtools::branch(), @files);
+}
 
 print "done\n" unless $?;
 
