@@ -74,13 +74,11 @@ if ( !$offsite )
 #################################
 
 # for debugging, we'll save the original output in a tmp file
-my $tmp_debug = "/tmp/csync.out";
-$tmp_debug = "$::ENV{TEMP}/csync.out" unless !length($::ENV{TEMP});
+my $tmp_debug = "/tmp/" . $me . "_$$.out";
+$tmp_debug = "$::ENV{TEMP}/" . $me . "_$$.out" unless !length($::ENV{TEMP});
 if (-e $tmp_debug)
 {
 	# clear out the existing file
-	# this is probably going to fuck up big time if more than person
-	# is running at the same time, but it's all temporary, so who cares ...
 	open(TD, ">$tmp_debug") and close(TD);
 }
 else
@@ -189,3 +187,6 @@ UPDATE_LINE: while ( <UPD> )
 }
 close(UPD);
 print "done\n" unless $?;
+
+# delete the temp file
+unlink($tmp_debug);
