@@ -48,12 +48,15 @@ foreach (@files)
 {
 	if (VCtools::modified_from_vc($_))
 	{
-		VCtools::prompt_to_continue("Warning! $_ has been modified",
-				"It's generally a bad idea to move a modified file.",
-				"It would be much better to do it in two steps: vcommit the file first, then re-run vmv.",
-				"However, if you really insist, I'll continue and move the modified file right now.",
-				"(Note that your changes will automatically be committed if you do this!)"
-		) unless VCtools::force();
+		unless (VCtools::force())
+		{
+			VCtools::info_msg("Warning! $_ has been modified");
+			VCtools::info_msg(INDENT => "It's generally a bad idea to move a modified file.");
+			VCtools::info_msg(INDENT => "It would be much better to do it in two steps: vcommit first, then re-run vmv.");
+			VCtools::info_msg(INDENT => "However, if you really insist, rerun this command with the --force switch.");
+			VCtools::info_msg(INDENT => "(Note that your changes will automatically be committed if you do this!)");
+			exit;
+		}
 	}
 }
 
