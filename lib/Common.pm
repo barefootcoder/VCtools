@@ -1291,6 +1291,7 @@ sub revert_files
 
 sub commit_files
 {
+	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
 	my ($proj, @files) = @_;
 
 	# if a debugging regex is specified, we need to search each file for
@@ -1320,6 +1321,10 @@ sub commit_files
 			close(IN);
 		}
 	}
+
+	# sending -m switch as if it were a file is cheating a bit, but it will work
+	# note that since filenames are automatically quoted, we don't have to quote the commit message itself
+	unshift @files, "-m$opts->{'MESSAGE'}" if $opts->{'MESSAGE'};
 
 	# we expect that our filelist has already been expanded for purposes of recursion,
 	# so we're not going to do any recursion here
