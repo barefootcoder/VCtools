@@ -1,96 +1,79 @@
-#! /usr/bin/perl -w
+#! /usr/bin/perl
 
 use strict;
+use warnings;
 
-#use Barefoot::debug(4);							# comment out for production
-
-use Getopt::Std;
-use Data::Dumper;
-use Cwd qw<getcwd>;
-
-use Barefoot::cvs;
-use Barefoot::base;
-use Barefoot::string;
-use Barefoot::input qw<get_yn>;
-
-my $me = $0;
-$me =~ s@^.*/@@;
-
-$| = true;
-
-
-# default values									 
-my $verbose = false;
-my $info_only = false;
+use VCtools::Base;
+use VCtools::Args;
+use VCtools::Common;
 
 
 # dispatch tables for release methods
-my $get_mtime =
+our $dispatch =
 {
-	LOCAL	=>	\&local_mtime,
-	rsh		=>	\&rsh_mtime,
-	ssh		=>	\&ssh_mtime,
-};
-
-my $rm_file =
-{
-	LOCAL	=>	\&local_rm,
-	rsh		=>	\&rsh_rm,
-	ssh		=>	\&ssh_rm,
-};
-
-my $cp_file =
-{
-	LOCAL	=>	\&local_cp,
-	rsh		=>	\&rcp,
-	ssh		=>	\&scp,
-};
-
-my $fix_group =
-{
-	LOCAL	=>	\&local_chgrp,
-	rsh		=>	\&rsh_chgrp,
-	ssh		=>	\&ssh_chgrp,
+	local	=>	{
+					get_mtime	=>	\&local_mtime,
+					rm_file		=>	\&local_rm,
+					cp_file		=>	\&local_cp,
+					fix_group	=>	\&local_chgrp,
+				},
+	rsh		=>	{
+					get_mtime	=>	\&rsh_mtime,
+					rm_file		=>	\&rsh_rm,
+					cp_file		=>	\&rcp,
+					fix_group	=>	\&rsh_chgrp,
+				},
+	ssh		=>	{
+					get_mtime	=>	\&ssh_mtime,
+					rm_file		=>	\&ssh_rm,
+					cp_file		=>	\&scp,
+					fix_group	=>	\&ssh_chgrp,
+				},
 };
 
 
 #################################
-# OPTIONS AND ENVIRONMENT VARS
+# OPTIONS AND ARGUMENTS
 #################################
 
-my $opt = {};
-getopts('vid:', $opt);
-$verbose = true if defined $opt->{v};
-$info_only = true if defined $opt->{i};
-cvs::set_cvsroot($opt->{d}) if defined $opt->{d};
+VCtools::switch('info_only', 'I', 'only show release information');
+VCtools::args('files', 'list', 'file(s) to release');
+VCtools::getopts();
+
+my @files = VCtools::files();
 
 
 #################################
 # CHECK FOR ERRORS
 #################################
 
-cvs::check_general_errors();
+our $proj = VCtools::verify_files_and_group(@files);
 
-my $file = $ARGV[0] || "<blank>";
-if (not $file or not -e $file or -d $file or $file =~ m@/@)
+# can't release a directory (at least at this time)
+if (grep { -d } @files)
 {
-	print STDERR "$me: argument is not a regular file in current directory ",
-			"($file)\n";
-	print STDERR "usage: $me [-d cvs_root_dir] [-v] file\n";
-	print STDERR "    -v : verbose\n";
-	print STDERR "    -d : cvsroot, if not using CVSROOT\n";
-	exit 2;
+	VCtools::fatal_error("can only release files (not directories)");
 }
 
-# can't release it if you've got it checked out
-my $path = getcwd();
-my ($project, $subdir, $module) = cvs::parse_module("$path/$file");
-if (cvs::user_is_a_locker($module))
+# need a valid release method
+our $rmethod = VCtools::get_proj_directive($proj, 'ReleaseMethod',
+		'<none specified>');
+VCtools::fatal_error("unknown release method $rmethod")
+		unless exists $dispatch->{$rmethod};
+
+# get statuses for everything at once (quicker that way)
+VCtools::cache_file_status(@files);
+
+# all files must have status "nothing"
+# any other status should block release
+# quick method for checking this: number of files with status 'nothing'
+# should exactly == total number of files
+unless (@files == VCtools::get_all_with_status('nothing'))
 {
-	print STDERR "$me: can't release a file you currently have checked out\n";
-	exit 1;
+	VCtools::fatal_error("not all files are properly checked in");
 }
 
+=not_working_with_svn_yet
 # probably _shouldn't_ release it if anyone else has it checked out
 if (cvs::lockers($module))
 {
@@ -105,6 +88,7 @@ if (-w $module)
 	print STDERR "  (check permissions and run cdiff)\n";
 	exit 1;
 }
+=cut
 
 
 
@@ -113,25 +97,15 @@ if (-w $module)
 #################################
 
 
-my $dir = $project . ($subdir ? "/$subdir" : "");
-my $module_date = (stat $file)[9];
-
-my ($suffix, $release_paths) = find_control_directives(cvs::RELEASE_FILE,
-		"$dir/$module", qw<proj method machine relpath> );
-$_->{method} ||= 'LOCAL' foreach @$release_paths;
-$_->{machine} ||= "local host" foreach @$release_paths;
-
-# now do a release for every path listed
-print $info_only ? "release info for" : "releasing", " file $file ...\n";
-foreach my $rp (@$release_paths)
+foreach my $file (@files)
 {
-	die("$me: don't understand release method $rp->{method}\n")
-			unless exists $cp_file->{$rp->{method}};
+	my $rpath = VCtools::release_path($file);
+	VCtools::info_msg(VCtools::info_only() ? "release info for" : "releasing",
+			"file $file ...");
 
-	unless (defined release($suffix, $rp))
+	unless (defined release($file, $rpath))
 	{
-		print "Release of $file to $rp->{machine} failed!!\n";
-		exit 1 unless get_yn("Continue?");
+		VCtools::prompt_to_continue("release of $file to $rpath failed!");
 	}
 }
 
@@ -142,140 +116,65 @@ foreach my $rp (@$release_paths)
 
 
 # return value:
-#	($suffix, $directives)
-# where suffix is what must be tacked on to any paths in the directives
-# and directives is an array ref to an array of hash refs
-# each hash ref has the fields specified as the final parameter(s)
-sub find_control_directives
-{
-	my ($control_file, $module, @fields) = @_;
-
-	my $orig_path = getcwd();
-
-	# find control dir and make sure control file is current
-	chdir(cvs::WORKING_DIR) or die("$me: can't change to working dir root\n");
-	unless (chdir(cvs::CONTROL_DIR))
-	{
-		cvs::execute_and_discard_output("checkout " . cvs::CONTROL_DIR);
-		chdir(cvs::CONTROL_DIR)
-				or die("$me: failed build of CONTROL directory\n");
-	}
-	cvs::execute_and_discard_output("update");
-	die("$me: can't read control file: $control_file\n")
-			unless -r $control_file;
-
-	# get path(s) from control file
-	my $possible_directives = [];
-	open(CTL, $control_file)
-			or die("$me: can't open control file $control_file\n");
-	while ( <CTL> )
-	{
-		chomp;
-
-		# skip blank lines and comments
-		next if /^\s*$/;
-		next if /^\s*#/;
-
-		my $directive = {};
-		@$directive{ @fields } = split(':');
-
-		# don't bother to save it unless it could apply to us
-		print STDERR "comparing $module to ^$directive->{proj}\n" if DEBUG >= 3;
-		next unless $module =~ m@^$directive->{proj}\b@;
-
-		# prioritize by how many /'s the proj has (that's how specific it is)
-		my $priority = string::count($directive->{proj}, '/');
-		push @{ $possible_directives->[$priority] }, $directive;
-	}
-	close(CTL);
-
-	# if no possibles, fail right here
-	die("$me: no directives apply to module $module in control file "
-			. "$control_file\n") unless @$possible_directives;
-
-	# go back to original directory
-	chdir($orig_path);
-
-	# most specific is the largest priority, a.k.a. the last index
-	my $directives = $possible_directives->[$#$possible_directives];
-
-	# suffix is the module path with the proj that matched it removed from
-	# the front ... theoretically, it's impossible for this sub to fail
-	# note that suffix might be the empty string, if line in the control
-	# file refers to a single module rather than a path
-	my $suffix = $module;
-	$suffix =~ s@^$directives->[0]->{proj}@@;
-
-	# return suffix and directives (note: this is an array ref, not an array!)
-	return ($suffix, $directives);
-}
-
-
-# return value:
 #	true: file was successfully released
 #	false: file was not released with user approval
 #	undef: system error while trying to release
 sub release
 {
-	my ($suffix, $rp) = @_;
-	print STDERR Dumper($rp) if DEBUG >= 4;
+	my ($file, $rpath) = @_;
+	my $machine = $rpath =~ s/^(\w+):// ? $1 : "localhost";
+	print STDERR "production file is $rpath\n" if DEBUG >= 2;
 
-	print "\t", $info_only ? "on:" : "now releasing to:", " $rp->{machine}\n";
-	my $old_file = "$rp->{relpath}$suffix";
-	print STDERR "production file is $old_file\n" if DEBUG >= 2;
+	VCtools::info_msg(-INDENT => VCtools::info_only() ? "on:" : "now releasing to:", $machine, "path", $rpath);
 
 	# make sure existing file is older
-	my $old_file_date
-			= $get_mtime->{$rp->{method}}->($rp->{machine}, $old_file);
-	print STDERR "comparing old date $old_file_date to new date $module_date\n"
+	my $vc_date = (stat $file)[9];
+	my $prod_file_date
+			= $dispatch->{$rmethod}->{get_mtime}->($machine, $rpath);
+	print STDERR "comparing prod date $prod_file_date to vc date $vc_date\n"
 			if DEBUG >= 4;
-	if ($info_only)
+	if (VCtools::info_only())
 	{
-		print "\t\t";
-		if ($old_file_date == 0)
+		if ($prod_file_date == 0)
 		{
-			print "File does not exist in production.\n";
+			VCtools::info_msg(-INDENT => "file does not yet exist in production",
+					"(needs to be released)");
 		}
-		elsif ($old_file_date == $module_date)
+		elsif ($prod_file_date == $vc_date)
 		{
-			print "Production file has same date; no need to release.\n";
+			VCtools::info_msg(-INDENT => "production file has same date; no need to release");
 		}
-		elsif ($old_file_date > $module_date)
+		elsif ($prod_file_date > $vc_date)
 		{
-			print "Production file is newer; check for ",
-					"unauthorized modification.\n";
+			VCtools::info_msg(-INDENT => "production file is newer; check for unauthorized modification");
 		}
 		else					# file in production is indeed older
 		{
-			print "Production file is old; need to release.\n";
+			VCtools::info_msg(-INDENT => "production file is old; need to release");
 		}
-		return true;
+		return 1;
 	}
-	unless ($old_file_date < $module_date)
+	unless ($prod_file_date < $vc_date)
 	{
-		print "\t\tCurrent production file is ", $old_file_date == $module_date
-				? "the same age as" : "newer than", " the development file.\n";
-		return true if $info_only;
-		unless (get_yn("\t\tRelease it anyway?"))
-		{
-			return false;
-		}
+		VCtools::info_msg(-INDENT => "current production file is",
+				$prod_file_date == $vc_date ? "the same age as" : "newer than", "the development file");
+		return 0 unless VCtools::yesno("Release it anyway?");
 	}
 
 	# remove old file
-	$rm_file->{$rp->{method}}->($rp->{machine}, $old_file);
+	$dispatch->{$rmethod}->{rm_file}->($machine, $rpath);
 
 	# copy new file
-	print "copying $file to $old_file\n" if $verbose;
-	$cp_file->{$rp->{method}}->($rp->{machine}, $file, $old_file);
+	VCtools::info_msg(-INDENT => "copying $file to $rpath") if VCtools::verbose();
+	$dispatch->{$rmethod}->{cp_file}->($machine, $file, $rpath);
 
 	# make sure file has the correct group
-	my $group = getgrgid((stat $file)[5]);
-	print STDERR "changing group on $file to $group\n" if $verbose;
-	$fix_group->{$rp->{method}}->($rp->{machine}, $old_file, $group);
+	my $group = VCtools::project_group($proj);
+	VCtools::info_msg(-INDENT => "changing group on $file to $group") if VCtools::verbose();
+	$dispatch->{$rmethod}->{fix_group}->($machine, $rpath, $group);
 
 	# successfully released
-	return true;
+	return 1;
 }
 
 
@@ -286,12 +185,12 @@ sub local_mtime
 
 sub rsh_mtime
 {
-	return `rsh $_[0] mtime $_[1]`;
+	return `rsh $_[0] perl -e 'print (stat(\$ARGV[0]))[9] || 0' $_[1]`;
 }
 
 sub ssh_mtime
 {
-	return `ssh $_[0] mtime $_[1]`;
+	return `ssh $_[0] perl -e 'print (stat(\$ARGV[0]))[9] || 0' $_[1]`;
 }
 
 
@@ -302,13 +201,13 @@ sub local_rm
 
 sub rsh_rm
 {
-	my $v = $verbose ? "-v" : "";
+	my $v = VCtools::verbose() ? "-v" : "";
 	system("rsh $_[0] /bin/rm $v -f $_[1]");
 }
 
 sub ssh_rm
 {
-	my $v = $verbose ? "-v" : "";
+	my $v = VCtools::verbose() ? "-v" : "";
 	system("ssh $_[0] /bin/rm $v -f $_[1]");
 }
 
