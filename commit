@@ -47,9 +47,14 @@ if (!$ARGV[0])
 
 my $file = $ARGV[0];
 my $path = $file;
+
 # add the current directory to the front of it 
 # unless it's an absolute path, a windows path, a unc path
-$path = getcwd() . '/' . $path unless $path =~ m@^/@ || $path =~ /^\w\:/ || $path =~ /^\\\\/;
+if ( !$offsite )
+{
+	$path = getcwd() . '/' . $path 
+			unless $path =~ m@^/@ || $path =~ /^\w\:/ || $path =~ /^\\\\/;
+}
 
 my ($project, $subdir, $module) = cvs::parse_module($path);
 if ( !$offsite )
