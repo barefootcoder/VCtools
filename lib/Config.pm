@@ -125,6 +125,50 @@ sub get_proj_directive
 }
 
 
+sub release_path
+{
+	my ($real_file) = @_;
+
+	my ($proj, $path, $file) = parse_vc_file($real_file);
+
+	my $rpaths = $config->{Project}->{$proj}->{ReleasePaths};
+	fatal_error("no release path(s) specified for this project")
+			unless $rpaths;
+
+	my $rpath = '';
+	foreach (keys %$rpaths)
+	{
+		# cheating a bit here: a dir of "." indicates project TLD, but the regex will intepret it as any char 
+		# this works out nicely, since a release path "." should match all files in the project
+		if ("$path/$file" =~ m<^$_>)
+		{
+			$rpath = $_ if length($_) > length($rpath);
+		}
+	}
+	fatal_error("don't have a release path for $path/$file")
+			unless $rpath;
+	print STDERR "release_path: found rpath $rpath\n" if DEBUG >= 2;
+
+	# now substitute the found release path in our particular file
+	# (if $path is "." it indicates the project TLD; no need to include it)
+	my $full_release_path = $path eq "." ? $file : "$path/$file";
+	# rpath of "." is a special case; it means this is a release path for
+	# the project TLD, so just tack on the release path to the beginning
+	if ($rpath eq ".")
+	{
+		$full_release_path = "$rpaths->{$rpath}/$full_release_path";
+	}
+	else
+	{
+		$full_release_path =~ s[^$rpath][$rpaths->{$rpath}];
+	}
+
+	print STDERR "release_path: going to return $full_release_path\n"
+			if DEBUG >= 2;
+	return $full_release_path;
+}
+
+
 ###########################
 # Return a true value:
 ###########################
