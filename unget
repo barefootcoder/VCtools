@@ -1,0 +1,64 @@
+#! /usr/bin/perl
+
+use strict;
+
+use Cwd qw(getcwd);
+use Barefoot::cvs;
+use Barefoot::input qw(get_yn);
+
+my $me = $0;
+$me =~ s@^.*/@@;
+
+
+#################################
+# CHECK FOR ERRORS
+#################################
+
+if (!$::ENV{CVSROOT})
+{
+	print STDERR "$me: variable CVSROOT must be set\n";
+	exit 2;
+}
+
+my $module = $ARGV[0];
+
+if (!$module)
+{
+	print STDERR "usage: $me module\n";
+	exit 2;
+}
+
+if (!-r $module)
+{
+	print STDERR "$me: $module does not exist or is not readable\n";
+	exit 2;
+}
+
+my ($project, $subdir) = cvs::parse_module(getcwd());
+
+if (!-e "$::ENV{CVSROOT}/$project/$subdir/$module,v")
+{
+	print "$::ENV{CVSROOT}/$project/$subdir/$module,v\n";
+	print STDERR "$me: $module does not appear to be checked into CVS\n";
+	exit 2;
+}
+
+
+#################################
+# MAIN
+#################################
+
+my @lockers = cvs::getLockers($module);
+if (!grep {$_ eq $::ENV{USER}} @lockers)
+{
+	print "$me: you didn't do a get on this module\n";
+	exit 1;
+}
+
+my $prgrp = cvs::project_group($project);
+
+system("cvs unedit $module");
+system("cvs watch remove -a edit $module");
+system("chgrp $prgrp $module") unless $?;
+system("chmod a+r $module") unless $?;
+print "done\n" unless $?;
