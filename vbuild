@@ -1,4 +1,4 @@
-#! /usr/bin/perl
+#! /usr/bin/perl -w
 
 use strict;
 
@@ -37,6 +37,15 @@ VCtools::verify_gid($project);
 
 # leaving second argument blank indicates we want the entire project
 VCtools::get_tree($project, "", $project);
+
+# check for post-build script and execute it
+foreach (VCtools::project_script($project, 'PostBuild'))
+{
+	print "$_\n" if VCtools::verbose;
+	system($_) == 0
+			or VCtools::fatal_error("script line failed; check config file");
+}
+
 print "done\n" unless $?;
 
 
