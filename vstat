@@ -3,33 +3,30 @@
 use strict;
 use warnings;
 
-use Geek::Dev::Debug(4);
-
-use Getopt::Std;
-
-use VCtools::common;
+use VCtools::Base;
+use VCtools::Args;
+use VCtools::Common;
 
 
 #################################
 # OPTIONS AND ENVIRONMENT VARS
 #################################
 
-VCtools::process_args( {
-		r   =>  {
-			name    =>  'recursive',
-			usage   =>  '[-r]',
-			comment =>  'apply operation recursively',
-		},
-	}, "[file_or_dir ...]");
+VCtools::switch('recursive', 'r', 'operate recursively');
+VCtools::args('files', 'optlist', 'file(s) (or directory/ies) to commit');
+VCtools::getopts();
 
 # remember, directories are files too
-my @files = @ARGV || ".";
+my @files = VCtools::files();
+@files = (".") unless @files;
+print STDERR "status for files: @files\n" if DEBUG >= 3;
 
 
 #################################
 # CHECK FOR ERRORS
 #################################
 
+VCtools::check_common_errors();
 VCtools::verify_files_and_group(@files);
 
 
