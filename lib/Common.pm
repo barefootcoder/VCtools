@@ -59,6 +59,10 @@ use constant RELEASE_FILE => "RELEASE";
 use constant WORKING_DIR => $config->{PersonalDir};
 use constant VCTOOLS_BINDIR => $config->{VCtoolsBinDir};
 use constant SUBVERSION_BINDIR => $config->{SubversionBinDir};
+######## the below *may* be necessary for -u switch (or then again, maybe not)
+# not a true constant; gives the current value of Personal Dir at the time it's called
+#sub WORKING_DIR () { return $config->{PersonalDir} };
+########
 
 use constant DEFAULT_STATUS => 'unknown';
 
@@ -139,6 +143,15 @@ sub _svn_auth_check
 }
 
 
+###########################
+# This returns the path *of* the supplied project (don't confuse it with projpath(), below).  The project
+# need not exist as a working copy, but it must exist in the repository.  The path returned is the asbolute
+# path # that this project's local copy should reside in.  The most common use of this function is to
+# determine that path in the first place (i.e., it's called by vbuild).
+#
+# You can also specify a second argument of either 'trunk', 'branch', or 'tag' (if you don't supply a second
+# arg, it assumes you want the trunk).  If possible, the routine will take the BranchingPolicy into account
+# and return the appropriate path.
 sub _project_path
 {
 	# finds the server-side path for the given project
@@ -208,16 +221,26 @@ sub _project_path
 }
 
 
+# this definitely won't work with CVS
 sub _server_path
 {
 	my ($file) = @_;
+	my $path;
 
-	# this probably wouldn't work with CVS; rethink in that case
-	my ($proj, $path, $basefile) = parse_vc_file($file);
+	# we expect this to succeed, so make sure you've run exists_in_vc() on the file first
+	my $ed = _execute_and_get_output("info", $file);
+	while ( <$ed> )
+	{
+		if ( /^URL:\s*(\S+)/ )
+		{
+			$path = $1;
+			last;
+		}
+	}
+	close($ed);
 
-	# could use File::Spec->catfile here, but then again the server path might be an URL, in which case
-	# catfile running under Windows (e.g.) would not Do The Right Thing(tm)
-	return $proj ? _project_path($proj) . "/$path/$basefile" : undef;
+	die("_server_path: cannot determine server path of $file") unless $path;
+	return $path;
 }
 
 
@@ -1049,7 +1072,7 @@ sub get_all_with_status
 sub get_all_files
 {
 	my @files = @_;
-	# note that in this case, they're more like to be dirs than files,
+	# note that in this case, they're more likely to be dirs than files,
 	# but we'll call it @files just for consistency
 
 	my @return_files;
@@ -1156,6 +1179,20 @@ sub parse_vc_file
 
 	# in scalar context, return just project; in list context, return all parts
 	return wantarray ? ($project, $path, $file) : $project;
+}
+
+
+###########################
+# This routine returns the path *in* the project of the supplied file (don't confuse with _project_path(),
+# above).  More specifically, it returns the given file as a path relative to the TLD of the project's
+# local copy.  The file need not exist (useful for reporting deleted files).  This is most useful for
+# user reporting.
+sub projpath
+{
+	my ($fullpath) = @_;
+
+	my (undef, $path, $file) = parse_vc_file($fullpath);
+	return File::Spec->catfile($path, $file);
 }
 
 
@@ -1520,9 +1557,9 @@ sub commit_files
 			{
 				# (this is probably a Subversion-only solution, unfortunately)
 				# get the server path for a file (any file will do)
-				# then take the basename so that we're looking at the log for the directory the file was removed from
-				print STDERR "getting log for ", dirname(_server_path($filenames[0])), "\n" if DEBUG >= 2;
-				get_log(dirname(_server_path($filenames[0])));
+				# then take away the basename so that we're looking at the log for the directory the file was removed from
+				print STDERR "getting log for ", _server_path(dirname($filenames[0])), "\n" if DEBUG >= 2;
+				get_log(_server_path(dirname($filenames[0])));
 			}
 			else
 			{
@@ -1534,6 +1571,10 @@ sub commit_files
 
 			if ($log_message)
 			{
+				# the person receiving the email has no clue what directory you were in at the time, so let's
+				# make those filenames a bit more useful
+				$_ = projpath($_) foreach @filenames;
+
 				foreach (split(',', $email_list))
 				{
 					my $mail = {};
