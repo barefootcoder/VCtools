@@ -62,7 +62,8 @@ $tmp_debug = "$::ENV{TEMP}/" . $me . "_$$.out" unless !length($::ENV{TEMP});
 system("cvs -d $cvsroot diff $file > $tmp_debug");
 
 # view the diff
-system("less $tmp_debug");
+my $pager = $ENV{PAGER} || "less";
+system("$pager $tmp_debug");
 
 # remove the temp file
 unlink($tmp_debug);
