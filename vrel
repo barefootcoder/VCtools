@@ -111,7 +111,12 @@ unless (VCtools::determine())
 
 if (VCtools::determine())
 {
-	@files = grep { needs_to_be_released } VCtools::get_all_files(@files);
+	# have to call cache_file_status() instead of get_all_files() because needs_to_be_released calls modififed_from_vc()
+	# obviously we want to force recursion here (and since we don't really have a -r switch, this would crash if we
+	# didn't provide a DONT_RECURSE option)
+	@files = VCtools::cache_file_status(@files, { DONT_RECURSE => 0 });
+
+	@files = grep { needs_to_be_released } @files;
 	if (@files)
 	{
 		VCtools::list_files($proj, "need to be released", @files);
