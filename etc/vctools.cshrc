@@ -27,6 +27,11 @@ else
 			alias vcshell "unsetenv VCTOOLS_SHELL ; exec $shellexec"
 			alias vcd 'cd `vfind -dirfind \!^`'
 
+			# newgrp often seems to trash $SHELL, so put it back
+			if ( ! $?SHELL ) then
+				setenv SHELL `which $0`
+			endif
+
 			if ( $?VCTOOLS_SHELL_STARTDIR ) then
 				cd $VCTOOLS_SHELL_STARTDIR
 				unsetenv VCTOOLS_SHELL_STARTDIR

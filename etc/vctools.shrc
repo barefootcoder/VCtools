@@ -31,13 +31,18 @@ else
 				cd `vfind -dirfind $1`
 			}
 
+			# newgrp often seems to trash $SHELL, so put it back
+			if [ -z "$SHELL" ]
+			then
+				export SHELL=`which $0`
+			fi
+
 			if [ -n "$VCTOOLS_SHELL_STARTDIR" ]
 			then
 				cd $VCTOOLS_SHELL_STARTDIR
 				unset VCTOOLS_SHELL_STARTDIR
 			fi
 			umask 2
-
 			;;
 		*)
 			# obviously $shellexec has more work to do
