@@ -39,13 +39,26 @@ BEGIN
 
 # test use Debug with no args and no higher package
 # to do this, we'll need a whole separate Perl program
-my $output = `perl -e 'use Geek::Dev::Debug; print DEBUG;'`;
+my $output = `perl -e 'use VCtools::Base; print DEBUG;'`;
 die("top level empty Debug value doesn't yield 0 (actually got $output)")
 		unless $output eq "0";
 
 
 ###########################
-# make sure @INC handler doesn't get installed twice
+# make sure @INC handler doesn't get installed when DEBUG is 0
+###########################
+
+system(q{perl -e '
+    use VCtools::Base;
+    foreach (@INC)
+	{
+		die("added INC handler even when DEBUG off") if ref eq 'CODE';
+	}
+'}) and die;
+
+
+###########################
+# and make sure it doesn't get installed twice no matter what
 ###########################
 
 system(q{perl -e '

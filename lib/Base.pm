@@ -97,11 +97,11 @@ sub import
 	my $caller_package = caller;
 	# print STDERR "my calling package is $caller_package\n";
 
-	set_up_debug_value($caller_package, $opts{DEBUG});
+	$opts{DEBUG} = set_up_debug_value($caller_package, $opts{DEBUG});
 
 	# prepend testing dirs into @INC path if we're actually in DEBUG mode
 	# print STDERR "just before prepending, value is $debug_value\n";
-	redirect_modules_to_testing();
+	redirect_modules_to_testing() if $opts{DEBUG};
 
 	# print STDERR "leaving import now\n";
 }
@@ -127,7 +127,7 @@ sub set_up_debug_value
 		return if $caller_defined;
 
 		# if neither one is defined, assume 0 (debugging off)
-		$debug_value = defined $master_debug ? $master_debug : 10;
+		$debug_value = defined $master_debug ? $master_debug : 0;
 	}
 =comment
 	elsif (exists $word_vals{uc $debug_value})
@@ -151,6 +151,9 @@ sub set_up_debug_value
 	# if it isn't already there
 	eval "sub main::DEBUG () { return $debug_value; }"
 			unless defined $master_debug;
+
+	# return whatever we came up with in case somebody else needs it
+	return $debug_value;
 }
 
 
