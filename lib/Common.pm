@@ -160,7 +160,7 @@ sub _project_path
 
 	my $root = rootpath() || $proj_root
 			|| $config->{DefaultRootPath} || $vcroot;
-	print STDERR "project_path thinks root is $root\n" if DEBUG >= 2;
+	print STDERR "project_path thinks root is $root\n" if DEBUG >= 3;
 
 	my %subdirs =
 	(
@@ -196,8 +196,7 @@ sub _project_path
 	# if trunk is blank, that's okay; otherwise, it's a fatal error
 	fatal_error("don't know how to make a $which directory for this project")
 			if $subdirs{$which} eq '' and $which ne 'trunk';
-	print STDERR "project_path thinks which dir is $subdirs{$which}\n"
-			if DEBUG >= 2;
+	print STDERR "project_path thinks which dir is $subdirs{$which}\n" if DEBUG >= 3;
 
 	my $projpath = $root . "/" . $proj . $subdirs{$which};
 
@@ -206,6 +205,19 @@ sub _project_path
 	auth_check($projpath);
 
 	return $projpath;
+}
+
+
+sub _server_path
+{
+	my ($file) = @_;
+
+	# this probably wouldn't work with CVS; rethink in that case
+	my ($proj, $path, $basefile) = parse_vc_file($file);
+
+	# could use File::Spec->catfile here, but then again the server path might be an URL, in which case
+	# catfile running under Windows (e.g.) would not Do The Right Thing(tm)
+	return $proj ? _project_path($proj) . "/$path/$basefile" : undef;
 }
 
 
@@ -1394,6 +1406,34 @@ sub move_files
 }
 
 
+sub remove_files
+{
+	my (@files) = @_;
+
+	# for looking up files
+	# also, every time we find a file, we're going to remove it from the hash
+	# then, at the end, if there's anything left, we know we had a problem
+	my $files = _file_hash(@files);
+
+	my $fh = _execute_and_get_output("remove", @files);
+	while ( <$fh> )
+	{
+		if ( / ^ D \s+ (.*) \s* $ /x )
+		{
+			fatal_error("deleted unknown file: $1") unless exists $files->{$1};
+			delete $files->{$1};
+		}
+		else
+		{
+			fatal_error("unknown output from remove command: $_");
+		}
+	}
+	close($fh);
+
+	fatal_error("not all files were removed: @{keys %$files}") if %$files;
+}
+
+
 sub revert_files
 {
 	my (@files) = @_;
@@ -1430,7 +1470,9 @@ sub commit_files
 	# we ask the user if they're really sure they want to commit a file which apparently still has some
 	# debugging switch turned on
 	# (note: we suspend this check for straight moves.  generally the contents of those files haven't changed)
-	if (not exists $opts->{MOVE} and my $debug_pattern = get_proj_directive($proj, 'DebuggingRegex'))
+	# (further note: obviously no point in checking for removes, since the files aren't there any more anyway)
+	if (not exists $opts->{MOVE} and not exists $opts->{DEL}
+			and my $debug_pattern = get_proj_directive($proj, 'DebuggingRegex'))
 	{
 		foreach my $file (@files)
 		{
@@ -1471,8 +1513,21 @@ sub commit_files
 			# note: can't use $files[0] here; it might be a -m option from above
 			# further note: in a move, we need to grab the first _destination_ file; the source files are gone and
 			# the log command will fail on them
-			my $index = exists $opts->{MOVE} ? $opts->{MOVE} : 0;
-			get_log($filenames[$index]);
+			# extra further note: in a remove, we have to do things totally differently because _all_ the files are gone
+			if (exists $opts->{DEL})
+			{
+				# (this is probably a Subversion-only solution, unfortunately)
+				# get the server path for a file (any file will do)
+				# then take the basename so that we're looking at the log for the directory the file was removed from
+				print STDERR "getting log for ", dirname(_server_path($filenames[0])), "\n" if DEBUG >= 2;
+				get_log(dirname(_server_path($filenames[0])));
+			}
+			else
+			{
+				# not a remove, just distinguish between move and "regular"
+				my $index = exists $opts->{MOVE} ? $opts->{MOVE} : 0;
+				get_log($filenames[$index]);
+			}
 			my $log_message = log_we_created($proj);
 
 			if ($log_message)
@@ -1483,11 +1538,12 @@ sub commit_files
 					$mail->{To} = $_;
 					$mail->{From} = $config->{EmailsFrom};
 					$mail->{Subject} = "Commit Notification: project $proj";
-					if (not exists $opts->{MOVE})
+					if (exists $opts->{DEL})
 					{
-						$mail->{Body} = "The following files were committed: @filenames\n\n$log_message";
+						# remove commits have a special message
+						$mail->{Body} = "The following files were removed from VC: @filenames\n\n$log_message";
 					}
-					else
+					elsif (exists $opts->{MOVE})
 					{
 						# move commits are a bit trickier:
 						$mail->{Body} = "The following files were renamed/moved:\n"
@@ -1495,6 +1551,12 @@ sub commit_files
 										map { "\t$filenames[$_] -> $filenames[$_ + $opts->{MOVE}]" } 0..($opts->{MOVE} - 1)
 								) . "\n\n$log_message";
 					}
+					else
+					{
+						# "regular" commit message
+						$mail->{Body} = "The following files were committed: @filenames\n\n$log_message";
+					}
+					print "commit email => ", Dumper($mail) if DEBUG >= 3;
 
 					unless (sendmail(%$mail))
 					{
@@ -1534,8 +1596,7 @@ sub edit_commit_log
 {
 	my ($file, $rev) = @_;
 
-	my ($proj, $path, $basefile) = parse_vc_file($file);
-	my $server_path = _project_path($proj) . "/$path/$basefile";
+	my $server_path = _server_path($file);
 
 	# passing command options as if they were part of the command itself is a slight perversion of the spirit of
 	# _make_vc_command, but it _will_ work

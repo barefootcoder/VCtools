@@ -24,6 +24,8 @@ else
 			alias stat=vstat
 			alias unget=vunget
 
+			alias vrm=vdel
+
 			# these require a bit more work
 			alias vcshell="unset VCTOOLS_SHELL ; exec $shellexec"
 			function vcd

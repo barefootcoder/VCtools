@@ -23,6 +23,8 @@ else
 			alias stat vstat
 			alias unget vunget
 
+			alias vrm vdel
+
 			# these require a bit more work
 			alias vcshell "unsetenv VCTOOLS_SHELL ; exec $shellexec"
 			alias vcd 'cd `vfind -dirfind \!^`'
