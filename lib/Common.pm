@@ -967,9 +967,9 @@ sub exists_in_vc
 
 	# if not cached already, go get it
 	cache_file_status($file) unless exists $status_cache{$file};
-	print "file status for $file is $status_cache{$file}\n" if DEBUG >= 3;
+	print STDERR "file status for $file is $status_cache{$file}\n" if DEBUG >= 3;
 
-	return $status_cache{$file} and $status_cache{$file} ne 'unknown';
+	return (exists $status_cache{$file} and $status_cache{$file} ne 'unknown');
 }
 
 
