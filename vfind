@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use File::Find;
+use Data::Dumper;
 
 use VCtools::Base;
 use VCtools::Args;
@@ -14,14 +14,11 @@ use VCtools::Common;
 # OPTIONS AND ARGUMENTS
 #################################
 
-VCtools::switch('current_dir', 'c', 'start from . '
-		. '(default: start from root project dir)');
-VCtools::args('dirs', 'optlist', 'directory/ies to search '
-		. '(default: search all from starting dir)');
-VCtools::action('print', 'print filename (only)  '
-		. '(this is the default action)');
-VCtools::action('grep', 'search file for (Perl regex) pattern '
-		. '(also prints filename)', 'pattern');
+VCtools::switch('current_dir', 'c', 'start from . (default: start from root project dir)');
+VCtools::args('dirs', 'optlist', 'directory/ies to search (default: search all from starting dir)');
+VCtools::action('print', 'print filename (only)  (this is the default action)');
+VCtools::action('grep', 'search file for (Perl regex) pattern (also prints filename)', 'pattern');
+VCtools::action('dirfind', 'find closest matching dirname (exact matches and least depth preferred)', 'dirname');
 VCtools::getopts();
 
 # remember, directories are files too
@@ -74,17 +71,53 @@ if ($grep_pattern)
 			or VCtools::fatal_error("illegal grep pattern: $@");
 }
 
+# ditto
+my $dirmatch = VCtools::dirfind();
+if ($dirmatch)
+{
+	eval { $dirmatch = qr{(?:^|/)$dirmatch(.*)$} }
+			# this shouldn't ever happen, I don't think
+			or VCtools::fatal_error("can't turn dirname into a pattern: $@");
+}
+our %possible_dirs;
+
 foreach (VCtools::get_all_files(@files))
 {
 	if ($grep_pattern)
 	{
 		$retval |= grep_file($_, $grep_pattern);
 	}
+	elsif ($dirmatch)
+	{
+		$retval |= dir_find($_, $dirmatch);
+	}
 	else
 	{
 		# doesn't really matter if they specified -print or not;
 		# this is the default action
 		$retval |= print_file($_, "\n");
+	}
+}
+
+
+# dirfind option doesn't print anything as it goes along, so print result here
+if ($dirmatch)
+{
+	if (%possible_dirs)
+	{
+		print "possible_dirs: ", Dumper(\%possible_dirs) if DEBUG >= 3;
+
+		my @dirs = sort {
+			$possible_dirs{$a} <=> $possible_dirs{$b} || $a cmp $b
+		} keys %possible_dirs;
+		print "dirs: @dirs\n" if DEBUG >= 2;
+
+		print "$dirs[0]\n";
+	}
+	else
+	{
+		# oops, no possibles
+		VCtools::warning("no directories found");
 	}
 }
 
@@ -121,7 +154,7 @@ sub grep_file
 		if (not open(IN, $_))
 		{
 			VCtools::warning("can't open file $_");
-			return;
+			return 0;
 		}
 
 		while ( <IN> )
@@ -137,4 +170,27 @@ sub grep_file
 	}
 
 	return $retval;
+}
+
+
+sub dir_find
+{
+	my ($file, $pattern) = @_;
+
+	return 0 unless -d $_;
+	return 0 unless /$dirmatch/;
+
+	# (note: pattern we built for $dirmatch captures any trailing chars as $1, so we can tell exact
+	# matches by checking $1 for having zero length)
+	my $exact = length($1) == 0;
+	
+	# count the number of subdirs
+	# this allows us to rank choices by how "deep" they are
+	my $depth = s@/@/@g || 0;
+
+	# we want exact matches to rank higher than partials
+	# thus we add an arbitrary large number to non-exact matches, making them drop low in the sorting
+	$possible_dirs{$_} = $depth + !$exact * 100;
+
+	return 1;
 }
