@@ -1,61 +1,38 @@
 #! /usr/bin/perl
 
 use strict;
+use warnings;
 
-# use Barefoot::debug;							# comment out for production
-
-use DirHandle;
-use Getopt::Std;
-use Cwd qw(getcwd);
-use Barefoot::cvs;
-
-my $me = $0;
-$me =~ s@^.*/@@;
-
-
-# default values
-my $verbose=0;
-my $cvsroot=$::ENV{CVSROOT};
+use VCtools::Base;
+use VCtools::Args;
+use VCtools::Common;
 
 
 #################################
 # OPTIONS AND ENVIRONMENT VARS
 #################################
 
-my $opt = {};
-getopts('vd:', $opt);
-$verbose = 1 if defined $opt->{v};
-$cvsroot = $opt->{d} if defined $opt->{d};
+VCtools::switch('latest', 'l', 'show only latest log');
+VCtools::args('files', 'list', 'file(s) (or directory/ies) to show logs for');
+VCtools::getopts();
+
+# remember, directories are files too
+my @files = VCtools::files();
+print STDERR "log for files: @files\n" if DEBUG >= 3;
 
 
 #################################
 # CHECK FOR ERRORS
 #################################
 
-if (!$cvsroot)
-{
-	print STDERR "$me: variable CVSROOT must be set\n";
-	exit 2;
-}
+VCtools::verify_files_and_group(@files);
 
-my $offsite = cvs::is_offsite($cvsroot);
+# get statuses for everything at once (quicker that way)
+VCtools::cache_file_status(@files, { DONT_RECURSE => 1 });
 
-my $path = $ARGV[0] if $ARGV[0];
-if ($path)
+foreach my $file (@files)
 {
-	if (!-e $path)
-	{
-		print STDERR "$me: argument is not a valid path or file, $ARGV[0]\n";
-		print STDERR "usage: $me [options] [path]\n";
-		print STDERR "         default path is .\n";
-		print STDERR "         -v : verbose\n";
-		print STDERR "         -d : cvsroot, if not using CVSROOT\n";
-		exit 2;
-	}
-}
-else
-{
-	$path = ".";
+	VCtools::fatal_error("$file is not in VC") unless VCtools::exists_in_vc($file);
 }
 
 
@@ -63,5 +40,28 @@ else
 # MAIN
 #################################
 
-system("cvs -d $cvsroot log $path");
-print "done\n";
+my $count = @files;
+foreach (@files)
+{
+	my $header_line = @files > 1 ? "\n---> $_ <---\n" : "";
+
+	if (VCtools::latest())
+	{
+		my @log_lines = VCtools::get_log($_);
+		print $header_line, shift @log_lines;
+		/^\n/ ? last : print foreach @log_lines;
+	}
+	else
+	{
+		VCtools::page_output('.vclog', $header_line, VCtools::get_log($_));
+		print "\n";
+		VCtools::prompt_to_continue("$count more files to view") if --$count;
+	}
+}
+
+print "\ndone\n";
+
+
+#################################
+# SUBS
+#################################
