@@ -14,6 +14,7 @@ $me =~ s@^.*/@@;
 
 # default values
 my $verbose=0;
+my $force=0;
 my $cvsroot=$::ENV{CVSROOT};
 
 
@@ -41,7 +42,9 @@ my $offsite = cvs::is_offsite($cvsroot);
 
 if (!$ARGV[0])
 {
-	print STDERR "usage: $me module\n";
+	print STDERR "usage: $me [options] [file]\n";
+	print STDERR "       -v : verbose\n";
+	print STDERR "       -d : cvsroot, if not using CVSROOT\n";
 	exit 2;
 }
 
@@ -117,13 +120,37 @@ if (!$tmp)										# no differences
 	exit 1;
 }
 
-system("cvs -r -d $cvsroot commit $path");
-system("cvs -d $cvsroot watch remove -a edit $path");	# don't watch edits any more
-
-# don't think this is necessary with -r above, buuuuttttt,
-if ( !$offsite )
+# need to check stick tag here
+# do a stat
+my $sticky = 0;
+open(STAT, "cvs -d $cvsroot status $path |");
+while (<STAT>)
 {
-	system("chmod a-w $path");
+	next unless /Sticky Tag/;
+	
+	$sticky = 1 unless /Sticky Tag.*\(none\)/; 
+}
+close(STAT);
+
+if ( !$sticky )
+{
+	system("cvs -r -d $cvsroot commit $path");
+	system("cvs -d $cvsroot watch remove -a edit $path");	# don't watch edits any more
+
+	# don't think this is necessary with -r above, buuuuttttt,
+	if ( !$offsite )
+	{
+		system("chmod a-w $path");
+	}
+}
+else
+{
+	# file is sticky, user should get newest version
+	print "$me: This file has a sticky tag.\n";
+	print "$me: csync to current version.\n";
+	print "$me: A commit can not be executed.\n";
 }
 
 print "done\n";
+exit 0;
+#------------------------------------------------------------------------------
