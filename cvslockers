@@ -1,0 +1,155 @@
+#! /usr/bin/perl
+
+use strict;
+
+use DirHandle;
+use Getopt::Std;
+use Cwd qw(getcwd);
+use Barefoot::cvs;
+
+my $me = $0;
+$me =~ s@^.*/@@;
+
+$| = 1;									# autoflush STDOUT
+
+# default values
+my $ignore_errors=0;
+my $recurse=0;
+my $fix_write_access=0;
+
+
+#################################
+# OPTIONS AND ENVIRONMENT VARS
+#################################
+
+my $opt = {};
+getopts('irf', $opt);
+$ignore_errors = 1 if defined $opt->{i};
+$recurse = 1 if defined $opt->{r};
+$fix_write_access = 1 if defined $opt->{f};
+
+
+#################################
+# CHECK FOR ERRORS
+#################################
+
+if (!$::ENV{CVSROOT})
+{
+	print STDERR "$me: variable CVSROOT must be set\n";
+	exit 2;
+}
+
+
+#################################
+# MAIN
+#################################
+
+my $retval = 0;							# default to no errors
+
+if (@ARGV == 0)							# no args passed, default to *
+{
+	handle_all_files();
+}
+else
+{
+	foreach my $file (@ARGV)
+	{
+		$retval |= printlockers($file);
+	}
+}
+
+exit $retval;							# will be 1 if any errors
+
+
+#################################
+# SUBS
+#################################
+
+sub handle_all_files
+{
+	my ($dir) = @_;
+	$dir = "." unless defined $dir;
+	# print "processing dir $dir ...\n";
+
+	opendir(DIR, $dir) or die("can't get dir filehandle for $dir");
+	foreach my $file ( readdir(DIR) )
+	{
+		# print "processing file $dir/$file ...\n";
+		if (-f "$dir/$file")					# don't process dirs, pipes, &c
+		{
+			next if $file =~ "^\.#";			# these are special CVS files
+			$retval |= printlockers("$dir/$file");
+		}
+		elsif (-d "$dir/$file" and $recurse)	# recurse into dirs
+		{
+			next if $file eq "CVS";				# but not the CVS dir
+			next if $file eq "Attic";			# also Attic dirs are special
+			next if $file =~ /^\.\.?$/;			# skip . and ..
+			handle_all_files("$dir/$file");
+		}
+	}
+	closedir(DIR);
+}
+
+sub printlockers
+{
+	my ($path) = @_;
+
+	if (!-r $path)
+	{
+		print STDERR "$me: $path does not exist or is not readable\n"
+				unless $ignore_errors;
+		return 1;
+	}
+
+	my ($project, $subdir, $module) = cvs::parse_module(getcwd() . "/$path");
+	# print "module is $module, project is $project, subdir is $subdir\n";
+
+	if (-d $path)
+	{
+		if ($recurse)
+		{
+			handle_all_files($path);
+		}
+		else
+		{
+			print STDERR "$me: directories cannot be locked\n"
+					unless $ignore_errors;
+		}
+		return 0;
+	}
+
+	if ($subdir =~ /\bCVS\b/)
+	{
+		print STDERR "$me: cannot get lockers for CVS dir files\n"
+				unless $ignore_errors;
+		return 1;
+	}
+
+	if (!-e "$::ENV{CVSROOT}/$project/$subdir/$module,v")
+	{
+		# print "$::ENV{CVSROOT}/$project/$subdir/$module,v\n";
+		print STDERR "$me: $module does not appear to be checked into CVS\n"
+				unless $ignore_errors;
+		return 1;
+	}
+
+	my $user_is_a_locker = 0;
+	my @lockers = cvs::getLockers($module, \$user_is_a_locker);
+	if (!$user_is_a_locker and -w $path)
+	{
+		if ($fix_write_access)
+		{
+			system("chmod a-w $path");
+		}
+		else
+		{
+			print STDERR "$me: $path has write access but you do not "
+					. "have it locked\n";
+		}
+	}
+	return unless @lockers;			# could print "NOT LOCKED" if -v, maybe
+
+	print "$path: ", join(", ", @lockers), "\n";
+	return 0;
+}
