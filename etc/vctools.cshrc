@@ -17,3 +17,7 @@ else
 		umask 2
 	endif
 endif
+
+if ( -e ~/.vctoolsrc ) then
+	source ~/.vctoolsrc
+endif
