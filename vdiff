@@ -12,6 +12,7 @@ use VCtools::Common;
 # OPTIONS AND ENVIRONMENT VARS
 #################################
 
+VCtools::switch('blanks', 'b', 'ignore differences in amounts of whitespace');
 VCtools::args('file', 'single', 'file to show diffs of');
 VCtools::getopts();
 
@@ -30,4 +31,4 @@ VCtools::verify_files_and_group($file);
 #################################
 
 # execute diff and page it out to STDOUT
-VCtools::page_output('.vcdiff', VCtools::get_diffs($file));
+VCtools::page_output('.vcdiff', VCtools::get_diffs($file, { IGNORE_BLANKS => VCtools::blanks() }));

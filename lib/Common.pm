@@ -589,6 +589,7 @@ sub _make_svn_command
 
 	my $quiet = $opts->{VERBOSE} ? "-v" : "";
 	my $local = $opts->{DONT_RECURSE} ? "-N" : "";
+	my $ignore_blanks = $opts->{IGNORE_BLANKS} ? "--diff-cmd diff -x -bc" : "";
 	my $err_redirect = $opts->{IGNORE_ERRORS} ? "2>/dev/null" : "";
 
 	# there is probably a cleaner way to do this, but I don't know what it is
@@ -609,7 +610,7 @@ sub _make_svn_command
 	$command = $cmd_subs{$command} if exists $cmd_subs{$command};
 
 	$_ = '"' . $_ . '"' foreach @files;
-	return "svn $command $quiet $local @files $err_redirect ";
+	return "svn $command $quiet $local $ignore_blanks @files $err_redirect ";
 }
 
 
@@ -1165,10 +1166,11 @@ sub parse_vc_file
 
 sub get_diffs
 {
+	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
 	my ($file) = @_;
 
 	# nice and simple here
-	return _execute_and_collect_output("diff", $file);
+	return _execute_and_collect_output("diff", $file, $opts);
 }
 
 
