@@ -66,11 +66,34 @@ my $switches =
 };
 
 # for error messages
-our $me = $0;
-$me =~ s@^.*/@@;
+our $me;
+BEGIN
+{
+	$me = $0;
+	$me =~ s@^.*/@@;
+}
+
+# have to declare this one early, as it's used in a BEGIN block
+sub fatal_error
+{
+	my ($err_msg, $exit_code) = @_;
+	$exit_code ||= 1;
+
+	if ($exit_code eq 'usage')
+	{
+		$err_msg .= " (-h for usage)";
+		$exit_code = 2;
+	}
+
+	print STDERR "$me: $err_msg\n";
+	exit 1;
+}
 
 # change below by calling cvs::set_vcroot()
-our $vcroot = $ENV{CVSROOT};
+#our $vcroot = $ENV{CVSROOT};							# for CVS
+our $vcroot = $ENV{SVNROOT};							# for Subversion
+	# actually, I don't really think Subversion has anything like this,
+	# but we'll leave it here to keep from rehacking everything
 
 # for internal use only (_get_lockers & cache_file_status, respectively)
 my (%lockers_cache, %status_cache);
@@ -79,7 +102,9 @@ my (%lockers_cache, %status_cache);
 my $config;
 BEGIN
 {
-	$config = { ParseConfig('/usr/local/etc/VCtools/VCtools.conf') };
+	fatal_error("required environment variable VCTOOLS_CONFIG is not set", 3)
+			unless exists $ENV{VCTOOLS_CONFIG};
+	$config = { ParseConfig($ENV{VCTOOLS_CONFIG}) };
 	# directives ending in "Dir" are allowed to include ~ expansion and env vars
 	foreach (keys %$config)
 	{
@@ -368,7 +393,7 @@ sub _interpret_cvs_update_output
 
 sub _interpret_svn_update_output
 {
-	next if /^At revision/;				# ignore these
+	return if /^At revision/;				# ignore these
 	if ( /^([ADUG]) (.*)/ )				# ignore unless verbose is on
 	{
 		if ($args->{verbose})
@@ -580,22 +605,6 @@ sub process_args
 	{
 		fatal_error("incorrect number of arguments", 'usage') unless @ARGV == @_;
 	}
-}
-
-
-sub fatal_error
-{
-	my ($err_msg, $exit_code) = @_;
-	$exit_code ||= 1;
-
-	if ($exit_code eq 'usage')
-	{
-		$err_msg .= " (-h for usage)";
-		$exit_code = 2;
-	}
-
-	print STDERR "$me: $err_msg\n";
-	exit 1;
 }
 
 
