@@ -1,69 +1,47 @@
 #! /usr/bin/perl
 
 use strict;
+use warnings;
 
-# use Barefoot::debug;							# comment out for production
-
-use DirHandle;
-use Getopt::Std;
-use Cwd qw(getcwd);
-use Barefoot::cvs;
-
-my $me = $0;
-$me =~ s@^.*/@@;
-
-
-# default values									 
-my $verbose=0;
-my $cvsroot=$::ENV{CVSROOT};
+use VCtools::Base;
+use VCtools::Args;
+use VCtools::Common;
 
 
 #################################
 # OPTIONS AND ENVIRONMENT VARS
 #################################
 
-my $opt = {};
-getopts('vd:', $opt);
-$verbose = 1 if defined $opt->{v};
-$cvsroot = $opt->{d} if defined $opt->{d};
+VCtools::args('file', 'single', 'file to show diffs of');
+VCtools::getopts();
+
+# remember, directories are files too
+my $file = VCtools::file();
 
 
 #################################
 # CHECK FOR ERRORS
 #################################
 
-if (!$cvsroot)
-{
-	print STDERR "$me: variable CVSROOT must be set\n";
-	exit 2;
-}
-
-my $offsite = cvs::is_offsite($cvsroot);
-
-my $file = $ARGV[0];
-if (!$file || !-e $file)
-{
-	print STDERR "$me: argument is not a valid file, $file\n";
-	print STDERR "usage: $me [options] [file]\n";
-	print STDERR "         -v : verbose\n";
-	print STDERR "         -d : cvsroot, if not using CVSROOT\n";
-	exit 2;
-}
+VCtools::check_common_errors();
+VCtools::verify_files_and_group($file);
 
 #################################
 # MAIN
 #################################
 
 # create a temporary filename
-my $tmp_debug = "/tmp/" . $me . "_$$.out";
-$tmp_debug = "$::ENV{TEMP}/" . $me . "_$$.out" unless !length($::ENV{TEMP});
+my $tmpdir = $ENV{TMP} || $ENV{TEMP} || "/tmp";
+my $tmpfile = "$tmpdir/vcdiff" . "_$$.out";
 
-# execute cvs diff and save to a file
-system("cvs -d $cvsroot diff $file > $tmp_debug");
+# execute diff and put into the tmpfile
+open(TMP, ">$tmpfile") or fatal_error("cannot create temp file $tmpfile");
+print TMP VCtools::get_diffs($file);
+close(TMP);
 
 # view the diff
 my $pager = $ENV{PAGER} || "less";
-system("$pager $tmp_debug");
+system("$pager $tmpfile");
 
 # remove the temp file
-unlink($tmp_debug);
+unlink($tmpfile);
