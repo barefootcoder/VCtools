@@ -1,0 +1,84 @@
+#! /usr/bin/perl
+
+use strict;
+use warnings;
+
+package top_level_test;
+use VCtools::Base(DEBUG => 2);
+
+
+# tests fallthrough and finding modules in testing dir simultaneously
+use VCtools::test_Base;
+
+
+###########################
+# test permutations of DEBUG value
+###########################
+
+die("DEBUG not correct") unless DEBUG == 2;
+die("master DEBUG not correct") unless main::DEBUG == 2;
+
+package test;
+BEGIN
+{
+	eval "use VCtools::Base(DEBUG => 1); use VCtools::Base(DEBUG => 1);";
+
+	die("Debug didn't catch multiple use statements")
+			unless $@ =~ /^DEBUG already defined/;
+
+	# OTOH, use Debug w/ no args is okay twice
+	use VCtools::Base(DEBUG => 1); use VCtools::Base;
+}
+
+package test2;
+BEGIN
+{
+	die("debug didn't set higher level for value: $@")
+			unless eval "use VCtools::Base(DEBUG => 2); DEBUG;" == 2;
+}
+
+# test use Debug with no args and no higher package
+# to do this, we'll need a whole separate Perl program
+my $output = `perl -e 'use Geek::Dev::Debug; print DEBUG;'`;
+die("top level empty Debug value doesn't yield 0 (actually got $output)")
+		unless $output eq "0";
+
+
+###########################
+# make sure @INC handler doesn't get installed twice
+###########################
+
+system(q{perl -e '
+    use VCtools::Base(DEBUG => 1);
+    package test;
+    use VCtools::Base(DEBUG => 3);
+    foreach (@INC)
+	{
+		if (ref eq 'CODE')
+		{
+			die("added INC handler twice") if $foundit;
+			$foundit = 1;
+		}
+	}
+'}) and die;
+
+
+###########################
+# make sure debug uses vctools-config properly
+###########################
+
+system("echo '#! /bin/sh\necho /tmp' >vctools-config");
+chmod 0777, "./vctools-config";
+system("mkdir -p /tmp/VCtools/lib ; echo '1;' >/tmp/VCtools/lib/fred.pm");
+system(q{perl -e '
+	BEGIN { $ENV{PATH} = "."; }
+	use VCtools::Base(DEBUG => 1);
+	use VCtools::fred;
+'}) and die;
+unlink "./vctools-config";
+unlink "/tmp/VCtools/lib/fred.pm";
+rmdir "/tmp/VCtools/lib";
+rmdir "/tmp/VCtools";
+
+
+print "ALL TESTS PASSED\n";
