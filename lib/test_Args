@@ -1,0 +1,19 @@
+#! /usr/bin/perl
+
+use strict;
+use warnings;
+
+use VCtools::Base(DEBUG => 3);
+use VCtools::Args;
+
+
+# note! this is not a standard "test first" test program
+# it's a just a convenient way to play around with switches and args
+
+VCtools::switch('recursive', 'r', 'operate recursively');
+VCtools::args('files', 'list', 'file(s) to operate on');
+VCtools::getopts();
+
+print "verbose is ", VCtools::verbose() ? "on" : "off", "\n";
+print "rootpath is ", VCtools::rootpath(), "\n";
+print "file(s) is/are ", join(' ', VCtools::files()), "\n";
