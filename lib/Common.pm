@@ -150,8 +150,9 @@ sub _svn_auth_check
 # determine that path in the first place (i.e., it's called by vbuild).
 #
 # You can also specify a second argument of either 'trunk', 'branch', or 'tag' (if you don't supply a second
-# arg, it assumes you want the trunk).  If possible, the routine will take the BranchingPolicy into account
-# and return the appropriate path.
+# arg, it assumes you want the trunk).  If you supply 'branch' or 'tag', you may also wish to specify a third
+# argument to say _which_ branch or tag you're talking about.  The routine will take the BranchingPolicy into
+# account and return the appropriate path.
 sub _project_path
 {
 	# finds the server-side path for the given project
@@ -159,7 +160,7 @@ sub _project_path
 	# project name to the first RootPath it can find
 	# also will try to handle various branch policies
 	# returns a complete path (hopefully)
-	my ($proj, $which) = @_;
+	my ($proj, $which, $subname) = @_;
 	# if no which specified, assume trunk
 	$which ||= 'trunk';
 
@@ -212,6 +213,7 @@ sub _project_path
 	print STDERR "project_path thinks which dir is $subdirs{$which}\n" if DEBUG >= 3;
 
 	my $projpath = $root . "/" . $proj . $subdirs{$which};
+	$projpath .= "/$subname" if $subname;
 
 	# while we're here, do an auth check for this server
 	# (most stuff will fail, possibly silently and/or crashingly, if there's no auth for the server)
@@ -1023,6 +1025,18 @@ sub proj_exists_in_vc
 }
 
 
+sub branch_exists_in_vc
+{
+	my ($project, $branch) = @_;
+
+	# works just like proj_exists_in_vc, so see notes there
+	return defined eval
+	{
+		_execute_and_discard_output("log", _project_path($project, 'branch', $branch));
+	}
+}
+
+
 sub outdated_by_vc
 {
 	my ($file) = @_;
@@ -1644,6 +1658,26 @@ sub edit_commit_log
 	# passing command options as if they were part of the command itself is a slight perversion of the spirit of
 	# _make_vc_command, but it _will_ work
 	_execute_normally("propedit svn:log --revprop -r $rev", $server_path);
+}
+
+
+# this couldn't possibly work with CVS either
+sub move_to_branch
+{
+	my ($proj, $branch, @files) = @_;
+
+	my $old = _project_path($proj);
+	my $new = _project_path($proj, 'branch', $branch);
+
+	# make the subs a bit faster
+	$old = qr/^\Q$old\E/;
+
+	foreach my $file (@files)
+	{
+		my $spath = _server_path($file);
+		$spath =~ s/$old/$new/;
+		_execute_normally("switch", $spath, $file);
+	}
 }
 
 

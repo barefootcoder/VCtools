@@ -1,0 +1,70 @@
+#! /usr/bin/perl
+
+use strict;
+use warnings;
+
+use VCtools::Base;
+use VCtools::Args;
+use VCtools::Common;
+
+
+#################################
+# OPTIONS AND ENVIRONMENT VARS
+#################################
+
+#VCtools::switch('recursive', 'r', 'operate recursively');
+VCtools::args('branch', 'single', 'name of branch to switch to (must already exist)');
+VCtools::args('files', 'optlist', 'file(s) and/or directory/ies to switch over to branch (default: .)');
+VCtools::getopts();
+
+# remember, directories are files too
+my @files = VCtools::files();
+@files = (".") unless @files;
+print STDERR "switch files: @files\n" if DEBUG >= 3;
+
+
+#################################
+# CHECK FOR ERRORS
+#################################
+
+my $proj = VCtools::verify_files_and_group(@files);
+unless (VCtools::branch_exists_in_vc($proj, VCtools::branch()))
+{
+	VCtools::fatal_error("no such branch " . VCtools::branch());
+}
+
+# get statuses for everything at once (quicker that way)
+# remember, vbranch is always recursive
+my @all_files = VCtools::cache_file_status(@files, { DONT_RECURSE => 0 });
+
+foreach my $file (@files)
+{
+	VCtools::fatal_error("$file is not in VC")
+			unless VCtools::exists_in_vc($file);
+}
+
+my @mod_files;
+foreach my $file (@all_files)
+{
+	push @mod_files, $file if VCtools::modified_from_vc($file);
+};
+if (@mod_files)
+{
+	VCtools::list_files($proj, "are modified from the repository versions", @mod_files);
+	VCtools::prompt_to_continue("If you want these mods to go into the branch, continue.",
+			"If you want the mods to stay in the trunk, stop now and vcommit before you vbranch.");
+}
+
+
+#################################
+# MAIN
+#################################
+
+VCtools::move_to_branch($proj, VCtools::branch(), @files);
+
+print "done\n" unless $?;
+
+
+#################################
+# SUBS
+#################################
