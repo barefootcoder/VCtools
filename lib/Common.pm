@@ -377,7 +377,7 @@ sub _interpret_svn_update_output
 	{
 		if (verbose())
 		{
-			my %action = ( A => 'added', R => 'removed',
+			my %action = ( A => 'added', D => 'removed',
 					U => 'updated', G => 'merged' );
 
 			info_msg("$action{$1} file $2");
