@@ -92,13 +92,13 @@ open(TD, ">>$tmp_debug") or die("$me: can't save debugging output");
 # can't do some command line stuff in windows
 if ( $^O =~ /MSWin32/ )
 {
-	open(UPD, "cvs -r -d $cvsroot update -d -P . |") or 
+	open(UPD, "cvs -r -d $cvsroot update -A -d -P . |") or 
 										die("can't execute cvs update");
 }
 else
 {
 	# note that we catch cvs update's stderr as well
-	open(UPD, "cvs -r -d $cvsroot update -d -P . 2>&1 |") or 
+	open(UPD, "cvs -r -d $cvsroot update -A -d -P . 2>&1 |") or 
 										die("can't execute cvs update");
 }
 
