@@ -1,7 +1,7 @@
 export VCTOOLS_CONFIG=`vctools-config --config`
 
 vcbindir=`vctools-config --bin`
-shellexec=$vcbindir/vcshellexec
+shellexec=$vcbindir/vcshell
 
 alias vcshell="exec $shellexec"
 

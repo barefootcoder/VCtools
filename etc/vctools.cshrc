@@ -1,7 +1,7 @@
 setenv VCTOOLS_CONFIG `vctools-config --config`
 
 set vcbindir=`vctools-config --bin`
-set shellexec=$vcbindir/vcshellexec
+set shellexec=$vcbindir/vcshell
 
 alias vcshell "exec $shellexec"
 
