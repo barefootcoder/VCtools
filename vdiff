@@ -3,6 +3,9 @@
 use strict;
 use warnings;
 
+use Fcntl qw<F_SETFD>;
+use File::Temp qw<tempfile>;
+
 use VCtools::Base;
 use VCtools::Args;
 use VCtools::Common;
@@ -23,7 +26,6 @@ my $file = VCtools::file();
 # CHECK FOR ERRORS
 #################################
 
-VCtools::check_common_errors();
 VCtools::verify_files_and_group($file);
 
 #################################
@@ -31,17 +33,17 @@ VCtools::verify_files_and_group($file);
 #################################
 
 # create a temporary filename
-my $tmpdir = $ENV{TMP} || $ENV{TEMP} || "/tmp";
-my $tmpfile = "$tmpdir/vcdiff" . "_$$.out";
+my $tmpfile = tempfile(SUFFIX => '.vcdiff') or fatal_error("cannot create tempfile");
 
 # execute diff and put into the tmpfile
-open(TMP, ">$tmpfile") or fatal_error("cannot create temp file $tmpfile");
-print TMP VCtools::get_diffs($file);
-close(TMP);
+print $tmpfile VCtools::get_diffs($file);
+
+# get the tmpfile ready for reading by the pager
+fcntl($tmpfile, F_SETFD, 0) or die("cannot clear close-on-exec bit on tempfile");
+$tmpfile->seek(0,0);
 
 # view the diff
 my $pager = $ENV{PAGER} || "less";
-system("$pager $tmpfile");
-
-# remove the temp file
-unlink($tmpfile);
+open(PAGER, "| $pager") or die("can't open pager");
+print PAGER <$tmpfile>;			# dumps the whole file into PAGER
+close(PAGER);
