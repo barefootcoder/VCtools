@@ -32,14 +32,13 @@ my @files = VCtools::dirs();
 # CHECK FOR ERRORS
 #################################
 
-VCtools::check_common_errors();
+my $proj = VCtools::check_common_errors();
 
 
 #################################
 # MAIN
 #################################
 
-my $proj = VCtools::current_project();
 my $projdir = VCtools::project_dir($proj);
 # this helps regex'es go faster
 my $projdir_qr = qr[^$projdir/];
