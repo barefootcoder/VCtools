@@ -302,12 +302,14 @@ sub local_rm
 
 sub rsh_rm
 {
-	system("rsh $_[0] rm -f $_[1]");
+	my $v = $verbose ? "-v" : "";
+	system("rsh $_[0] /bin/rm $v -f $_[1]");
 }
 
 sub ssh_rm
 {
-	system("ssh $_[0] rm -f $_[1]");
+	my $v = $verbose ? "-v" : "";
+	system("ssh $_[0] /bin/rm $v -f $_[1]");
 }
 
 
