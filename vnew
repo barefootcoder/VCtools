@@ -1,64 +1,45 @@
 #! /usr/bin/perl
 
 use strict;
+use warnings;
 
-# use Barefoot::debug;							# comment out for production
+use Geek::Dev::Debug(1);
 
 use Getopt::Std;
 use Cwd qw(getcwd);
-use Barefoot::cvs;
-use Barefoot::input qw(get_yn);
 
-my $me = $0;
-$me =~ s@^.*/@@;
+use VCtools::common;
 
-# default values
-my $verbose=0;
-my $cvsroot=$::ENV{CVSROOT};
 
 #################################
 # OPTIONS AND ENVIRONMENT VARS
 #################################
 
-my $opt = {};
-getopts('vd:', $opt);
-$verbose = 1 if defined $opt->{v};
-$cvsroot = $opt->{d} if defined $opt->{d};
+VCtools::process_args("file_or_dir [...]");
+
+# remember, directories are files too
+my @files = @ARGV;
 
 
 #################################
 # CHECK FOR ERRORS
 #################################
 
-if (!$cvsroot)
+foreach my $file (@files)
 {
-	print STDERR "$me: variable CVSROOT must be set\n";
-	exit 2;
+	VCtools::fatal_error("$file does not exist")
+			unless -e $file;
+	VCtools::fatal_error("$file is not in VC working dir")
+			unless VCtools::parse_module($file);
 }
 
-my $offsite = cvs::is_offsite($cvsroot);
-my $module = $ARGV[0];
+# get statuses for everything at once (quicker that way)
+VCtools::cache_file_status(@files);
 
-if (!$module)
+foreach my $file (@files)
 {
-	print STDERR "usage: $me module\n";
-	exit 2;
-}
-
-if (!-r $module)
-{
-	print STDERR "$me: $module does not exist or is not readable\n";
-	exit 2;
-}
-
-my ($project, $subdir) = cvs::parse_module(getcwd());
-if ( !$offsite )
-{
-	if (-e "$cvsroot/$project/$subdir/$module,v")
-	{
-		print STDERR "$me: $module appears to be already checked into CVS\n";
-		exit 2;
-	}
+	VCtools::fatal_error("$file is already in VC")
+			if VCtools::exists_in_vc($file);
 }
 
 
