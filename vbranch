@@ -12,7 +12,6 @@ use VCtools::Common;
 # OPTIONS AND ENVIRONMENT VARS
 #################################
 
-#VCtools::switch('recursive', 'r', 'operate recursively');
 VCtools::switch('create', 'c', 'create new branch with given name');
 VCtools::args('branch', 'single', 'name of branch to switch to (must exist) or create with -c (must not exist)');
 VCtools::args('files', 'optlist', 'file(s) and/or directory/ies to switch over to branch (default: .); not used with -c');

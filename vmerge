@@ -1,0 +1,127 @@
+#! /usr/bin/perl
+
+use strict;
+use warnings;
+
+use VCtools::Base;
+use VCtools::Args;
+use VCtools::Common;
+use VCtools::Config;
+
+
+#################################
+# OPTIONS AND ARGUMENTS
+#################################
+
+VCtools::switch('branch', 'b', 'merge from this branch (default: merge from trunk)', 'branchname');
+VCtools::switch('revision', 'V', 'merge changes up to this revision (default is HEAD)', 'revno');
+VCtools::args('files', 'list', 'file(s) (or directory/ies) to merge');
+VCtools::getopts();
+
+# remember, directories are files too
+my @files = VCtools::files();
+
+
+#################################
+# CHECK FOR ERRORS
+#################################
+
+my $proj = VCtools::verify_files_and_group(@files);
+print STDERR "project is $proj\n" if DEBUG >= 2;
+
+# get statuses for everything at once (quicker that way)
+# like vbranch, vmerge is always recursive
+VCtools::cache_file_status(@files, { DONT_RECURSE => 0 });
+
+# pull out which files are modified
+my @mod_files = VCtools::get_all_with_status('modified');
+
+my $branch = VCtools::branch();									# if we're merging from a branch, use that
+if ($branch)
+{
+	VCtools::fatal_error("no such branch $branch") unless VCtools::branch_exists_in_vc($proj, $branch);
+}
+print STDERR "determined branch to be $branch\n" if DEBUG >= 2;
+
+my $curbranch;
+foreach (@files)												# important for all files to be in the same branch
+{
+	my $br = VCtools::get_branch($proj, $_) || 'TRUNK';
+	print STDERR "got $br back from get_branch\n" if DEBUG >= 3;
+
+	if ($curbranch)
+	{
+		VCtools::fatal_error("files are from at least two branches: $curbranch, $br") unless $br eq $curbranch;
+	}
+	$curbranch = $br;
+}
+
+if ($curbranch eq 'TRUNK' and not $branch)
+{
+	VCtools::fatal_error("cannot merge from trunk to trunk");
+}
+elsif ($curbranch eq $branch)
+{
+	VCtools::fatal_error("cannot merge from branch $branch to itself");
+}
+
+my $merge_commit = VCtools::get_proj_directive($proj, 'MergeCommit');
+VCtools::fatal_error("too dangerous to merge without a MergeCommit directive; fix your config and try again")
+		unless $merge_commit;
+
+my $start = VCtools::branch_point_revno($proj, $branch || $curbranch);
+my $prev_merge = VCtools::prev_merge_point($proj, $branch || $curbranch, @files);
+$start = $prev_merge + 1 if $prev_merge > $start;
+print STDERR "determined starting revision to be $start\n" if DEBUG >= 2;
+
+my $end = VCtools::revision() || VCtools::head_revno($proj);
+print STDERR "determined ending revision to be $end\n" if DEBUG >= 2;
+
+
+#################################
+# MAIN
+#################################
+
+use constant BAK_EXT => '.mrgbak';
+
+VCtools::backup_full_project($proj, { ext => BAK_EXT });
+
+VCtools::merge_from_branch($proj, $branch, $start, $end, @files);
+
+VCtools::info_msg("NOTE! It is *strongly* advised that you go to another window and check the success of this operation.");
+VCtools::info_msg(-INDENT => "If you feel the merge was successful, you should continue (say 'yes' below).");
+VCtools::info_msg(-INDENT => "If you feel the merge failed, you should revert (say 'no' below) and try again later.");
+
+if (yesno_no_default("Do you wish to continue by committing the merge operation?"))
+{
+	my $commit_msg = "$merge_commit\nMerged revisions $start:$end from " . ($branch ? "branch $branch" : "trunk");
+	VCtools::commit_files($proj, @files, { TREE_OPS => 1, MESSAGE => $commit_msg });
+}
+else
+{
+	# they don't like it; let's put everything back
+	VCtools::restore_project_backup($proj, { ext => BAK_EXT });
+}
+
+print "done\n";
+
+
+#################################
+# SUBS
+#################################
+
+
+# a special version of yesno() that doesn't allow default values
+sub yesno_no_default
+{
+	loop:
+	{
+		print "$_[0]  [y/n] ";
+		my $answer = <STDIN>;
+
+		redo loop unless $answer;
+		return 1 if $answer =~ /^y/i;
+		return 0 if $answer =~ /^n/i;
+		redo loop;
+	}
+}
