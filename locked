@@ -6,20 +6,22 @@ use strict;
 
 use DirHandle;
 use Getopt::Std;
-use Cwd qw(getcwd);
+use Cwd qw<getcwd>;
+
 use Barefoot::cvs;
+use Barefoot::base;
 
 my $me = $0;
 $me =~ s@^.*/@@;
 
-$| = 1;									# autoflush STDOUT
+$| = true;										# autoflush STDOUT
 
 # default values
-my $ignore_errors=0;
-my $recurse=0;
-my $fix_write_access=0;
-my $verbose=1;
-my $cvsroot=$::ENV{CVSROOT};
+my $ignore_errors = false;
+my $recurse = false;
+my $fix_write_access = false;
+my $verbose = false;
+my $cvsroot = $::ENV{CVSROOT};
 
 #################################
 # OPTIONS AND ENVIRONMENT VARS
@@ -27,22 +29,18 @@ my $cvsroot=$::ENV{CVSROOT};
 
 my $opt = {};
 getopts('irfd:v', $opt);
-$cvsroot = $opt->{d} if defined $opt->{d};
-$ignore_errors = 1 if defined $opt->{i};
-$recurse = 1 if defined $opt->{r};
-$fix_write_access = 1 if defined $opt->{f};
-$verbose = 1 if defined $opt->{v};
+cvs::set_cvsroot($opt->{d}) if defined $opt->{d};
+$ignore_errors = true if defined $opt->{i};
+$recurse = true if defined $opt->{r};
+$fix_write_access = true if defined $opt->{f};
+$verbose = true if defined $opt->{v};
 
 
 #################################
 # CHECK FOR ERRORS
 #################################
 
-if (!$cvsroot)
-{
-	print STDERR "$me: variable CVSROOT must be set\n";
-	exit 2;
-}
+cvs::check_general_errors();
 
 
 #################################
@@ -51,17 +49,103 @@ if (!$cvsroot)
 
 my $retval = 0;							# default to no errors
 
-if (@ARGV == 0)							# no args passed, default to *
+if (@ARGV == 0)							# no args passed, default to .
 {
-	handle_all_files();
+	@ARGV = ( "." );
 }
-else
+
+# ideally, we would just call cvs::lockers() on each potential module
+# however, this would generate one cvs call for each file, which could be
+# slow as hell, especially if the CVS server is a remote one
+# consequently, we'll just generate one call here and parse the output
+# ourselves.  we don't duplicate any code, really, because we call the same
+# internal function cvs::lockers() calls (i.e., cvs::_interpet_editors_output,
+# not cvs::_get_lockers).  we won't miss any functionality, because the only
+# thing we're circumventing is the cache, and that would be empty anyway.
+# also, doing it this way saves us having to expand the directories ourselves.
+
+my %modules;
+
+my $ed = cvs::execute_and_get_output("editors", @ARGV,
+		{ VERBOSE => $verbose, RECURSE => $recurse });
+my $curmod = "";
+while ( <$ed> )
 {
-	foreach my $file (@ARGV)
+	my ($module, $user) = cvs::_interpret_editors_output();
+
+	if (defined $user)
 	{
-		$retval |= printlockers($file);
+		if (defined $module)
+		{
+			# new module; change curmod and init hash element
+			$curmod = $module;
+			$modules{$curmod} = {};
+		}
+
+		# save user as a locker (value not really used)
+		$modules{$curmod}->{$user} = true;
+	}
+	else
+	{
+		# unknown module
+		$modules{$module} = undef;
 	}
 }
+close($ed);
+
+
+# now cycle through the files and print 'em all out
+
+# this is the same way cvs::user_is_a_locker() does it
+my $username = $ENV{USER} || $ENV{USERNAME};
+
+foreach (sort keys %modules)
+{
+	my $lockers = $modules{$_};
+
+	# unknown module
+	unless (defined $lockers)
+	{
+		print "$_: WARNING! unknown module (not in CVS)\n";
+		$retval |= 2;
+		next;
+	}
+
+	# print lockers if there are any
+	print "$_: ", join(", ", keys %$lockers), "\n" if %$lockers;
+	
+	# if user isn't one of the lockers, check to see if has write perms
+	if (not exists $lockers->{$username} and -w $_)
+	{
+		if ($fix_write_access)
+		{
+			my $difference = system("cvs diff $_ >/dev/null");
+			if ($difference)
+			{
+				system("get $_");
+				if ($verbose)
+				{
+					print "NOTE: locked $_ since it had changes\n";
+				}
+			}
+			else
+			{
+				system("chmod a-w $_");
+				if ($verbose)
+				{
+					print "NOTE: restored $_ since it had no changes\n";
+				}
+			}
+		}
+		else
+		{
+			print "$_: WARNING! module is writable, ",
+					"but you don't have it locked\n";
+			$retval |= 1;
+		}
+	}
+}
+
 
 exit $retval;							# will be 1 if any errors
 
@@ -69,103 +153,3 @@ exit $retval;							# will be 1 if any errors
 #################################
 # SUBS
 #################################
-
-sub handle_all_files
-{
-	my ($dir) = @_;
-	$dir = "." unless defined $dir;
-	# print "processing dir $dir ...\n";
-
-	opendir(DIR, $dir) or die("can't get dir filehandle for $dir");
-	foreach my $file ( readdir(DIR) )
-	{
-		# print "processing file $dir/$file ...\n";
-		if (-f "$dir/$file")					# don't process dirs, pipes, &c
-		{
-			next if $file =~ "^\.#";			# these are special CVS files
-			$retval |= printlockers("$dir/$file");
-		}
-		elsif (-d "$dir/$file" and $recurse)	# recurse into dirs
-		{
-			next if $file eq "CVS";				# but not the CVS dir
-			next if $file eq "Attic";			# also Attic dirs are special
-			next if $file =~ /^\.\.?$/;			# skip . and ..
-			handle_all_files("$dir/$file");
-		}
-	}
-	closedir(DIR);
-}
-
-sub printlockers
-{
-	my ($path) = @_;
-	$path =~ s/\.\///;
-
-	if (!-r $path)
-	{
-		print STDERR "$me: $path does not exist or is not readable\n"
-				unless $ignore_errors;
-		return 1;
-	}
-
-	my ($project, $subdir, $module);
-	if ( !cvs::is_offsite($cvsroot) )
-	{
-		($project, $subdir, $module) = cvs::parse_module(getcwd() . "/$path");
-		#print "module is $module, project is $project, subdir is $subdir\n";
-   	}
-	else
- 	{
-		# this is an offsite hack
-		$module = $path;
-	}
-
-	if (-d $path)
-	{
-		if ($recurse)
-		{
-			handle_all_files($path);
-		}
-		else
-		{
-			print STDERR "$me: directories cannot be locked\n"
-					unless $ignore_errors;
-		}
-		return 0;
-	}
-
-	if ($subdir =~ /\bCVS\b/)
-	{
-		print STDERR "$me: cannot get lockers for CVS dir files\n"
-				unless $ignore_errors;
-		return 1;
-	}
-
-	if (!cvs::is_offsite($cvsroot) && !-e "$cvsroot/$project/$subdir/$module,v")
-	{
-		# print "$cvsroot/$project/$subdir/$module,v\n";
-		print STDERR "$me: $module does not appear to be checked into CVS\n"
-				unless $ignore_errors;
-		return 1;
-	}
-
-	my $user_is_a_locker = 0;
-	my @lockers = cvs::getLockers($cvsroot, $path, \$user_is_a_locker);
-	if (!$user_is_a_locker and -w $path)
-	{
-		if ($fix_write_access)
-		{
-			system("chmod a-w $path");
-		}
-		else
-		{
-			print STDERR "$me: $path has write access but you do not "
-					. "have it locked\n";
-			print "$path: ", join(", ", @lockers), "\n";
-		}
-	}
-	return unless @lockers;			# could print "NOT LOCKED" if -v, maybe
-
-	print "$path: ", join(", ", @lockers), "\n";
-	return 0;
-}
