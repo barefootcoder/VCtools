@@ -14,10 +14,15 @@ else
 			# $shellexec seems to have found something it's happy with
 			export PATH=`$shellexec -p`
 
+			alias commit=vcommit
 			alias get=vget
+			alias log=vlog
+			alias new=vnew
+			alias rel=vrel
+			alias tag=vtag
 			alias sync=vsync
 			alias stat=vstat
-			alias commit=vcommit
+			alias unget=vunget
 
 			# these require a bit more work
 			alias vcshell="unset VCTOOLS_SHELL ; exec $shellexec"
