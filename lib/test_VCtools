@@ -1,0 +1,46 @@
+#! /usr/local/bin/perl -w
+
+use strict;
+
+use Geek::Dev::Debug(1);
+
+use VCtools::common;
+
+
+if (defined $ARGV[0] and $ARGV[0] eq "-h")		# avoid infinite loop, please
+{
+	VCtools::process_args();
+}
+else
+{
+	open(U, "././$0 -h 2>&1 |") or die("can't run myself");
+	my $stamp = time;
+	while ( <U> )
+	{
+		chomp;
+		system("echo $stamp: $_ >>catch");
+		if ($. == 1)
+		{
+			die("didn't get expected usage message") unless /^usage/;
+			die("not trimming \$0") unless /: (.)/ and $1 ne ".";
+		}
+		if ($. == 2)
+		{
+			die("not printing usage for -v switch") unless /-v : verbose/;
+		}
+	}
+	die("never got enough lines to check") unless $. >= 2;
+	close(U);
+}
+
+
+my $proper_working_dir = qx<awk -F= '/^PersonalDir/ { print \$2 }' /usr/local/etc/VCtools.conf>;
+$proper_working_dir = qx<csh -c "cd $proper_working_dir ; pwd">;
+chomp $proper_working_dir;
+
+die("can't figure out what WORKING_DIR is supposed to be (I thought it "
+		. "would be $proper_working_dir, but it was " . VCtools::WORKING_DIR)
+		unless VCtools::WORKING_DIR eq $proper_working_dir;
+
+
+print "ALL TESTS PASSED\n";
