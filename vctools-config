@@ -3,9 +3,10 @@
 use strict;
 use warnings;
 
-use Geek::Dev::Debug(0);
-
 use Getopt::Declare;
+
+use VCtools::Base;
+
 
 # have to do this stuff up here, before VCtools::common
 # has a chance to freak out

@@ -3,11 +3,10 @@
 use strict;
 use warnings;
 
-use Geek::Dev::Debug(0);
-
 use File::Find;
 
-use VCtools::common;
+use VCtools::Base;
+use VCtools::Common;
 
 
 my $pattern = $ARGV[0];

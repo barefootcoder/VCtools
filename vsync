@@ -3,11 +3,10 @@
 use strict;
 use warnings;
 
-use Geek::Dev::Debug(0);
-
 use Getopt::Std;
 
-use VCtools::common;
+use VCtools::Base;
+use VCtools::Common;
 
 
 #################################
