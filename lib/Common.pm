@@ -1027,7 +1027,8 @@ sub commit_files
 	my (@files) = @_;
 
 	# pretty basic
-	_execute_normally("commit", @files);
+	_execute_normally("commit", @files,
+			{ DONT_RECURSE => not $args->{recursive} } );
 }
 
 
