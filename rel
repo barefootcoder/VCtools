@@ -2,7 +2,7 @@
 
 use strict;
 
-use Barefoot::debug(3);							# comment out for production
+#use Barefoot::debug(3);							# comment out for production
 
 use Getopt::Std;
 use Data::Dumper;
