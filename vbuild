@@ -6,6 +6,7 @@ use warnings;
 use Cwd qw(getcwd);
 
 use VCtools::Base;
+use VCtools::Args;
 use VCtools::Common;
 
 
@@ -13,14 +14,19 @@ use VCtools::Common;
 # OPTIONS AND ARGUMENTS
 #################################
 
-VCtools::process_args("project");
+VCtools::args('project', 'single', 'project to build');
+VCtools::getopts();
 
-my $project = $ARGV[0];
+my $project = VCtools::project();
 
 
 #################################
 # CHECK FOR ERRORS
 #################################
+
+# have to do this before we can do much else
+# if password is required, this will set it up
+VCtools::auth_check();
 
 VCtools::fatal_error("must be run from top-level personal testing directory")
 		if getcwd() ne VCtools::WORKING_DIR;
@@ -42,7 +48,7 @@ VCtools::get_tree($project, "", $project);
 # check for post-build script and execute it
 foreach (VCtools::project_script($project, 'PostBuild'))
 {
-	print "$_\n" if VCtools::verbose;
+	print "$_\n" if VCtools::verbose();
 	system($_) == 0
 			or VCtools::fatal_error("script line failed; check config file");
 }
