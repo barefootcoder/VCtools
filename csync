@@ -92,7 +92,7 @@ else
 open(TD, ">>$tmp_debug") or die("$me: can't save debugging output");
 
 # can't do some command line stuff in windows
-if ( $^0 =~ /MSWin32/ )
+if ( $^O =~ /MSWin32/ )
 {
 	open(UPD, "cvs -r -d $cvsroot update -d -P . |") or 
 										die("can't execute cvs update");
