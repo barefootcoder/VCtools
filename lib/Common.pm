@@ -32,7 +32,7 @@ use File::HomeDir;
 use Config::General;
 use Cwd qw<realpath>;
 
-use Geek::Dev::Debug;
+use VCtools::Base;
 
 
 # for access to program arguments/switches
@@ -158,9 +158,10 @@ sub _really_realpath
 
 sub _project_path
 {
-	# finds the path for the given project
+	# finds the server-side path for the given project
 	# will try to find a ProjectPath, or, failing that, will append the
 	# project name to the first RootPath it can find
+	# also will try to handle various branch policies
 	# returns a complete path (hopefully)
 	my ($proj) = @_;
 
@@ -174,8 +175,27 @@ sub _project_path
 
 	my $root = $args->{R} || $proj_root
 			|| $config->{DefaultRootPath} || $vcroot;
-	print STDERR "project_path returns $root/$_[0]\n" if DEBUG >= 2;
-	return $root . "/" . $_[0];
+	print STDERR "project_path thinks root is $root\n" if DEBUG >= 2;
+
+	my $branch_policy = $config->{Project}->{$proj}->{BranchPolicy}
+			|| $config->{DefaultBranchPolicy} || "NONE";
+	my $trunk;
+	if ($branch_policy eq "NONE")
+	{
+		# no policy, so no trunk dir
+		$trunk = "";
+	}
+	elsif ($branch_policy =~ /^(\w+),\w+$/)
+	{
+		# policy speficies "trunk_dir,branches_dir"
+		$trunk = $1;
+	}
+	fatal_error("unknown branch policy $branch_policy specified")
+			unless defined $trunk;
+	$trunk = "/$trunk" if $trunk;
+	print STDERR "project_path thinks trunk is $trunk\n" if DEBUG >= 2;
+
+	return $root . "/" . $proj . $trunk;
 }
 
 
