@@ -7,14 +7,27 @@ use Geek::Dev::Debug(0);
 
 use Getopt::Declare;
 
+# have to do this stuff up here, before VCtools::common
+# has a chance to freak out
+# theoretically, the following line is the only place
+# this hardcoded path should ever exist
+use constant CONFIG_FILE => '/usr/local/etc/VCtools/VCtools.conf';
+BEGIN { $ENV{VCTOOLS_CONFIG} = CONFIG_FILE; }
+
 use VCtools::common;
 
 
+# parends on CONFIG_FILE below are necessary
+# elsewise Getopt::Declare seems to think it's a filehandle
 my $params = <<END;
 	[strict]
 
+	--config		show master configuration file
+					{ print CONFIG_FILE(), "\n"; }
 	--working		show working directory
 					{ print VCtools::WORKING_DIR, "\n"; }
+	--bin			show working directory
+					{ print VCtools::VCTOOLS_BINDIR, "\n"; }
 END
 my $opts = Getopt::Declare->new($params);
 
