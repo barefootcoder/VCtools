@@ -81,6 +81,7 @@ if (!grep {$_ eq $username} @lockers)
 
 system("cvs -d $cvsroot unedit $module");
 system("cvs -d $cvsroot watch remove -a edit $module");
+system("cvs -r -d $cvsroot update -A $module");
 if ( !$offsite )
 {
 	my $prgrp = cvs::project_group($project);
