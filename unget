@@ -2,6 +2,8 @@
 
 use strict;
 
+# use Barefoot::debug;							# comment out for production
+
 use Cwd qw(getcwd);
 use Barefoot::cvs;
 use Barefoot::input qw(get_yn);
