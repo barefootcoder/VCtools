@@ -1,88 +1,66 @@
 #! /usr/bin/perl
 
 use strict;
+use warnings;
 
-# use Barefoot::debug;							# comment out for production
+use Geek::Dev::Debug(1);
 
 use Getopt::Std;
-use Cwd qw(getcwd);
-use Barefoot::cvs;
-use Barefoot::input qw(get_yn);
+use Cwd qw<getcwd>;
 
-my $me = $0;
-$me =~ s@^.*/@@;
-
-# default values
-my $verbose=0;
-my $force=0;
-my $cvsroot=$::ENV{CVSROOT};
+use VCtools::common;
 
 
 #################################
-# OPTIONS AND ENVIRONMENT VARS
+# OPTIONS AND ARGUMENTS
 #################################
 
-my $opt = {};
-getopts('vd:', $opt);
-$verbose = 1 if defined $opt->{v};
-$cvsroot = $opt->{d} if defined $opt->{d};
+VCtools::process_args("file_or_dir [...]");
+
+# remember, directories are files too
+my @files = @ARGV;
 
 
 #################################
 # CHECK FOR ERRORS
 #################################
 
-if (!$cvsroot)
+foreach my $file (@files)
 {
-	print STDERR "$me: variable CVSROOT must be set\n";
-	exit 2;
+	VCtools::fatal_error("$file does not exist")
+			unless -e $file;
+	VCtools::fatal_error("$file is not in VC working dir")
+			unless VCtools::parse_module($file);
 }
 
-my $offsite = cvs::is_offsite($cvsroot);
+# get statuses for everything at once (quicker that way)
+VCtools::cache_file_status(@files);
+# right here, think of a way to do similar for lockers
 
-if (!$ARGV[0])
+foreach my $file (@files)
 {
-	print STDERR "usage: $me [options] [file]\n";
-	print STDERR "       -v : verbose\n";
-	print STDERR "       -d : cvsroot, if not using CVSROOT\n";
-	exit 2;
-}
+	VCtools::fatal_error("$file is not checked in to VC")
+			unless VCtools::exists_in_vc($file);
+=not_working_with_svn_yet
+	VCtools::fatal_error("you did a 'get' on $file")
+			unless VCtools::user_is_a_locker($file);
 
-my $file = $ARGV[0];
-my $path = $file;
-
-# add the current directory to the front of it 
-# unless it's an absolute path, a windows path, a unc path
-if ( !$offsite )
-{
-	$path = getcwd() . '/' . $path 
-			unless $path =~ m@^/@ || $path =~ /^\w\:/ || $path =~ /^\\\\/;
-}
-
-my ($project, $subdir, $module) = cvs::parse_module($path);
-if ( !$offsite )
-{
-	if (!defined($project))
+	if (@lockers > 1)
 	{
-		print STDERR "$me: path does not appear to be a private CVS directory\n";
-		exit 2;
+		# user must be in the list, else would have err'ed out above
+		# but more than one name is in the list, so ...
+		print STDERR "$me: other people are currently editing this file!\n";
+		print STDERR "     $file is currently being edited by: @lockers\n";
+		if (not yesno("Do you want to proceed anyway?"))
+		{
+			exit 1;
+		}
 	}
+=cut
 
-	if (!-e "$cvsroot/$project/$subdir/$module,v")
-	{
-		print STDERR "$me: module does not appear to be checked into CVS\n";
-		exit 2;
-	}
-}
-
-my $username = $::ENV{USER};
-$username = $::ENV{USERNAME} if !$username;
-my @lockers = cvs::getLockers($cvsroot, $file);
-if (!@lockers or !grep { /\b$username\b/ } @lockers)
-{
-	print STDERR "$me: [$username] did not do a get on this module\n";
-	print STDERR "     Lockers: @lockers\n";
-	exit 2;
+	VCtools::fatal_error("file unchanged "
+			. "(vunget to remove your editing status)")
+					unless VCtools::modified_from_vc($file);
 }
 
 
@@ -90,67 +68,17 @@ if (!@lockers or !grep { /\b$username\b/ } @lockers)
 # MAIN
 #################################
 
-if (@lockers > 1)
-{
-	# user must be in the list, else would have err'ed out above
-	# but more than one name is in the list, so ...
-	print STDERR "$me: other people are currently editing this module!\n";
-	print STDERR "     $module is currently being edited by: @lockers\n";
-	if ( !$offsite )
-	{
-		if (!get_yn("Do you want to proceed anyway?"))
-		{
-			exit 1;
-		}
-	}
-}
+# for CVS, at a minimum, would need to check for sticky tags here
+# not sure what to in a generic fashion
 
-#system("cvs -d $cvsroot diff $path >/dev/null");
-my $tmp = `cvs -d $cvsroot diff $file`;
-if (!$tmp)										# no differences
-{
-	print STDERR "$me: you have not changed the file\n";
-	if ( !$offsite )
-	{
-		if (get_yn("Do you want to break your edit lock?"))
-		{
-			system("cvs -d $cvsroot unedit $path");
-		}
-	}
-	exit 1;
-}
-
-# need to check stick tag here
-# do a stat
-my $sticky = 0;
-open(STAT, "cvs -d $cvsroot status $path |");
-while (<STAT>)
-{
-	next unless /Sticky Tag/;
-	
-	$sticky = 1 unless /Sticky Tag.*\(none\)/; 
-}
-close(STAT);
-
-if ( !$sticky )
-{
-	system("cvs -r -d $cvsroot commit $path");
-	system("cvs -d $cvsroot watch remove -a edit $path");	# don't watch edits any more
-
-	# don't think this is necessary with -r above, buuuuttttt,
-	if ( !$offsite )
-	{
-		system("chmod a-w $path");
-	}
-}
-else
-{
-	# file is sticky, user should get newest version
-	print "$me: This file has a sticky tag.\n";
-	print "$me: csync to current version.\n";
-	print "$me: A commit can not be executed.\n";
-}
+VCtools::commit_files(@files);
+=not_working_with_svn_yet
+VCtools::release_edit_flag(@files);
+=cut
 
 print "done\n";
-exit 0;
-#------------------------------------------------------------------------------
+
+
+#################################
+# SUBS
+#################################
