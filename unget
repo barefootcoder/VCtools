@@ -4,6 +4,7 @@ use strict;
 
 # use Barefoot::debug;							# comment out for production
 
+use Getopt::Std;
 use Cwd qw(getcwd);
 use Barefoot::cvs;
 use Barefoot::input qw(get_yn);
@@ -11,16 +12,32 @@ use Barefoot::input qw(get_yn);
 my $me = $0;
 $me =~ s@^.*/@@;
 
+# default values
+my $verbose=0;
+my $cvsroot=$::ENV{CVSROOT};
+
+
+#################################
+# OPTIONS AND ENVIRONMENT VARS
+#################################
+
+my $opt = {};
+getopts('vd:', $opt);
+$verbose = 1 if defined $opt->{v};
+$cvsroot = $opt->{d} if defined $opt->{d};
+
 
 #################################
 # CHECK FOR ERRORS
 #################################
 
-if (!$::ENV{CVSROOT})
+if (!$cvsroot)
 {
 	print STDERR "$me: variable CVSROOT must be set\n";
 	exit 2;
 }
+
+my $offsite = cvs::is_offsite($cvsroot);
 
 my $module = $ARGV[0];
 
@@ -37,12 +54,14 @@ if (!-r $module)
 }
 
 my ($project, $subdir) = cvs::parse_module(getcwd());
-
-if (!-e "$::ENV{CVSROOT}/$project/$subdir/$module,v")
+if ( !$offsite )
 {
-	print "$::ENV{CVSROOT}/$project/$subdir/$module,v\n";
-	print STDERR "$me: $module does not appear to be checked into CVS\n";
-	exit 2;
+	if (!-e "$cvsroot/$project/$subdir/$module,v")
+	{
+		print "$cvsroot/$project/$subdir/$module,v\n";
+		print STDERR "$me: $module does not appear to be checked into CVS\n";
+		exit 2;
+	}
 }
 
 
@@ -50,17 +69,23 @@ if (!-e "$::ENV{CVSROOT}/$project/$subdir/$module,v")
 # MAIN
 #################################
 
-my @lockers = cvs::getLockers($module);
-if (!grep {$_ eq $::ENV{USER}} @lockers)
+my @lockers = cvs::getLockers($cvsroot, $module);
+my $username = $::ENV{USER};
+$username = $::ENV{USERNAME} if !$username;
+if (!grep {$_ eq $username} @lockers)
 {
 	print "$me: you didn't do a get on this module\n";
 	exit 1;
 }
 
-my $prgrp = cvs::project_group($project);
 
-system("cvs unedit $module");
-system("cvs watch remove -a edit $module");
-system("chgrp $prgrp $module") unless $?;
-system("chmod a+r $module") unless $?;
+system("cvs -d $cvsroot unedit $module");
+system("cvs -d $cvsroot watch remove -a edit $module");
+if ( !$offsite )
+{
+	my $prgrp = cvs::project_group($project);
+	system("chgrp $prgrp $module") unless $?;
+	system("chmod a+r $module") unless $?;
+}
+
 print "done\n" unless $?;

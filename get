@@ -4,6 +4,7 @@ use strict;
 
 # use Barefoot::debug;							# comment out for production
 
+use Getopt::Std;
 use Cwd qw(getcwd);
 use Barefoot::cvs;
 use Barefoot::input qw(get_yn);
@@ -12,16 +13,31 @@ my $me = $0;
 $me =~ s@^.*/@@;
 
 
+# default values
+my $verbose=0;
+my $cvsroot=$::ENV{CVSROOT};
+
+
+#################################
+# OPTIONS AND ENVIRONMENT VARS
+#################################
+
+my $opt = {};
+getopts('vd:', $opt);
+$verbose = 1 if defined $opt->{v};
+$cvsroot = $opt->{d} if defined $opt->{d};
+
 #################################
 # CHECK FOR ERRORS
 #################################
 
-if (!$::ENV{CVSROOT})
+if (!$cvsroot )
 {
 	print STDERR "$me: variable CVSROOT must be set\n";
 	exit 2;
 }
 
+my $offsite = cvs::is_offsite($cvsroot);
 my $module = $ARGV[0];
 
 if (!$module)
@@ -38,11 +54,15 @@ if (!-r $module)
 
 my ($project, $subdir) = cvs::parse_module(getcwd());
 
-if (!-e "$::ENV{CVSROOT}/$project/$subdir/$module,v")
+
+if ( !$offsite )
 {
-	print "$::ENV{CVSROOT}/$project/$subdir/$module,v\n";
-	print STDERR "$me: $module does not appear to be checked into CVS\n";
-	exit 2;
+	if (!-e "$cvsroot/$project/$subdir/$module,v")
+	{
+		print "$cvsroot/$project/$subdir/$module,v\n";
+		print STDERR "$me: $module does not appear to be checked into CVS\n";
+		exit 2;
+	}
 }
 
 
@@ -50,18 +70,25 @@ if (!-e "$::ENV{CVSROOT}/$project/$subdir/$module,v")
 # MAIN
 #################################
 
-my @lockers = cvs::getLockers($module);
+my @lockers = cvs::getLockers($cvsroot, $module);
 if (@lockers)
 {
-	print "$module is currently being edited by: @lockers\n";
-	if (!get_yn("Do you want to edit it anyway?"))
+	print "$me info: $module is currently being edited by: @lockers\n";
+	if ( !$offsite )
 	{
-		exit 1;
+		if (!get_yn("Do you want to edit it anyway?"))
+		{
+			exit 1;
+		}
 	}
 }
 
-system("cvs edit $module");
-system("cvs watch add -a edit $module");
-system("chgrp guestpc $module") unless $?;
-system("chmod g+w $module") unless $?;
+system("cvs -d $cvsroot edit $module");
+system("cvs -d $cvsroot watch add -a edit $module");
+if ( !$offsite )
+{
+	system("chgrp guestpc $module") unless $?;
+	system("chmod g+w $module") unless $?;
+}
+
 print "done\n" unless $?;

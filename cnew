@@ -4,6 +4,7 @@ use strict;
 
 # use Barefoot::debug;							# comment out for production
 
+use Getopt::Std;
 use Cwd qw(getcwd);
 use Barefoot::cvs;
 use Barefoot::input qw(get_yn);
@@ -11,17 +12,31 @@ use Barefoot::input qw(get_yn);
 my $me = $0;
 $me =~ s@^.*/@@;
 
+# default values
+my $verbose=0;
+my $cvsroot=$::ENV{CVSROOT};
+
+#################################
+# OPTIONS AND ENVIRONMENT VARS
+#################################
+
+my $opt = {};
+getopts('vd:', $opt);
+$verbose = 1 if defined $opt->{v};
+$cvsroot = $opt->{d} if defined $opt->{d};
+
 
 #################################
 # CHECK FOR ERRORS
 #################################
 
-if (!$::ENV{CVSROOT})
+if (!$cvsroot)
 {
 	print STDERR "$me: variable CVSROOT must be set\n";
 	exit 2;
 }
 
+my $offsite = cvs::is_offsite($cvsroot);
 my $module = $ARGV[0];
 
 if (!$module)
@@ -37,11 +52,13 @@ if (!-r $module)
 }
 
 my ($project, $subdir) = cvs::parse_module(getcwd());
-
-if (-e "$::ENV{CVSROOT}/$project/$subdir/$module,v")
+if ( !$offsite )
 {
-	print STDERR "$me: $module appears to be already checked into CVS\n";
-	exit 2;
+	if (-e "$cvsroot/$project/$subdir/$module,v")
+	{
+		print STDERR "$me: $module appears to be already checked into CVS\n";
+		exit 2;
+	}
 }
 
 
@@ -52,6 +69,13 @@ if (-e "$::ENV{CVSROOT}/$project/$subdir/$module,v")
 system("cvs add $module") unless $?;
 unless (-d $module)
 {
-	system("cvs commit -m'initial version' $module") unless $?;
-	system("chmod a-w $module") unless $?;
+	system("cvs -r -d $cvsroot commit -m\"initial version\" $module") unless $?;
+
+	# don't think this is needed with -r above, regardless won't work offsite
+	if ( !$offsite )
+	{
+		system("chmod a-w $module") unless $?;
+	}
 }
+
+print "done\n" unless $?;

@@ -13,6 +13,7 @@ $me =~ s@^.*/@@;
 
 # default values
 my $verbose=0;
+my $cvsroot=$::ENV{CVSROOT};
 
 
 #################################
@@ -20,43 +21,52 @@ my $verbose=0;
 #################################
 
 my $opt = {};
-getopts('v', $opt);
+getopts('vd:', $opt);
 $verbose = 1 if defined $opt->{v};
+$cvsroot = $opt->{d} if defined $opt->{d};
 
 
 #################################
 # CHECK FOR ERRORS
 #################################
 
-if (!$::ENV{CVSROOT})
+if (!$cvsroot)
 {
 	print STDERR "$me: variable CVSROOT must be set\n";
 	exit 2;
 }
 
+my $offsite = is_offsite($cvsroot);
+
 if ($ARGV[0])
 {
 	if (!chdir($ARGV[0]))
 	{
-		print STDERR "$me: argument is not a valid path\n";
-		print STDERR "usage: $me [path]\n";
+		print STDERR "$me: argument is not a valid path, $ARGV[0]\n";
+		print STDERR "usage: $me [options] [path]\n";
 		print STDERR "         default path is .\n";
+		print STDERR "         -v : verbose\n";
+		print STDERR "         -d : cvsroot, if not using CVSROOT\n";
 		exit 2;
 	}
 }
 
+
+# TODO figure out what this is doing and see if it is relevant offsite
 my ($project, $subdir) = cvs::parse_module(getcwd());
-
-if (!defined($project))
+if ( !$offsite )
 {
-	print STDERR "$me: path does not appear to be a private CVS directory\n";
-	exit 2;
-}
+	if (!defined($project))
+	{
+		print STDERR "$me: path does not appear to be a private CVS directory\n";
+		exit 2;
+	}
 
-if (!-d "$::ENV{CVSROOT}/$project/$subdir")
-{
-	print STDERR "$me: path does not appear to be checked into CVS\n";
-	exit 2;
+	if (!-d "$cvsroot/$project/$subdir")
+	{
+		print STDERR "$me: path does not appear to be checked into CVS\n";
+		exit 2;
+	}
 }
 
 #################################
@@ -65,6 +75,7 @@ if (!-d "$::ENV{CVSROOT}/$project/$subdir")
 
 # for debugging, we'll save the original output in a tmp file
 my $tmp_debug = "/tmp/csync.out";
+$tmp_debug = "$::ENV{TEMP}/csync.out" unless !length($::ENV{TEMP});
 if (-e $tmp_debug)
 {
 	# clear out the existing file
@@ -75,13 +86,23 @@ if (-e $tmp_debug)
 else
 {
 	# create and make world-writable
-	system("touch $tmp_debug");
-	system("chmod 777 $tmp_debug");
+	open(TD, ">$tmp_debug") and close(TD);
+	chmod(0777,$tmp_debug);
 }
 open(TD, ">>$tmp_debug") or die("$me: can't save debugging output");
 
 # note that we catch cvs update's stderr as well
-open(UPD, "cvs -r update -d -P . 2>&1 |") or die("can't execute cvs update");
+if ( length($::ENV{SHELL}) )
+{
+	open(UPD, "cvs -r -d $cvsroot update -d -P . 2>&1 |") or 
+										die("can't execute cvs update");
+}
+else
+{
+	open(UPD, "cvs -r -d $cvsroot update -d -P . |") or 
+										die("can't execute cvs update");
+}
+
 UPDATE_LINE: while ( <UPD> )
 {
 	print TD;							# debugging
@@ -111,16 +132,20 @@ UPDATE_LINE: while ( <UPD> )
 	{
 		# this is trickier ...
 		my $file = $1;
-		if (-d $file)
+		if ( !$offsite )
 		{
-			# if it's a directory, it just means that there's no CVS
-			# files _in_ that directory ... however, that's perfectly
-			# okay if that directory is also in cvsroot
-			my $wdir = cvs::WORKING_DIR;
-			my $cvsdir = "$wdir/$project/$subdir/$file";
-			$cvsdir =~ s/$wdir/$::ENV{CVSROOT}/;
-			next if -d $cvsdir;
+			if (-d $file)
+			{
+				# if it's a directory, it just means that there's no CVS
+				# files _in_ that directory ... however, that's perfectly
+				# okay if that directory is also in cvsroot
+				my $wdir = cvs::WORKING_DIR;
+				my $cvsdir = "$wdir/$project/$subdir/$file";
+				$cvsdir =~ s/$wdir/$cvsroot/;
+				next if -d $cvsdir;
+			}
 		}
+
 		# if the dir isn't in cvs, or if it's a file (and that _definitely_
 		# isn't in cvs, else it wouldn't have popped up), that's a problem
 		print "file/dir isn't in CVS repository: $file\n";

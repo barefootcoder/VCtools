@@ -4,6 +4,7 @@ use strict;
 
 # use Barefoot::debug;							# comment out for production
 
+use Getopt::Std;
 use Cwd qw(getcwd);
 use Barefoot::cvs;
 use Barefoot::input qw(get_yn);
@@ -11,16 +12,32 @@ use Barefoot::input qw(get_yn);
 my $me = $0;
 $me =~ s@^.*/@@;
 
+# default values
+my $verbose=0;
+my $cvsroot=$::ENV{CVSROOT};
+
+
+#################################
+# OPTIONS AND ENVIRONMENT VARS
+#################################
+
+my $opt = {};
+getopts('vd:', $opt);
+$verbose = 1 if defined $opt->{v};
+$cvsroot = $opt->{d} if defined $opt->{d};
+
 
 #################################
 # CHECK FOR ERRORS
 #################################
 
-if (!$::ENV{CVSROOT})
+if (!$cvsroot)
 {
 	print STDERR "$me: variable CVSROOT must be set\n";
 	exit 2;
 }
+
+my $offsite = cvs::is_offsite($cvsroot);
 
 if (!$ARGV[0])
 {
@@ -28,28 +45,35 @@ if (!$ARGV[0])
 	exit 2;
 }
 
-my $path = $ARGV[0];
-# add the current directory to the front of it unless it's an absolute path
-$path = getcwd() . '/' . $path unless $path =~ m@^/@;
+my $file = $ARGV[0];
+my $path = $file;
+# add the current directory to the front of it 
+# unless it's an absolute path, a windows path, a unc path
+$path = getcwd() . '/' . $path unless $path =~ m@^/@ || $path =~ /^\w\:/ || $path =~ /^\\\\/;
 
 my ($project, $subdir, $module) = cvs::parse_module($path);
-
-if (!defined($project))
+if ( !$offsite )
 {
-	print STDERR "$me: path does not appear to be a private CVS directory\n";
-	exit 2;
+	if (!defined($project))
+	{
+		print STDERR "$me: path does not appear to be a private CVS directory\n";
+		exit 2;
+	}
+
+	if (!-e "$cvsroot/$project/$subdir/$module,v")
+	{
+		print STDERR "$me: module does not appear to be checked into CVS\n";
+		exit 2;
+	}
 }
 
-if (!-e "$::ENV{CVSROOT}/$project/$subdir/$module,v")
+my $username = $::ENV{USER};
+$username = $::ENV{USERNAME} if !$username;
+my @lockers = cvs::getLockers($cvsroot, $file);
+if (!@lockers or !grep { /\b$username\b/ } @lockers)
 {
-	print STDERR "$me: module does not appear to be checked into CVS\n";
-	exit 2;
-}
-
-my @lockers = cvs::getLockers($path);
-if (!@lockers or !grep { /\b$::ENV{USER}\b/ } @lockers)
-{
-	print STDERR "$me: you did not do a get on this module\n";
+	print STDERR "$me: [$username] did not do a get on this module\n";
+	print STDERR "     Lockers: @lockers\n";
 	exit 2;
 }
 
@@ -64,23 +88,37 @@ if (@lockers > 1)
 	# but more than one name is in the list, so ...
 	print STDERR "$me: other people are currently editing this module!\n";
 	print STDERR "     $module is currently being edited by: @lockers\n";
-	if (!get_yn("Do you want to proceed anyway?"))
+	if ( !$offsite )
 	{
-		exit 1;
+		if (!get_yn("Do you want to proceed anyway?"))
+		{
+			exit 1;
+		}
 	}
 }
 
-system("cvs diff $path >/dev/null");
-if (!$?)										# no differences
+#system("cvs -d $cvsroot diff $path >/dev/null");
+my $tmp = `cvs -d $cvsroot diff $file`;
+if (!$tmp)										# no differences
 {
 	print STDERR "$me: you have not changed the file\n";
-	if (get_yn("Do you want to break your edit lock?"))
+	if ( !$offsite )
 	{
-		system("cvs unedit $path");
+		if (get_yn("Do you want to break your edit lock?"))
+		{
+			system("cvs -d $cvsroot unedit $path");
+		}
 	}
 	exit 1;
 }
 
-system("cvs commit $path");
-system("cvs watch remove -a edit $path");	# don't watch edits any more
-system("chmod a-w $path");
+system("cvs -r -d $cvsroot commit $path");
+system("cvs -d $cvsroot watch remove -a edit $path");	# don't watch edits any more
+
+# don't think this is necessary with -r above, buuuuttttt,
+if ( !$offsite )
+{
+	system("chmod a-w $path");
+}
+
+print "done\n";
