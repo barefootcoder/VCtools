@@ -47,7 +47,7 @@ print STDERR "determined branch to be $branch\n" if DEBUG >= 2;
 my $curbranch;
 foreach (@files)												# important for all files to be in the same branch
 {
-	my $br = VCtools::get_branch($proj, $_) || 'TRUNK';
+	my $br = VCtools::get_branch($_) || 'TRUNK';
 	print STDERR "got $br back from get_branch\n" if DEBUG >= 3;
 
 	if ($curbranch)

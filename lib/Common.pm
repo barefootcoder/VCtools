@@ -48,8 +48,9 @@ our $vcroot = $ENV{SVNROOT};							# for Subversion
 	# actually, I don't really think Subversion has anything like this,
 	# but we'll leave it here to keep from rehacking everything
 
-# for internal use only (_get_lockers, cache_file_status, & _interpret_log_output, respectively)
-my (%lockers_cache, %status_cache, @log_cache);
+# for internal use only
+my (%lockers_cache, %status_cache, %info_cache, @log_cache);
+# (used by _get_lockers, cache_file_status, cache_file_status/_server_path, & _interpret_log_output, respectively)
 
 # help get messages out a bit more quickly
 $| = 1;
@@ -205,14 +206,14 @@ sub _project_path
 	elsif ($branch_policy =~ /^(\w+),(\w+)$/)
 	{
 		# policy speficies "trunk_dir,branches_and_tags_dir"
-		$subdirs{trunk} = "/$1";
-		$subdirs{branch} = $subdirs{tag} = "/$2";
+		$subdirs{'trunk'} = "/$1";
+		$subdirs{'branch'} = $subdirs{'tag'} = "/$2";
 	}
 	elsif ($branch_policy =~ /^(\w+),(\w+),(\w+)$/)
 	{
-		$subdirs{trunk} = "/$1";
-		$subdirs{branch} = "/$2";
-		$subdirs{tag} = "/$3";
+		$subdirs{'trunk'} = "/$1";
+		$subdirs{'branch'} = "/$2";
+		$subdirs{'tag'} = "/$3";
 	}
 	else
 	{
@@ -247,23 +248,12 @@ sub _project_path
 sub _server_path
 {
 	my ($file) = @_;
-	my $path;
-	local $_;
 
 	# we expect this to succeed, so make sure you've run exists_in_vc() on the file first
-	my $ed = _execute_and_get_output("info", $file);
-	while ( <$ed> )
-	{
-		if ( /^URL:\s*(\S+)/ )
-		{
-			$path = $1;
-			last;
-		}
-	}
-	close($ed);
+	cache_file_status($file, { SHOW_BRANCHES => 1 }) unless exists $info_cache{$file};
 
-	die("_server_path: cannot determine server path of $file") unless $path;
-	return $path;
+	die("_server_path: cannot determine server path of $file") unless $info_cache{$file}->{'server_path'};
+	return $info_cache{$file}->{'server_path'};
 }
 
 
@@ -411,6 +401,47 @@ sub _interpret_svn_status_output
 }
 
 
+sub _interpret_info_output
+{
+	# use 1st arg, or $_ if no args
+	local $_ = $_[0] if @_;
+
+	# ditch newline
+	chomp;
+
+	# pass through to Subversion ATM
+	# CVS version has never been implemented
+	&_interpret_svn_info_output
+}
+
+my $branch_regex;											# cache this for faster lookups
+sub _interpret_svn_info_output
+{
+	my $info = {};
+	($info->{'file'}) = m{^Path:\s*(.*?)/?\s*$}m;
+	return undef unless $info->{'file'};					# this will happen if the file doesn't exist in VC
+
+	($info->{'rev'}) = m{^Revision:\s*(\d+)\s*$}m;
+	($info->{'server_path'}) = m{^URL:\s*(.*?)\s*$}m;
+	print STDERR "scraped info for file $info->{'file'}\n" if DEBUG >= 4;
+
+	# we can extract branch from server path
+	unless ($branch_regex)
+	{
+		my $proj = parse_vc_file($info->{'file'});
+		my $base_branch_path = _project_path($proj, 'branch');
+		$branch_regex = qr{^\Q$base_branch_path\E/?([^/]+)};
+	}
+	# if server_path doesn't start with $base_branch_path, then $1 will be undefined
+	# this will indicate that the file is on the trunk
+	# (note that for a file that doesn't exist in the working copy at all, it just won't exist in %info_cache)
+	$info->{'server_path'} =~ /$branch_regex/;
+	$info->{'branch'} = $1;
+
+	return $info;
+}
+
+
 sub _interpret_update_output
 {
 	# use 1st arg, or $_ if no args
@@ -433,7 +464,7 @@ sub _interpret_cvs_update_output
 	}
 	elsif ( /^[AR\?]/ )
 	{
-		# these indicate local adds or deletes that have never committed
+		# these indicate local adds or deletes that have never been committed
 		# or files which just aren't in VC at all
 		# Subversion won't report these (and, really, why should it? if you
 		# want that type of info, use "status", not "update")
@@ -646,8 +677,8 @@ sub _make_svn_command
 
 	my @options;
 	push @options, "-v" if $opts->{VERBOSE};
-	# there is probably a cleaner way to do this, but I don't know what it is
-	if ($command eq 'revert')
+	# there is probably a cleaner way to do this, but I can't think what it is right now
+	if ($command eq 'revert' or $command eq 'info')
 	{
 		push @options, "-R" unless $opts->{DONT_RECURSE};
 	}
@@ -1032,6 +1063,7 @@ sub cache_file_status
 	# therefore, override even if client told us to ignore
 	$opts->{IGNORE_ERRORS} = 0;
 	my (@files) = @_;
+	fatal_error("cannot cache status for non-existent files") unless @files;
 
 	my @statfiles;
 	my $st = _execute_and_get_output("status", @files, $opts);
@@ -1045,7 +1077,7 @@ sub cache_file_status
 
 		# directories sometimes come in with trailing slashes, so make sure
 		# lookups for those won't fail
-		$status_cache{"$file/"} = $status if $file and -d $file;
+		$status_cache{"$file/"} = $status if -d $file;
 
 		# and save in case anyone's looking at our return value
 		push @statfiles, $file;
@@ -1054,6 +1086,28 @@ sub cache_file_status
 
 	print Data::Dumper->Dump( [\%status_cache], [qw<%status_cache>] )
 			if DEBUG >= 4;
+
+	if ($opts->{'SHOW_BRANCHES'})
+	{
+		# first, make sure we don't try to get info on files that aren't in VC
+		my @ifiles = grep { $status_cache{$_} ne 'unknown' } @files;
+
+		my $inf = _execute_and_get_output("info", @files, $opts);
+		local ($/) = '';		# info spits out paragraphs, not lines
+		while ( <$inf> )
+		{
+			print STDERR "<file info>:$_" if DEBUG >= 5;
+			my $info = _interpret_info_output;
+			my $file = $info->{'file'};
+
+			next unless $info;
+			$info_cache{$file} = $info;
+
+			# repeat the trailing slash trick for dirs
+			$info_cache{"$file/"} = $info if -d $file;
+		}
+		close($inf);
+	}
 
 	# in case someone needs to know what files we collected statuses (stati?) on
 	return @statfiles;
@@ -1354,16 +1408,12 @@ sub projpath
 # repository for this to work.
 sub get_branch
 {
-	my ($proj, $file) = @_;
+	my ($file) = @_;
 
-	my $spath = _server_path($file);
-	my $bpath = _project_path($proj, 'branch');
-	print STDERR "server path of $spath, branch path of $bpath\n" if DEBUG >= 4;
+	cache_file_status($file, { SHOW_BRANCHES => 1 }) unless exists $info_cache{$file};
 
-	$spath =~ m@^\Q$bpath\E/?([^/]+)@;
-	# if $spath doesn't start with $bpath, then $1 will be undefined, which is what we want to return
-	print STDERR "looks like branch is $1\n" if DEBUG >= 4;
-	return $1;
+	print STDERR "looks like branch is $info_cache{$file}->{'branch'}\n" if DEBUG >= 4;
+	return $info_cache{$file}->{'branch'};
 }
 
 
@@ -1628,7 +1678,7 @@ sub print_status
 
 	my $errors = 0;
 
-	cache_file_status(@files);
+	cache_file_status(@files, $opts);
 	my $cur_status = '';
 	foreach my $file (sort { $status_cache{$a} cmp $status_cache{$b} or $a cmp $b } keys %status_cache)
 	{
@@ -1651,7 +1701,7 @@ sub print_status
 			printf "    => %-60s", $file;
 			if ($opts->{'SHOW_BRANCHES'} and exists_in_vc($file) and -e $file)
 			{
-				my $branch = get_branch($project, $file);
+				my $branch = get_branch($file);
 				print $branch ? " {BRANCH:$branch}" : " {TRUNK}";
 			}
 			print "\n";
@@ -1929,15 +1979,24 @@ sub edit_commit_log
 
 
 # this couldn't _possibly_ work with CVS
+# note that even though the routine is named 'switch_to_branch', it is also capable of switching to the trunk
 sub switch_to_branch
 {
 	my ($proj, $branch, @files) = @_;
 
-	my $new = _project_path($proj, 'branch', $branch);
+	my $new;
+	if ($branch eq 'trunk')
+	{
+		$new = _project_path($proj);
+	}
+	else
+	{
+		$new = _project_path($proj, 'branch', $branch);
+	}
 
 	foreach my $file (@files)
 	{
-		my $branch = get_branch($proj, $file);
+		my $branch = get_branch($file);
 		my $old = $branch ? _project_path($proj, 'branch', $branch) : _project_path($proj);
 
 		my $spath = _server_path($file);
@@ -1963,7 +2022,7 @@ sub merge_from_branch
 
 	foreach my $file (@files)
 	{
-		my $branch = get_branch($proj, $file);
+		my $branch = get_branch($file);
 		my $current = $branch ? _project_path($proj, 'branch', $branch) : _project_path($proj);
 
 		my $spath = _server_path($file);
