@@ -13,7 +13,7 @@ use VCtools::Common;
 #################################
 
 VCtools::switch('recursive', 'r', 'operate recursively');
-VCtools::switch('show_branches', 'b', 'show the branch (if TRUNK if no branch) for all files');
+VCtools::switch('show_branches', 'b', 'show the branch name (or TRUNK if no branch) for all files');
 VCtools::args('files', 'optlist', 'file(s) (or directory/ies) to show status of (default .)');
 VCtools::getopts();
 
