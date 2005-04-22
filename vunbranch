@@ -1,0 +1,84 @@
+#! /usr/bin/perl
+
+use strict;
+use warnings;
+
+use VCtools::Base;
+use VCtools::Args;
+use VCtools::Common;
+
+
+#################################
+# OPTIONS AND ENVIRONMENT VARS
+#################################
+
+VCtools::args('files', 'optlist', 'file(s) and/or directory/ies to switch over to trunk (default: .)');
+VCtools::getopts();
+
+# remember, directories are files too
+my @files = VCtools::files();
+if (not @files)
+{
+	VCtools::prompt_to_continue("Your entire local copy from this directory down will be converted to the trunk!");
+	@files = (".");
+}
+print STDERR "switch files: @files\n" if DEBUG >= 3;
+
+
+#################################
+# CHECK FOR ERRORS
+#################################
+
+my $proj = VCtools::verify_files_and_group(@files);
+
+# get statuses for everything at once (quicker that way)
+# remember, vunbranch is always recursive
+my @all_files = VCtools::cache_file_status(@files, { DONT_RECURSE => 0, SHOW_BRANCHES => 1 });
+
+foreach my $file (@files)
+{
+	VCtools::fatal_error("$file is not in VC")
+			unless VCtools::exists_in_vc($file);
+}
+
+my @mod_files;
+my $old_branch = VCtools::get_branch($all_files[0]);
+foreach my $file (@all_files)
+{
+	if (VCtools::exists_in_vc($file))
+	{
+		my $ob = VCtools::get_branch($file);
+		if (not $ob)
+		{
+			VCtools::fatal_error("at least some files are already on the trunk!");
+		}
+		elsif ($ob ne $old_branch)
+		{
+			VCtools::fatal_error("the file(s) or tree(s) you want to switch contain more than one branch; cannot continue");
+		}
+	}
+
+	# note that this is NOT the same as setting @mod_files to get_all_with_status('modified')!
+	# modified_from_vc reports both conflict and unknown as well as modified
+	push @mod_files, $file if VCtools::modified_from_vc($file);
+};
+if (@mod_files)
+{
+	VCtools::list_files($proj, "are modified from the repository versions", @mod_files);
+	VCtools::prompt_to_continue("If you want these mods to go into the trunk, continue.",
+			"If you want the mods to stay in the branch, stop now and vcommit before you vunbranch.");
+}
+
+
+#################################
+# MAIN
+#################################
+
+VCtools::switch_to_branch($proj, 'trunk', @files);
+
+print "done\n" unless $?;
+
+
+#################################
+# SUBS
+#################################
