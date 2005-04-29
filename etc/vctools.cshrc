@@ -13,6 +13,7 @@ else
 			# $shellexec seems to have found something it's happy with
 			setenv PATH `$shellexec -p`
 
+			alias branch vbranch
 			alias commit vcommit
 			alias get vget
 			alias log vlog
@@ -22,6 +23,7 @@ else
 			alias sync vsync
 			alias stat vstat
 			alias unget vunget
+			alias unbranch vunbranch
 
 			alias vrm vdel
 
