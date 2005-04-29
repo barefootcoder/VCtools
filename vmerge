@@ -31,48 +31,52 @@ print STDERR "project is $proj\n" if DEBUG >= 2;
 
 # get statuses for everything at once (quicker that way)
 # like vbranch, vmerge is always recursive
-VCtools::cache_file_status(@files, { DONT_RECURSE => 0 });
+VCtools::cache_file_status(@files, { DONT_RECURSE => 0, SHOW_BRANCHES => 1 });
 
 # pull out which files are modified
 my @mod_files = VCtools::get_all_with_status('modified');
 print STDERR "mod files are: ", join(', ', @mod_files), "\n" if DEBUG >= 3;
 
-my $branch = VCtools::branch();									# if we're merging from a branch, use that
-if ($branch)
+my $from_branch = VCtools::branch();							# if we're merging from a branch, use that
+if ($from_branch)
 {
-	VCtools::fatal_error("no such branch $branch") unless VCtools::branch_exists_in_vc($proj, $branch);
+	VCtools::fatal_error("no such branch $from_branch") unless VCtools::branch_exists_in_vc($proj, $from_branch);
 }
-print STDERR "determined branch to be $branch\n" if DEBUG >= 2;
+else
+{
+	$from_branch = 'TRUNK';
+}
+print STDERR "determined from branch to be $from_branch\n" if DEBUG >= 2;
 
-my $curbranch;
+my $to_branch;
 foreach (@files)												# important for all files to be in the same branch
 {
 	my $br = VCtools::get_branch($_) || 'TRUNK';
 	print STDERR "got $br back from get_branch\n" if DEBUG >= 3;
 
-	if ($curbranch)
+	if ($to_branch)
 	{
-		VCtools::fatal_error("files are from at least two branches: $curbranch, $br") unless $br eq $curbranch;
+		VCtools::fatal_error("files are from at least two branches: $to_branch, $br") unless $br eq $to_branch;
 	}
-	$curbranch = $br;
+	$to_branch = $br;
 }
 
-print STDERR "curbranch is $curbranch and branch is $branch\n" if DEBUG >= 2;
-if ($curbranch eq 'TRUNK' and not $branch)
+print STDERR "to branch is $to_branch and from branch is $from_branch\n" if DEBUG >= 2;
+if ($from_branch eq 'TRUNK' and $to_branch eq 'TRUNK')
 {
 	VCtools::fatal_error("cannot merge from trunk to trunk");
 }
-elsif ($branch and $curbranch eq $branch)
+elsif ($from_branch eq $to_branch)
 {
-	VCtools::fatal_error("cannot merge from branch $branch to itself");
+	VCtools::fatal_error("cannot merge from branch $from_branch to itself");
 }
 
 my $merge_commit = VCtools::get_proj_directive($proj, 'MergeCommit');
 VCtools::fatal_error("too dangerous to merge without a MergeCommit directive; fix your config and try again")
 		unless $merge_commit;
 
-my $start = VCtools::branch_point_revno($proj, $branch || $curbranch);
-my $prev_merge = VCtools::prev_merge_point($proj, $branch || $curbranch, @files);
+my $start = VCtools::branch_point_revno($proj, $from_branch eq 'TRUNK' ? $to_branch : $from_branch);
+my $prev_merge = VCtools::prev_merge_point($proj, $from_branch, $to_branch, @files);
 print STDERR "determined branch point to be $start and previous merge point to be $prev_merge\n" if DEBUG >= 3;
 $start = $prev_merge + 1 if $prev_merge > $start;
 print STDERR "determined starting revision to be $start\n" if DEBUG >= 2;
@@ -80,7 +84,9 @@ print STDERR "determined starting revision to be $start\n" if DEBUG >= 2;
 my $end = VCtools::revision() || VCtools::head_revno($proj);
 print STDERR "determined ending revision to be $end\n" if DEBUG >= 2;
 
-VCtools::prompt_to_continue("will merge revisions $start through $end from " . ($branch ? "branch $branch" : "trunk"),
+VCtools::prompt_to_continue("will merge revisions $start through $end from "
+				. ($from_branch eq 'TRUNK' ? "trunk" : "branch $from_branch") . " into "
+				. ($to_branch eq 'TRUNK' ? "trunk" : "branch $to_branch"),
 		"If this does not sound right, please do not continue.",
 		"Also, for maximum safety you should always vsync before you vmerge.",
 		"If you haven't vsync'ed lately, please stop now and do so before running again.");
@@ -102,7 +108,7 @@ if (@mod_files)
 	VCtools::revert_files(@mod_files);
 }
 
-VCtools::merge_from_branch($proj, $branch, $start, $end, @files);
+VCtools::merge_from_branch($proj, $from_branch, $start, $end, @files);
 
 # now figure out what got modified, if there are any conflicts, etc
 CONFLICT_RESOLUTION:
@@ -144,7 +150,8 @@ VCtools::info_msg(-INDENT => "If you feel the merge failed, you should revert (s
 
 if (yesno_no_default("Do you wish to continue by committing the merge operation?"))
 {
-	my $commit_msg = "$merge_commit\nMerged revisions $start:$end from " . ($branch ? "branch $branch" : "trunk");
+	my $commit_msg = "$merge_commit\nMerged revisions $start:$end from "
+			. ($from_branch eq 'TRUNK' ? "trunk" : "branch $from_branch");
 	VCtools::commit_files($proj, @new_mod_files, { MERGE => scalar(@new_mod_files), MESSAGE => $commit_msg });
 }
 else
@@ -158,7 +165,7 @@ else
 if (@mod_files)
 {
 	VCtools::restore_backup_files(@mod_files, { ext => BAK_EXT, overwrite => 1 });
-	VCtools::merge_from_branch($proj, $branch, $start, $end, @mod_files);
+	VCtools::merge_from_branch($proj, $from_branch, $start, $end, @mod_files);
 }
 
 print "done\n";

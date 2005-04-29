@@ -359,7 +359,7 @@ sub _interpret_svn_status_output
 	return wantarray ? () : undef unless length > 40;
 
 	my $file = substr($_, 40);
-	print "interpreting status output: file is <$file>\n" if DEBUG >= 4;
+	print STDERR "interpreting status output: file is <$file>\n" if DEBUG >= 4;
 	# if we're not going to return the status, may as well not bother to figure it out
 	return $file unless wantarray;
 
@@ -432,11 +432,11 @@ sub _interpret_svn_info_output
 		my $base_branch_path = _project_path($proj, 'branch');
 		$branch_regex = qr{^\Q$base_branch_path\E/?([^/]+)};
 	}
-	# if server_path doesn't start with $base_branch_path, then $1 will be undefined
+	# if server_path doesn't start with $base_branch_path, then set branch to undefined
 	# this will indicate that the file is on the trunk
 	# (note that for a file that doesn't exist in the working copy at all, it just won't exist in %info_cache)
-	$info->{'server_path'} =~ /$branch_regex/;
-	$info->{'branch'} = $1;
+	$info->{'branch'} = $info->{'server_path'} =~ /$branch_regex/ ? $1 : undef;
+	print STDERR "set branch for $info->{'file'} to $info->{'branch'}\n" if DEBUG >= 4;
 
 	return $info;
 }
@@ -1084,8 +1084,7 @@ sub cache_file_status
 	}
 	close($st);
 
-	print Data::Dumper->Dump( [\%status_cache], [qw<%status_cache>] )
-			if DEBUG >= 4;
+	print STDERR Data::Dumper->Dump( [\%status_cache], [qw<%status_cache>] ) if DEBUG >= 4;
 
 	if ($opts->{'SHOW_BRANCHES'})
 	{
@@ -1335,11 +1334,13 @@ sub branch_point_revno
 # completely fuxored for CVS
 sub prev_merge_point
 {
-	my ($proj, $branch, @files) = @_;
+	my ($proj, $from_branch, $to_branch, @files) = @_;
 	my $message;
 
 	my $merge_commit = get_proj_directive($proj, 'MergeCommit');
 	fatal_error("cannot look for previous merge points without a MergeCommit directive") unless $merge_commit;
+
+	my $from_msg = $from_branch eq 'TRUNK' ? "from trunk" : "from branch $from_branch";
 
 	my ($project, $path) = parse_vc_file($files[0]);
 	die("file is not in the right project!") unless $proj eq $project;		# this should theoretically never happen
@@ -1348,16 +1349,23 @@ sub prev_merge_point
 		# doing entire working copy; this seems to be a special case for some reason (not sure why)
 
 		# try looking for a project-wide merge point
-		get_log(_project_path($proj, 'branch', $branch), { BRANCH_ONLY => 1 });
-		$message = find_log($merge_commit, 'message') || '';
+		if ($to_branch eq 'TRUNK')
+		{
+			get_log(_project_path($proj));
+		}
+		else
+		{
+			get_log(_project_path($proj, 'branch', $to_branch), { BRANCH_ONLY => 1 });
+		}
+		$message = find_log($merge_commit, 'message', $from_msg) || '';
 	}
 	else
 	{
 		# find prev merge point for each file/dir, and make sure they're all the same
 		foreach my $file (@files)
 		{
-			get_log($file, { BRANCH_ONLY => 1 });
-			my $msg = find_log($merge_commit, 'message') || '';
+			get_log($file, { BRANCH_ONLY => ($to_branch ne 'TRUNK') });
+			my $msg = find_log($merge_commit, 'message', $from_msg) || '';
 			print STDERR "looking for previous merge point on $file, found $msg\n" if DEBUG >= 4;
 
 			if (not defined $message)
@@ -1509,13 +1517,13 @@ sub log_field
 # specify which field you're interested in, it returns the index of the found log.
 sub find_log
 {
-	my ($search_for, $which_field) = @_;
+	my ($search_for, $which_field, $addl_search) = @_;
 
 	my $x = 0;
 	foreach (@log_cache)
 	{
 		print STDERR "searching for //$search_for// in //$_->{message}//\n" if DEBUG >= 4;
-		if ($_->{message} =~ /\Q$search_for\E/)
+		if ($_->{message} =~ /\Q$search_for\E/ and $_->{'message'} =~ /\Q$addl_search\E/)
 		{
 			return $which_field ? $_->{$which_field} : $x;
 		}
@@ -2016,8 +2024,7 @@ sub merge_from_branch
 	my $merge_commit = get_proj_directive($proj, 'MergeCommit');
 	fatal_error("cannot safely vmerge without a merge commit message specified in the config") unless $merge_commit;
 
-	# no branch means merging from the trunk
-	my $merge_from = $branch ? _project_path($proj, 'branch', $branch) : _project_path($proj);
+	my $merge_from = $branch eq 'TRUNK' ?  _project_path($proj) : _project_path($proj, 'branch', $branch);
 	print STDERR "merge_from_branch: merging from $merge_from\n" if DEBUG >= 3;
 
 	foreach my $file (@files)
