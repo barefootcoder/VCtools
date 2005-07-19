@@ -690,7 +690,7 @@ sub _make_svn_command
 	push @options, "-r $opts->{REVNO}" if $opts->{REVNO};
 	push @options, "--force" if $opts->{FORCE};
 	push @options, "--stop-on-copy" if $opts->{BRANCH_ONLY};
-	push @options, "--diff-cmd diff -x -bc" if $opts->{IGNORE_BLANKS};
+	push @options, "--diff-cmd diff -x -b" if $opts->{IGNORE_BLANKS};
 	my $err_redirect = $opts->{IGNORE_ERRORS} ? "2>/dev/null" : "";
 
 	# command substitutions
