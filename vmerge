@@ -78,7 +78,8 @@ VCtools::fatal_error("too dangerous to merge without a MergeCommit directive; fi
 my $start = VCtools::branch_point_revno($proj, $from_branch eq 'TRUNK' ? $to_branch : $from_branch);
 my $prev_merge = VCtools::prev_merge_point($proj, $from_branch, $to_branch, @files);
 print STDERR "determined branch point to be $start and previous merge point to be $prev_merge\n" if DEBUG >= 3;
-$start = $prev_merge + 1 if $prev_merge > $start;
+# I thought this should be $prev_merge + 1, but the Subversion mailing lists seem to indicate this is wrong
+$start = $prev_merge if $prev_merge > $start;
 print STDERR "determined starting revision to be $start\n" if DEBUG >= 2;
 
 my $end = VCtools::revision() || VCtools::head_revno($proj);
