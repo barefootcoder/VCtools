@@ -27,8 +27,12 @@ print STDERR "vbuild: going to try to build project $project\n" if DEBUG >= 4;
 
 VCtools::fatal_error("must be run from top-level personal testing directory")
 		if getcwd() ne VCtools::WORKING_DIR;
-VCtools::fatal_error("project $project does not exist in VC")
-		unless VCtools::proj_exists_in_vc($project);
+unless (VCtools::proj_exists_in_vc($project))
+{
+	my $msg = "project $project does not exist in VC";
+	$msg .= " (server path: " . VCtools::_project_path($project) . ")" if VCtools::verbose();
+	VCtools::fatal_error($msg);
+}
 VCtools::fatal_error("project $project already exists") if -e $project;
 
 # check for proper group
