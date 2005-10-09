@@ -229,7 +229,7 @@ sub _project_path
 
 	# while we're here, do an auth check for this server
 	# (most stuff will fail, possibly silently and/or crashingly, if there's no auth for the server)
-	auth_check($projpath);
+	auth_check($root);
 
 	return $projpath;
 }
