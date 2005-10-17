@@ -133,7 +133,7 @@ if (VCtools::determine())
 foreach my $file (@files)
 {
 	my $rpath = VCtools::release_path($file);
-	fatal_error("don't have a release path for $file") unless $rpath;
+	VCtools::fatal_error("don't have a release path for $file") unless $rpath;
 
 	VCtools::info_msg(VCtools::info_only() ? "release info for" : "releasing",
 			"file $file ...");
