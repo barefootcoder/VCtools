@@ -25,6 +25,7 @@ print STDERR "vbuild: going to try to build project $project\n" if DEBUG >= 4;
 # CHECK FOR ERRORS
 #################################
 
+print STDERR "vbuild: working dir is " . VCtools::WORKING_DIR . "\n" if DEBUG >= 3;
 VCtools::fatal_error("must be run from top-level personal testing directory")
 		if getcwd() ne VCtools::WORKING_DIR;
 unless (VCtools::proj_exists_in_vc($project))
