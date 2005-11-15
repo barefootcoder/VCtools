@@ -1562,7 +1562,7 @@ sub restore_backup_files
 	my (@files) = @_;
 
 	die("restore_backup_files: must supply backup extension") unless $opts->{'ext'};
-	$opts->{overwrite} ||= 0;
+	$opts->{overwrite} = 0 unless exists $opts->{overwrite};
 
 	foreach my $file (@files)
 	{
