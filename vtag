@@ -131,7 +131,7 @@ if (my $tagfile = VCtools::get_proj_directive($proj, 'TagFile') and not VCtools:
 VCtools::create_tag($proj, VCtools::tag());
 
 # put back any files we temporarily reverted
-VCtools::restore_backup_files(@bak_files, { ext => $BAK_EXT, OVERWRITE => 1 });
+VCtools::restore_backup_files(@bak_files, { ext => $BAK_EXT, overwrite => 1 });
 
 
 #################################
