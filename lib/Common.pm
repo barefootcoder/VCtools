@@ -33,8 +33,8 @@ use Date::Format;
 use Data::Dumper;
 use File::Basename;
 use Mail::Sendmail;
-use Cwd qw<realpath>;
 use Fcntl qw<F_SETFD>;
+use Cwd qw<getcwd realpath>;
 use File::Temp qw<tempfile>;
 
 use VCtools::Base;
@@ -994,6 +994,12 @@ sub verify_files_and_group
 
 	# in case someone needs to know what the project is
 	return $project;
+}
+
+
+sub in_working_dir
+{
+	return getcwd() eq _really_realpath(WORKING_DIR);
 }
 
 
