@@ -370,6 +370,10 @@ sub _interpret_svn_status_output
 	{
 		return ($file, 'locked');
 	}
+	elsif ($status eq 'M' and substr($_, 7, 1) eq '*')
+	{
+		return ($file, 'mod_outdated');
+	}
 	elsif (substr($_, 7, 1) eq '*')
 	{
 		return ($file, 'outdated');
@@ -1163,8 +1167,9 @@ sub outdated_by_vc
 
 	# if not cached already, go get it
 	cache_file_status($file) unless exists $status_cache{$file};
+	print STDERR "file status for $file is $status_cache{$file}\n" if DEBUG >= 3;
 
-	return $status_cache{$file} eq 'outdated';
+	return ($status_cache{$file} eq 'outdated' or $status_cache{$file} eq 'mod_outdated');
 }
 
 
@@ -1174,14 +1179,13 @@ sub modified_from_vc
 
 	# if not cached already, go get it
 	cache_file_status($file) unless exists $status_cache{$file};
-	print "file status for $file is $status_cache{$file}\n" if DEBUG >= 3;
+	print STDERR "file status for $file is $status_cache{$file}\n" if DEBUG >= 3;
 
 	# for this function, we'll consider 'unknown' to be modified
 	# (for files to be added for the first time)
 	# call exists_in_vc() first if you don't like that
-	return ($status_cache{$file} eq 'modified'
-			or $status_cache{$file} eq 'conflict'
-			or $status_cache{$file} eq 'unknown');
+	return ($status_cache{$file} eq 'modified' or $status_cache{$file} eq 'mod_outdated'
+			or $status_cache{$file} eq 'conflict' or $status_cache{$file} eq 'unknown');
 }
 
 
@@ -1659,6 +1663,12 @@ sub print_status
 							printif		=>	ALWAYS,
 							comment		=>	"newer version in repository",
 							to_fix		=>	"vsync",
+							is_error	=>	0,
+						},
+		'mod_outdated'=>{
+							printif		=>	ALWAYS,
+							comment		=>	"outdated and modified!",
+							to_fix		=>	"vsync then vcommit",
 							is_error	=>	0,
 						},
 		'nothing'	=>	{

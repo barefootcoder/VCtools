@@ -94,8 +94,12 @@ foreach my $file (@files)
 		}
 =cut
 
-		VCtools::fatal_error("no changes to commit (vunget to remove your editing status)")
-						unless VCtools::modified_from_vc($file);
+		print STDERR "outdated is ", VCtools::outdated_by_vc($file),
+				", modified is ", VCtools::modified_from_vc($file), "\n" if DEBUG >= 2;
+		VCtools::fatal_error("file $file is outdated (vsync to merge your revisions with the latest repository changes)")
+				if VCtools::outdated_by_vc($file);
+		VCtools::fatal_error("file $file has no changes to commit (vunget to remove your editing status)")
+				unless VCtools::modified_from_vc($file);
 	}
 }
 
