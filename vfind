@@ -68,17 +68,15 @@ my $retval = 0;
 my $grep_pattern = VCtools::grep();
 if ($grep_pattern)
 {
-	eval { $grep_pattern = qr/$grep_pattern/ }
-			or VCtools::fatal_error("illegal grep pattern: $@");
+	eval { $grep_pattern = qr/$grep_pattern/ } or VCtools::fatal_error("illegal grep pattern: $@");
 }
 
 # ditto
 my $dirmatch = VCtools::dirfind();
 if ($dirmatch)
 {
-	eval { $dirmatch = qr{(?:^|/)$dirmatch(.*)$} }
-			# this shouldn't ever happen, I don't think
-			or VCtools::fatal_error("can't turn dirname into a pattern: $@");
+	# this shouldn't ever happen, I don't think
+	eval { $dirmatch = qr{(?:^|/)$dirmatch(.*)$} } or VCtools::fatal_error("can't turn dirname into a pattern: $@");
 }
 our %possible_dirs;
 
@@ -86,9 +84,8 @@ our %possible_dirs;
 my $filematch = VCtools::file();
 if ($filematch)
 {
-	eval { $filematch = qr{[^/]*\Q$filematch\E[^/]*$} }
-			# even less likely for this to happen IMHO
-			or VCtools::fatal_error("can't turn filename into a pattern: $@");
+	# even less likely for this to happen IMHO
+	eval { $filematch = qr{[^/]*\Q$filematch\E[^/]*$} } or VCtools::fatal_error("can't turn filename into a pattern: $@");
 }
 
 foreach (VCtools::get_all_files(@files))
@@ -162,35 +159,42 @@ sub grep_file
 	my ($file, $pattern) = @_;
 	my $retval = 0;
 
-	if (-f)
+	if (-f $file)
 	{
-		if (not open(IN, $_))
+		if (-T $file)
 		{
-			VCtools::warning("can't open file $_");
-			return 0;
-		}
-
-		while ( <IN> )
-		{
-			if ( /$pattern/ )
+			if (not open(IN, $file))
 			{
-				$retval = 1;
+				VCtools::warning("can't open file $file");
+				return 0;
+			}
 
-				# using -grep and -print at the same time indicates that we only want the file name
-				if (VCtools::print())
+			while ( <IN> )
+			{
+				if ( /$pattern/ )
 				{
-					print_file($file);
-					print "\n";
-					last;
-				}
-				else
-				{
-					print_file($file, ":");
-					print;
+					$retval = 1;
+
+					# using -grep and -print at the same time indicates that we only want the file name
+					if (VCtools::print())
+					{
+						print_file($file);
+						print "\n";
+						last;
+					}
+					else
+					{
+						print_file($file, ":");
+						print;
+					}
 				}
 			}
+			close(IN);
 		}
-		close(IN);
+		else
+		{
+			VCtools::warning("skipped binary file $file");
+		}
 	}
 
 	return $retval;
@@ -201,7 +205,7 @@ sub dir_find
 {
 	my ($file, $pattern) = @_;
 
-	return 0 unless -d $_;
+	return 0 unless -d $file;
 	return 0 unless /$dirmatch/;
 
 	# (note: pattern we built for $dirmatch captures any trailing chars as $1, so we can tell exact
@@ -214,7 +218,7 @@ sub dir_find
 
 	# we want exact matches to rank higher than partials
 	# thus we add an arbitrary large number to non-exact matches, making them drop low in the sorting
-	$possible_dirs{$_} = $depth + !$exact * 100;
+	$possible_dirs{$file} = $depth + !$exact * 100;
 
 	return 1;
 }
