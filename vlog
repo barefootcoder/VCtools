@@ -12,9 +12,14 @@ use VCtools::Common;
 # OPTIONS AND ENVIRONMENT VARS
 #################################
 
-VCtools::switch('latest', 'l', 'show only latest log');
+VCtools::switch('latest', 'l', 'show only latest log (same as -n1)');
+VCtools::switch('number', 'n', 'show only howmany logs (default: 100)', 'howmany');
 VCtools::args('files', 'list', 'file(s) (or directory/ies) to show logs for');
 VCtools::getopts();
+
+# figure out how many logs to show
+my $howmany = VCtools::latest() ? 1 : VCtools::number() || 100;
+print STDERR "number of logs to print: $howmany\n" if DEBUG >= 3;
 
 # remember, directories are files too
 my @files = VCtools::files();
@@ -45,7 +50,7 @@ foreach (@files)
 {
 	my $header_line = @files > 1 ? "\n---> $_ <---\n" : "";
 
-	VCtools::get_log($_);
+	VCtools::get_log($_, $howmany);
 	if (VCtools::latest())
 	{
 		print $header_line, VCtools::log_lines($proj, 0);

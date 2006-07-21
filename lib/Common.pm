@@ -175,21 +175,12 @@ sub _project_path
 	# if no which specified, assume trunk
 	$which ||= 'trunk';
 
-	my $proj_root;
-	if (exists $config->{Project}->{$proj})
-	{
-		return $config->{Project}->{$proj}->{ProjectPath}
-				if exists $config->{Project}->{$proj}->{ProjectPath};
-		$proj_root = $config->{Project}->{$proj}->{RootPath};
-	}
-
-	my $root = rootpath() || $proj_root
-			|| $config->{DefaultRootPath} || $vcroot;
+	my $root = rootpath() || get_proj_directive($proj, 'RootPath') || $vcroot;
 	print STDERR "project_path thinks root is $root\n" if DEBUG >= 3;
 
 	my %subdirs =
 	(
-		root	=>	'',						# this always remains blank, regardless of BranchPolicy
+		root	=>	'',								# this always remains blank, regardless of BranchPolicy
 		trunk	=>	'',
 		branch	=>	'',
 		tag		=>	'',
@@ -229,7 +220,7 @@ sub _project_path
 
 	# while we're here, do an auth check for this server
 	# (most stuff will fail, possibly silently and/or crashingly, if there's no auth for the server)
-	auth_check($root);
+	auth_check("$root/$proj");
 
 	return $projpath;
 }
@@ -254,6 +245,121 @@ sub _server_path
 
 	die("_server_path: cannot determine server path of $file") unless $info_cache{$file}->{'server_path'};
 	return $info_cache{$file}->{'server_path'};
+}
+
+
+###########################
+# This is somewhat similar to parse_vc_file, except for the following:
+#
+#	*	it's private (parse_vc_file is public)
+#	*	instead of taking a filename, it takes a path returned by the native VC tool
+#	*	it doesn't return the project
+#
+# So you pass it in some path that you got from the underlying VC implementation, which is expressed as a
+# pathname from _its_ POV, and this strips off the leading crap (which usually corresponds roughly--but not
+# always exactly--to the rootpath) and returns you the path relative to the TLD of the project, an indicator
+# of whether it's a trunk, branch, or tag path, and (if a branch or tag) which branch or tag it's in.  The
+# reason it doesn't return you the project is because it doesn't determine the project from the name (it just
+# calls current_project()), and you could call that yourself if you liked.  We don't want to imply that we're
+# figuring out something cool.
+BEGIN
+{
+	my ($trunk_regex, $branch_regex, $tag_regex);
+	sub _parse_vc_nativepath
+	{
+		my ($nativepath) = @_;
+		print STDERR "parsing native path $nativepath\n" if DEBUG >= 3;
+
+		# This seems remarkably funky, but bear with us:
+		# In order to find the leading crap that needs to be stripped off, we're going to use _project_path()
+		# to generate 3 base names: one for trunk, one for branches, and one for tags.  We'll then split those
+		# apart and put them back together part by part until we find a combination that matches our
+		# nativepath.  This is necessary because sometimes nativepaths are relative, and what they're relative
+		# to may not always be clear.
+
+		if (not $trunk_regex)
+		{
+			print STDERR "trying to build trunk reg ex\n" if DEBUG >= 5;
+			my $trunkpath = _project_path(current_project(), 'trunk') . '/';
+			while ($trunkpath)
+			{
+				print STDERR "trying trunkpath $trunkpath\n" if DEBUG >= 4;
+				if ( $nativepath =~ s{^\Q$trunkpath\E}{} )
+				{
+					$trunk_regex = qr{^\Q$trunkpath\E};
+
+					return ($nativepath, 'trunk');
+				}
+				else
+				{
+					$trunkpath =~ s{^.+?(?=/)}{};
+					$trunkpath = '' if $trunkpath eq '/';
+				}
+			}
+		}
+		else
+		{
+			if ( $nativepath =~ s/$trunk_regex// )
+			{
+				return ($nativepath, 'trunk');
+			}
+		}
+
+		if (not $branch_regex)
+		{
+			print STDERR "trying to build branch reg ex\n" if DEBUG >= 5;
+			my $branchpath = _project_path(current_project(), 'branch') . '/';
+			while ($branchpath)
+			{
+				if ( $nativepath =~ s{^\Q$branchpath\E(.*?)/}{} )
+				{
+					$branch_regex = qr{^\Q$branchpath\E(.*?)/};
+
+					return ($nativepath, branch => $1);
+				}
+				else
+				{
+					$branchpath =~ s{^.+?(?=/)}{};
+					$branchpath = '' if $branchpath eq '/';
+				}
+			}
+		}
+		else
+		{
+			if ( $nativepath =~ s/$branch_regex// )
+			{
+				return ($nativepath, branch => $1);
+			}
+		}
+
+		if (not $tag_regex)
+		{
+			print STDERR "trying to build tag reg ex\n" if DEBUG >= 5;
+			my $tagpath = _project_path(current_project(), 'tag') . '/';
+			while ($tagpath)
+			{
+				if ( $nativepath =~ s{^\Q$tagpath\E(.*?)/}{} )
+				{
+					$tag_regex = qr{^\Q$tagpath\E(.*?)/};
+
+					return ($nativepath, tag => $1);
+				}
+				else
+				{
+					$tagpath =~ s{^.+?(?=/)}{};
+					$tagpath = '' if $tagpath eq '/';
+				}
+			}
+		}
+		else
+		{
+			if ( $nativepath =~ s/$tag_regex// )
+			{
+				return ($nativepath, tag => $1);
+			}
+		}
+
+	}
 }
 
 
@@ -505,7 +611,7 @@ sub _interpret_cvs_update_output
 				# and we're done ... back to outer loop
 				next UPDATE_LINE;
 			}
-			
+
 			# everything was okay up to here, but we read one line too many
 			redo UPDATE_LINE;
 		}
@@ -572,7 +678,7 @@ sub _interpret_cvs_log_output
 sub _interpret_svn_log_output
 {
 	# ignore the blank lines and the separator lines
-	return if /^\s*$/ or /^-+$/;
+	return if /^\s*$/ or /^-+$/ or /^Changed paths:$/;
 
 	# bit of a shortcut here for the field separators
 	my $SEP = qr/\s*\|\s*/;
@@ -581,8 +687,34 @@ sub _interpret_svn_log_output
 		my $log = {};
 		@$log{ qw<rev author date> } = ($1, $2, str2time($3));
 
-		$log->{message} = '';					# this gets filled in later
+		$log->{message} = '';											# this gets filled in below
 		push @log_cache, $log;
+	}
+	elsif ( m{ ^ \s\s\s ([A-Z]) \s (/.*?) \s+ (\(from .*?\))? \s* $ }x )
+	{
+		my $log = $log_cache[-1];
+
+		my ($file, $which, $branch) = _parse_vc_nativepath($2);
+		$log->{branch} = $branch unless $which and $which eq 'tag';		# just ignore tags; shouldn't get those anyway
+
+		if ($1 eq 'R')													# dunno WTF these things are
+		{
+			$file = "?$file";
+		}
+		elsif ($1 eq 'D')												# deletes
+		{
+			$file = "-$file";
+		}
+		elsif ($1 eq 'A')												# adds
+		{
+			$file = "+$file";
+			$file = "-$file" if $3;										# means it was moved (delete then add)
+		}
+		else															# just a regular mod
+		{
+			# nothing to do, really
+		}
+		push @{$log->{files}}, $file;
 	}
 	elsif (@log_cache > 0)
 	{
@@ -751,12 +883,10 @@ sub _execute_and_get_output
 
 	# if user has requested us to ignore errors, _make_vc_command will have
 	# redirected STDERR off into the ether;
-	# but if they haven't, let's catch that too 
-	$cmd .= " 2>&1" unless @_ and ref $_[-1] eq 'HASH'
-			and $_[-1]->{IGNORE_ERRORS};
+	# but if they haven't, let's catch that too
+	$cmd .= " 2>&1" unless @_ and ref $_[-1] eq 'HASH' and $_[-1]->{IGNORE_ERRORS};
 
-	my $fh = new FileHandle("$cmd |")
-			or fatal_error("call to cvs command $cmd failed with $!", 3);
+	my $fh = new FileHandle("$cmd |") or fatal_error("call to cvs command $cmd failed with $!", 3);
 	return $fh;
 }
 
@@ -816,6 +946,18 @@ sub _log_format
 
 	# create more human readable datestr field from date field
 	$log->{datestr} = time2str($time_fmt, $log->{date});
+
+	# set up 'filemods' field based on files modified
+	if (verbose())
+	{
+		$log->{'filemods'} = join(' ', @{$log->{'files'}});
+	}
+	else
+	{
+		my $count = scalar(@{$log->{files}});
+		$log->{'filemods'} = $log->{files}->[0];
+		$log->{'filemods'} .= " (" . ($count - 1) . " more)" if $count > 1;
+	}
 
 	print STDERR "_log_format: fields are ", join(' // ', @$log{@fields}) if DEBUG >= 4;
 	my $output = form({interleave => 1}, $log_fmt, @$log{@fields});
@@ -885,7 +1027,7 @@ sub current_project
 	# you probably ought to call check_common_errors() instead of this function
 	# that will verify that the VCTOOLS_SHELL var is properly set
 	# and then call this for you
-	
+
 	$ENV{VCTOOLS_SHELL} =~ /proj:(\w+)/;
 	return $1;
 }
@@ -894,24 +1036,15 @@ sub current_project
 sub project_group
 {
 	# finds the Unix group for the given project
-	# first tries a specific UnixGroup directive in the project section
-	# then tries to get the DefaultUnixGroup directive
-	# not finding a group is a fatal error: better to bomb out than let
-	# people who might not have the right permissions do stuff
+	# not finding a group is a fatal error: better to bomb out than let people who might not have the right
+	# permissions do stuff
 	my ($proj) = @_;
 
-	if (exists $config->{Project}->{$proj}->{UnixGroup})
-	{
-		return $config->{Project}->{$proj}->{UnixGroup};
-	}
-	else
-	{
-		return $config->{DefaultUnixGroup}
-				if exists $config->{DefaultUnixGroup};
-	}
+	my $group = get_proj_directive($proj, 'UnixGroup');
 
-	fatal_error("configuration error--"
-			. "can't determine Unix group for project $proj");
+	fatal_error("configuration error--can't determine Unix group for project $proj") unless $group;
+
+	return $group;
 }
 
 
@@ -1336,7 +1469,7 @@ sub branch_point_revno
 {
 	my ($proj, $branch) = @_;
 
-	get_log(_project_path($proj, 'branch', $branch), { BRANCH_ONLY => 1 });
+	get_log(_project_path($proj, 'branch', $branch), { BRANCH_ONLY => 1, VERBOSE => 0 });
 	return log_field(-1, 'rev');									# -1 meaning the last log, which is the earliest one
 }
 
@@ -1361,11 +1494,11 @@ sub prev_merge_point
 		# try looking for a project-wide merge point
 		if ($to_branch eq 'TRUNK')
 		{
-			get_log(_project_path($proj));
+			get_log(_project_path($proj), { VERBOSE => 0 });
 		}
 		else
 		{
-			get_log(_project_path($proj, 'branch', $to_branch), { BRANCH_ONLY => 1 });
+			get_log(_project_path($proj, 'branch', $to_branch), { BRANCH_ONLY => 1, VERBOSE => 0 });
 		}
 		$message = find_log($merge_commit, 'message', $from_msg) || '';
 	}
@@ -1374,7 +1507,7 @@ sub prev_merge_point
 		# find prev merge point for each file/dir, and make sure they're all the same
 		foreach my $file (@files)
 		{
-			get_log($file, { BRANCH_ONLY => ($to_branch ne 'TRUNK') });
+			get_log($file, { BRANCH_ONLY => ($to_branch ne 'TRUNK'), VERBOSE => 0 });
 			my $msg = find_log($merge_commit, 'message', $from_msg) || '';
 			print STDERR "looking for previous merge point on $file, found $msg\n" if DEBUG >= 4;
 
@@ -1448,19 +1581,33 @@ sub get_diffs
 sub get_log
 {
 	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
-	my ($file) = @_;
+	my ($file, $number) = @_;
+	print STDERR "get_log: args are $file, $number, ", Data::Dumper->Dump( [$opts], [qw<$opts>] ) if DEBUG >= 3;
 
 	# it's unlikely to retrieve logs for more than one file, but it is possible, so be safe
 	@log_cache = ();
 
+	# have to have verbose to get filenames modified, but caller might not need that
+	# so set it by default, but not if it's set already
+	$opts->{VERBOSE} = 1 unless exists $opts->{VERBOSE};
+
 	my $fh = _execute_and_get_output("log", $file, $opts);
 	while ( <$fh> )
 	{
+		# if we were passed a number of logs to retrieve and we've retrieved that many, we're done
+		# (you may think this should be >=, but you'd be wrong)
+		last if $number and @log_cache > $number;
+
+		print STDERR "<log output>:$_" if DEBUG >= 5;
 		_interpret_log_output;
 	}
 	close($fh);
 
-	print STDERR Dumper(\@log_cache) if DEBUG >= 3;
+	# generally, the loop goes to far and you end up with one extra revision log which doesn't have a message
+	# so get rid of that if it exists
+	pop @log_cache unless $log_cache[-1]->{message};
+
+	print STDERR Data::Dumper->Dump( [\@log_cache], [qw<@log_cache>] ) if DEBUG >= 4;
 }
 
 
@@ -1505,7 +1652,7 @@ sub log_we_created
 	{
 		return log_lines($proj, 0);
 	}
-	
+
 	return undef;
 }
 
@@ -1597,7 +1744,7 @@ sub restore_backup_files
 			}
 		}
 		move("$file$opts->{'ext'}", $file);
-	} 
+	}
 }
 
 
@@ -1914,7 +2061,7 @@ sub commit_files
 			# however, in a remove, we have to do things totally differently because _all_ the files are gone
 			unless (exists $opts->{DEL})
 			{
-				get_log($files[-1]);
+				get_log($files[-1], 1);
 			}
 			else
 			{
@@ -1922,7 +2069,7 @@ sub commit_files
 				# get the server path for a file (any file will do)
 				# then take away the basename so that we're looking at the log for the directory the file was removed from
 				print STDERR "getting log for ", _server_path(dirname($files[0])), "\n" if DEBUG >= 2;
-				get_log(_server_path(dirname($files[0])));
+				get_log(_server_path(dirname($files[0])), 1);
 			}
 			my $log_message = log_we_created($proj);
 
