@@ -478,7 +478,7 @@ sub _interpret_svn_status_output
 	}
 	elsif ($status eq 'M' and substr($_, 7, 1) eq '*')
 	{
-		return ($file, 'mod_outdated');
+		return ($file, 'modified+outdated');
 	}
 	elsif (substr($_, 7, 1) eq '*')
 	{
@@ -940,6 +940,14 @@ sub _file_hash
 }
 
 
+sub _status_match
+{
+	my ($file_status, $to_match) = @_;
+
+	return $file_status =~ /\b$to_match\b/;
+}
+
+
 sub _log_format
 {
 	my ($log, $time_fmt, $log_fmt, @fields) = @_;
@@ -1302,7 +1310,7 @@ sub outdated_by_vc
 	cache_file_status($file) unless exists $status_cache{$file};
 	print STDERR "file status for $file is $status_cache{$file}\n" if DEBUG >= 3;
 
-	return ($status_cache{$file} eq 'outdated' or $status_cache{$file} eq 'mod_outdated');
+	return (_status_match($status_cache{$file}, 'outdated'));
 }
 
 
@@ -1317,8 +1325,8 @@ sub modified_from_vc
 	# for this function, we'll consider 'unknown' to be modified
 	# (for files to be added for the first time)
 	# call exists_in_vc() first if you don't like that
-	return ($status_cache{$file} eq 'modified' or $status_cache{$file} eq 'mod_outdated'
-			or $status_cache{$file} eq 'conflict' or $status_cache{$file} eq 'unknown');
+	return (_status_match($status_cache{$file}, 'modified') or _status_match($status_cache{$file}, 'conflict')
+			or _status_match($status_cache{$file}, 'unknown'));
 }
 
 
@@ -1330,8 +1338,7 @@ sub get_all_with_status
 
 	# return all files with the requested status
 	# that also begin with the requested prefix (usually a dirname)
-	return grep { $status_cache{$_} eq $status and /^\Q$prefix\E/ }
-			keys %status_cache;
+	return grep { _status_match($status_cache{$_}, $status) and /^\Q$prefix\E/ } keys %status_cache;
 }
 
 
@@ -1812,7 +1819,7 @@ sub print_status
 							to_fix		=>	"vsync",
 							is_error	=>	0,
 						},
-		'mod_outdated'=>{
+		'modified+outdated'=>{
 							printif		=>	ALWAYS,
 							comment		=>	"outdated and modified!",
 							to_fix		=>	"vsync then vcommit",
