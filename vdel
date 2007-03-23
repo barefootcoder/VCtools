@@ -15,7 +15,7 @@ use VCtools::Common;
 # OPTIONS AND ENVIRONMENT VARS
 #################################
 
-#VCtools::switch('recursive', 'r', 'operate recursively');
+VCtools::switch('recursive', 'r', 'operate recursively');
 VCtools::switch('force', 'f', "don't ask any questions");
 VCtools::args('files', 'list', 'file(s) (or directory/ies) to remove from VC');
 VCtools::getopts();
