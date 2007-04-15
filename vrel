@@ -1,5 +1,22 @@
 #! /usr/bin/perl
 
+###########################################################################
+#
+# vrel
+#
+###########################################################################
+#
+# This command releases files to production based on information in the config file (typically
+# /usr/local/etc/VCtools.conf).  Files must be committed before they can be released.
+#
+# #########################################################################
+#
+# All the code herein is released under the Artistic License
+#		( http://www.perl.com/language/misc/Artistic.html )
+# Copyright (c) 2003-2007 Barefoot Software, Copyright (c) 2004-2007 ThinkGeek
+#
+###########################################################################
+
 use strict;
 use warnings;
 
@@ -65,10 +82,8 @@ if (not VCtools::determine() and grep { -d } @files)
 }
 
 # need a valid release method
-our $rmethod = VCtools::get_proj_directive($proj, 'ReleaseMethod',
-		'<none specified>');
-VCtools::fatal_error("unknown release method $rmethod")
-		unless exists $dispatch->{$rmethod};
+our $rmethod = VCtools::get_proj_directive($proj, 'ReleaseMethod', '<none specified>');
+VCtools::fatal_error("unknown release method $rmethod") unless exists $dispatch->{$rmethod};
 
 unless (VCtools::determine())
 {

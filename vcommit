@@ -1,5 +1,22 @@
 #! /usr/bin/perl
 
+###########################################################################
+#
+# vcommit
+#
+###########################################################################
+#
+# This command commits changes to the repository.  It is a fairly thin wrapper around the VC's checkin or commit
+# command, although it provides some extra functionality as well.
+#
+# #########################################################################
+#
+# All the code herein is released under the Artistic License
+#		( http://www.perl.com/language/misc/Artistic.html )
+# Copyright (c) 2000-2007 Barefoot Software, Copyright (c) 2004-2007 ThinkGeek
+#
+###########################################################################
+
 use strict;
 use warnings;
 
