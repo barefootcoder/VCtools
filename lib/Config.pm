@@ -12,7 +12,7 @@
 #
 # All the code herein is released under the Artistic License
 #		( http://www.perl.com/language/misc/Artistic.html )
-# Copyright (c) 1999-2003 Barefoot Software, Copyright (c) 2004 ThinkGeek
+# Copyright (c) 1999-2007 Barefoot Software, Copyright (c) 2004-2007 ThinkGeek
 #
 ###########################################################################
 
@@ -23,8 +23,10 @@ package VCtools;
 use strict;
 use warnings;
 
+use Data::Dumper;
 use File::HomeDir;
-use Config::General;
+use Storable qw<dclone>;
+use Config::General qw<ParseConfig>;
 
 use VCtools::Base;
 use VCtools::Args;
@@ -38,12 +40,12 @@ our $config;
 
 
 # suck in configuration file
-fatal_error("required environment variable VCTOOLS_CONFIG is not set", 3)
-		unless exists $ENV{VCTOOLS_CONFIG};
-$config = { ParseConfig($ENV{VCTOOLS_CONFIG}) };
+fatal_error("required environment variable VCTOOLS_CONFIG is not set", 3) unless exists $ENV{VCTOOLS_CONFIG};
+my %_save_config = ParseConfig($ENV{VCTOOLS_CONFIG});
+$config = dclone(\%_save_config);
 _expand_directives($config);
 
-print Data::Dumper->Dump( [$config], [qw<$config>] ) if DEBUG >= 3;
+print STDERR Data::Dumper->Dump( [$config], [qw<$config>] ) if DEBUG >= 3;
 
 
 ###########################
@@ -84,7 +86,7 @@ sub _expand_directives
 		elsif ( /Dir$/ )
 		{
 			# $~ thoughtfully provided by File::HomeDir
-			$node->{$_} =~ s@^~(.*?)/@$~{$1}/@;
+			$node->{$_} =~ s@^~(.*?)/@$~{$1 ? $1 : $VCtools::PROJ_USER}/@;
 			$node->{$_} =~ s/\$\{?(\w+)\}?/$ENV{$1}/;
 		}
 		elsif ( /Regex$/ )
@@ -102,6 +104,17 @@ sub _expand_directives
 ###########################
 # Subroutines:
 ###########################
+
+
+# sort of a "semi-private" sub:
+# this should really only be called by the VCtools::Config module
+sub re_expand_directives
+{
+	print STDERR Dumper(\%_save_config) if DEBUG >= 3;
+
+	$config = dclone(\%_save_config);
+	_expand_directives($config);
+}
 
 
 sub get_proj_directive
