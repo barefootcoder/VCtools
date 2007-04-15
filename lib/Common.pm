@@ -12,7 +12,7 @@
 #
 # All the code herein is released under the Artistic License
 #		( http://www.perl.com/language/misc/Artistic.html )
-# Copyright (c) 1999-2003 Barefoot Software, Copyright (c) 2004 ThinkGeek
+# Copyright (c) 1999-2007 Barefoot Software, Copyright (c) 2004-2007 ThinkGeek
 #
 ###########################################################################
 
@@ -185,8 +185,7 @@ sub _project_path
 		branch	=>	'',
 		tag		=>	'',
 	);
-	die("_project_path: unknown path type $which")
-			unless exists $subdirs{$which};
+	die("_project_path: unknown path type $which") unless exists $subdirs{$which};
 
 	my $branch_policy = get_proj_directive($proj, 'BranchPolicy', 'NONE');
 
