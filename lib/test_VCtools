@@ -1,46 +1,60 @@
-#! /usr/local/bin/perl -w
+#! /usr/local/bin/perl
 
 use strict;
+use warnings;
 
-use Geek::Dev::Debug(1);
+use VCtools::Base(DEBUG=>1);
+use VCtools::Args;
+use VCtools::Common;
 
-use VCtools::common;
 
-
-if (defined $ARGV[0] and $ARGV[0] eq "-h")		# avoid infinite loop, please
+my @args = @ARGV;
+if ($ARGV[0])							# avoid infinite loop, please
 {
-	VCtools::process_args();
+	VCtools::getopts();
+	exit unless $args[0] eq '-u';		# only go further if we're testing -u
 }
 else
 {
-	open(U, "././$0 -h 2>&1 |") or die("can't run myself");
+	END { unlink 'catch'; }
+
+	# test -h switch
+	open(U, "././$0 -h 2>/dev/null |") or die("can't run myself");
 	my $stamp = time;
+	my $found_verbose_usage = 0;
 	while ( <U> )
 	{
 		chomp;
-		system("echo $stamp: $_ >>catch");
+		system("echo '$stamp: $_' >>catch");
 		if ($. == 1)
 		{
 			die("didn't get expected usage message") unless /^usage/;
 			die("not trimming \$0") unless /: (.)/ and $1 ne ".";
 		}
-		if ($. == 2)
-		{
-			die("not printing usage for -v switch") unless /-v : verbose/;
-		}
+
+		$found_verbose_usage = 1 if /-v[\s:]*verbose/;
 	}
-	die("never got enough lines to check") unless $. >= 2;
+	die("not printing usage for -v switch") unless $found_verbose_usage;
 	close(U);
+
+	# test -u switch
+	#system("$0 -u jon") and die("-u test failed");
 }
 
 
+
+print STDERR "I'm about to call awk now\n" if DEBUG >= 5;
 my $proper_working_dir = qx<awk -F= '/^PersonalDir/ { print \$2 }' /usr/local/etc/VCtools/VCtools.conf>;
+$proper_working_dir =~ s/~/~$args[1]/ if $args[0] and $args[0] eq '-u';
+print STDERR "I'm about to chdir/pwd now\n" if DEBUG >= 5;
 $proper_working_dir = qx<csh -c "cd $proper_working_dir ; pwd">;
 chomp $proper_working_dir;
+print STDERR "I think proper working dir should be $proper_working_dir\n" if DEBUG >= 2;
 
-die("can't figure out what WORKING_DIR is supposed to be (I thought it "
-		. "would be $proper_working_dir, but it was " . VCtools::WORKING_DIR)
-		unless VCtools::WORKING_DIR eq $proper_working_dir;
+die("can't figure out what WORKING_DIR is supposed to be (I thought it would be $proper_working_dir, but it was "
+		. VCtools::WORKING_DIR) unless VCtools::WORKING_DIR eq $proper_working_dir;
+
+exit if $args[0] and $args[0] eq '-u';			# no need to go further if we're testing -u
 
 
 print "ALL TESTS PASSED\n";
