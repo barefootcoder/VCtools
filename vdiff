@@ -1,5 +1,23 @@
 #! /usr/bin/perl
 
+###########################################################################
+#
+# vdiff
+#
+###########################################################################
+#
+# This command calls the diff command of the VC and stores the result in a temporary file.  It automatically
+# pages the result, and by using a temp file it insures that the VC will not lock the dir while you
+# languorously peruse the results.
+#
+# #########################################################################
+#
+# All the code herein is released under the Artistic License
+#		( http://www.perl.com/language/misc/Artistic.html )
+# Copyright (c) 2001-2007 Barefoot Software, Copyright (c) 2004-2007 ThinkGeek
+#
+###########################################################################
+
 use strict;
 use warnings;
 
@@ -12,6 +30,7 @@ use VCtools::Common;
 # OPTIONS AND ENVIRONMENT VARS
 #################################
 
+VCtools::switch('revision', 'V', 'compare working copy to this revision (default is HEAD)', 'revno');
 VCtools::switch('blanks', 'b', 'ignore differences in amounts of whitespace');
 VCtools::args('file', 'single', 'file to show diffs of');
 VCtools::getopts();
@@ -31,4 +50,6 @@ VCtools::verify_files_and_group($file);
 #################################
 
 # execute diff and page it out to STDOUT
-VCtools::page_output('.vcdiff', VCtools::get_diffs($file, { IGNORE_BLANKS => VCtools::blanks() }));
+my $opts = { IGNORE_BLANKS => VCtools::blanks() };
+$opts->{'REVNO'} = VCtools::revision() if VCtools::revision();
+VCtools::page_output('.vcdiff', VCtools::get_diffs($file, $opts));
