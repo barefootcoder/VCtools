@@ -173,8 +173,15 @@ sub _project_path
 	# if no which specified, assume trunk
 	$which ||= 'trunk';
 
-	my $root = rootpath() || get_proj_directive($proj, 'RootPath') || $vcroot;
-	print STDERR "project_path thinks root is $root\n" if DEBUG >= 3;
+	my $projpath = get_proj_directive($proj, 'ProjectPath');
+	unless ($projpath)
+	{
+		# below, rootpath() is the -R argument passed in, if any
+		my $root = rootpath() || get_proj_directive($proj, 'RootPath') || $vcroot;
+		print STDERR "project_path thinks root is $root\n" if DEBUG >= 3;
+
+		$projpath = $root . "/" . $proj;
+	}
 
 	my %subdirs =
 	(
@@ -212,12 +219,12 @@ sub _project_path
 			if $subdirs{$which} eq '' and $which ne 'trunk' and $which ne 'root';
 	print STDERR "project_path thinks which dir is $subdirs{$which}\n" if DEBUG >= 3;
 
-	my $projpath = $root . "/" . $proj . $subdirs{$which};
-	$projpath .= "/$subname" if $subname;
-
 	# while we're here, do an auth check for this server
 	# (most stuff will fail, possibly silently and/or crashingly, if there's no auth for the server)
-	auth_check("$root/$proj");
+	auth_check("$projpath");
+
+	$projpath .= $subdirs{$which};
+	$projpath .= "/$subname" if $subname;
 
 	return $projpath;
 }
