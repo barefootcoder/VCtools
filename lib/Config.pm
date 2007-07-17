@@ -143,10 +143,10 @@ sub release_path
 	my ($real_file) = @_;
 
 	my ($proj, $path, $file) = parse_vc_file($real_file);
+	print STDERR "release_path: arg $real_file turned into proj $proj, path $path, file $file\n" if DEBUG >= 4;
 
 	my $rpaths = $config->{Project}->{$proj}->{ReleasePaths};
-	fatal_error("no release path(s) specified for this project")
-			unless $rpaths;
+	fatal_error("no release path(s) specified for this project") unless $rpaths;
 
 	my $rpath = '';
 	foreach (keys %$rpaths)

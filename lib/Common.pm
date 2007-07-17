@@ -83,17 +83,15 @@ END
 
 sub _really_realpath
 {
-	# ah, if only Cwd::realpath actually worked as advertised ....
-	# but, since it doesn't, here we have this
-	# the problem is that realpath seems to believe that files
-	# (as opposed to directories) aren't paths, and it chokes on them
-	# thus, the algorithm is to break it up into dir / file (using File::Spec routines),
+	# ah, if only Cwd::realpath actually worked as advertised .... but, since it doesn't, here we have this.
+	# the problem is that realpath seems to believe that files (as opposed to directories) aren't paths, and
+	# it chokes on them.  thus, the algorithm is to break it up into dir / file (using File::Spec routines),
 	# then realpath() the dir, then put it all back together again.  yuck.
 	my ($path) = @_;
 
 	my ($vol, $dir, $file) = File::Spec->splitpath(File::Spec->rel2abs($path));
-	print STDERR "(catpath returns ", File::Spec->catpath($vol, $dir), ") "
-			if DEBUG >= 4;
+	print STDERR "(splitpath returns vol $vol, dir $dir, file $file) " if DEBUG >= 5;
+	print STDERR "(catpath returns ", File::Spec->catpath($vol, $dir), ") " if DEBUG >= 4;
 	my $realpath = realpath(File::Spec->catpath($vol, $dir));
 	return File::Spec->catfile($realpath, $file);
 }
@@ -468,7 +466,7 @@ sub _interpret_svn_status_output
 
 	return wantarray ? () : undef unless length > 40;
 
-	my $file = substr($_, 40);
+	my $file = (split(' ', substr($_, 9)))[3];
 	print STDERR "interpreting status output: file is <$file>\n" if DEBUG >= 4;
 	# if we're not going to return the status, may as well not bother to figure it out
 	return $file unless wantarray;
