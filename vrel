@@ -56,6 +56,7 @@ our $dispatch =
 #################################
 
 VCtools::switch('info_only', 'I', 'only show release information');
+VCtools::switch('force', 'f', "release files even if not checked in (doesn't work with -d) /dangerous!/");
 VCtools::switch('determine', 'd', 'determine (recursively) which files to release (only if released previously)');
 VCtools::args('files', 'optlist', 'file(s) to release (with -d defaults to . ; without -d may not be omitted)');
 VCtools::getopts();
@@ -96,7 +97,31 @@ unless (VCtools::determine())
 	# should exactly == total number of files
 	unless (@files == VCtools::get_all_with_status('nothing'))
 	{
-		VCtools::fatal_error("not all files are properly checked in");
+		if (VCtools::force())
+		{
+			my %nothings = map { $_ => 1 } VCtools::get_all_with_status('nothing');
+			foreach (@files)
+			{
+				next if exists $nothings{$_};
+
+				if (VCtools::modified_from_vc($_))
+				{
+					VCtools::prompt_to_continue("File $_ is not checked in!");
+				}
+				elsif (VCtools::outdated_by_vc($_))
+				{
+					VCtools::prompt_to_continue("File $_ has a newer version in VC!");
+				}
+				else
+				{
+					VCtools::fatal_error("can't figure out what's wrong with file $_");
+				}
+			}
+		}
+		else
+		{
+			VCtools::fatal_error("not all files are properly checked in");
+		}
 	}
 
 =not_working_with_svn_yet
