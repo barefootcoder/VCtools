@@ -41,10 +41,14 @@ use VCtools::Config;
 
 
 # change below with the -R switch
-#our $vcroot = $ENV{CVSROOT};							# for CVS
-our $vcroot = $ENV{SVNROOT};							# for Subversion
-	# actually, I don't really think Subversion has anything like this,
-	# but we'll leave it here to keep from rehacking everything
+# or, better yet, use a DefaultRootPath in your VCtools.conf
+our $vcroot = $ENV{CVSROOT};							# for CVS; Subversion doesn't really have an equivalent concept
+
+# current project (set by _set_project())
+our $PROJ;
+
+# function pointers for VC-specific routines
+our %vc_func;
 
 # for internal use only
 my (%lockers_cache, %status_cache, %info_cache, @log_cache);
@@ -124,13 +128,58 @@ sub _file_dest
 }
 
 
+sub _set_project
+{
+	($PROJ) = @_;
+
+	# choose the proper routines based on whether it's CVS or Svn
+	my $vctype = get_proj_directive($PROJ, 'VCSystem') || 'svn';		# svn is default for historical reasons
+	if ($vctype eq 'cvs')
+	{
+
+		%vc_func =
+		(
+			auth_check		=>	\&_cvs_auth_check,
+			status_output	=>	\&_interpret_cvs_status_output,
+			list_output		=>	\&_interpret_cvs_status_output,
+			info_output		=>	\&_interpret_cvs_info_output,
+			update_output	=>	\&_interpret_cvs_update_output,
+			revert_output	=>	\&_interpret_cvs_revert_output,
+			log_output		=>	\&_interpret_cvs_log_output,
+			collect_dirs	=>	\&_collect_cvs_dirs,
+			make_command	=>	\&_make_cvs_command,
+		);
+	}
+	elsif ($vctype eq 'svn')
+	{
+
+		%vc_func =
+		(
+			auth_check		=>	\&_svn_auth_check,
+			status_output	=>	\&_interpret_svn_status_output,
+			list_output		=>	\&_interpret_svn_status_output,			# because we're using svn status instead of svn list
+			info_output		=>	\&_interpret_svn_info_output,
+			update_output	=>	\&_interpret_svn_update_output,
+			revert_output	=>	\&_interpret_svn_revert_output,
+			log_output		=>	\&_interpret_svn_log_output,
+			collect_dirs	=>	sub { return () },						# Subversion doesn't need this CVS hack
+			make_command	=>	\&_make_svn_command,
+		);
+	}
+	else
+	{
+		fatal_error("unknown version control system $vctype specified");
+	}
+}
+
+
 # never implemented for CVS, but probably wouldn't be very hard
 # (check ~/.cvslogin, if not exists, call cvs login)
 sub _svn_auth_check
 {
 	my ($rootpath) = @_;
 
-	print STDERR "auth_check: going to try to generate auth using $rootpath\n" if DEBUG >= 3;
+	print STDERR "auth_check(svn): going to try to generate auth using $rootpath\n" if DEBUG >= 3;
 
 	# a short, simple log will ask the password question, if necessary
 	# we'll throw away the output, but we can't redirect STDERR or we'd lose the password and certificate prompts
@@ -183,7 +232,7 @@ sub _project_path
 
 	my %subdirs =
 	(
-		root	=>	'',								# this always remains blank, regardless of BranchPolicy
+		root	=>	'',													# this is always blank, regardless of BranchPolicy
 		trunk	=>	'',
 		branch	=>	'',
 		tag		=>	'',
@@ -219,7 +268,7 @@ sub _project_path
 
 	# while we're here, do an auth check for this server
 	# (most stuff will fail, possibly silently and/or crashingly, if there's no auth for the server)
-	auth_check("$projpath");
+	$vc_func{'auth_check'}->("$projpath");
 
 	$projpath .= $subdirs{$which};
 	$projpath .= "/$subname" if $subname;
@@ -261,9 +310,8 @@ sub _server_path
 # pathname from _its_ POV, and this strips off the leading crap (which usually corresponds roughly--but not
 # always exactly--to the rootpath) and returns you the path relative to the TLD of the project, an indicator
 # of whether it's a trunk, branch, or tag path, and (if a branch or tag) which branch or tag it's in.  The
-# reason it doesn't return you the project is because it doesn't determine the project from the name (it just
-# calls current_project()), and you could call that yourself if you liked.  We don't want to imply that we're
-# figuring out something cool.
+# reason it doesn't return you the project is because it doesn't try to determine the project from the name
+# (it just trusts $PROJ).  We don't want to imply that we're figuring out something cool.
 BEGIN
 {
 	my ($trunk_regex, $branch_regex, $tag_regex);
@@ -282,7 +330,7 @@ BEGIN
 		if (not $trunk_regex)
 		{
 			print STDERR "trying to build trunk reg ex\n" if DEBUG >= 5;
-			my $trunkpath = _project_path(current_project(), 'trunk') . '/';
+			my $trunkpath = _project_path($PROJ, 'trunk') . '/';
 			while ($trunkpath)
 			{
 				print STDERR "trying trunkpath $trunkpath\n" if DEBUG >= 4;
@@ -310,7 +358,7 @@ BEGIN
 		if (not $branch_regex)
 		{
 			print STDERR "trying to build branch reg ex\n" if DEBUG >= 5;
-			my $branchpath = _project_path(current_project(), 'branch') . '/';
+			my $branchpath = _project_path($PROJ, 'branch') . '/';
 			while ($branchpath)
 			{
 				if ( $nativepath =~ s{^\Q$branchpath\E(.*?)/}{} )
@@ -337,7 +385,7 @@ BEGIN
 		if (not $tag_regex)
 		{
 			print STDERR "trying to build tag reg ex\n" if DEBUG >= 5;
-			my $tagpath = _project_path(current_project(), 'tag') . '/';
+			my $tagpath = _project_path($PROJ, 'tag') . '/';
 			while ($tagpath)
 			{
 				if ( $nativepath =~ s{^\Q$tagpath\E(.*?)/}{} )
@@ -413,46 +461,79 @@ sub _interpret_status_output
 	# ditch newline
 	chomp;
 
-	# pass through to Subversion ATM
-	# could be changed back to CVS (theoretically)
-	&_interpret_svn_status_output
+	# this routine shouldn't use args; just process the line in $_
+	$vc_func{'status_output'}->();
 }
 
 sub _interpret_cvs_status_output
 {
-	# this was never actually originally implemented
-	# below is a sort of wild-ass guess
-	# test the shit out of this if you use it
+	# safely ignore these
+	if ( /^retrieving revision/ )
+	{
+		return wantarray ? () : undef;
+	}
+	# also ignore these (not relevant to status)
+	elsif ( /^Merging differences between/ or /rcsmerge: warning: conflicts during merge/
+			or /cvs update: conflicts found in/ )
+	{
+		return wantarray ? () : undef;
+	}
+	# as a special case, a file that has been removed from VC will look like this:
+	elsif ( /cvs update: (.*) is no longer in the repository/ )
+	{
+		return wantarray ? ($1, 'outdated') : $1;
+	}
+	# second special case: directories often look like this:
+	elsif ( /cvs update: New directory `(.*)' -- ignored/ )
+	{
+		# although I really really despise doing this, I think we have to trust that CVS knows what it's doing
+		# here ... I know, I know, that's laughable; and yet I can't find any cases where the dir really
+		# shouldn't just be ignored.
+		return wantarray ? () : undef;
+	}
+	# third special case: RCS files that have wandered into your main working copy area look like this:
+	elsif ( m{RCS file: /(.*)} )
+	{
+		return wantarray ? ($1, 'unknown') : $1;
+	}
 
 	my $file = substr($_, 2);
-	# if it's not in our cache hash (haha!), it's probably not a filename
-	# at all (status output can include lots o' funky stuff)
-	# NOTE!!! the above statement was found to be wildly inaccurate.
-	# this was fixed for Subversion, but not CVS (yet).  caveat codor.
-	if (exists $status_cache{$file})
+	print STDERR "interpreting status output: file is <$file>\n" if DEBUG >= 4;
+	# if we're not going to return the status, may as well not bother to figure it out
+	return $file unless wantarray;
+
+	my $status = substr($_, 0, 1);
+	if ($status eq 'M' or $status eq 'A' or $status eq 'R')
 	{
-		my $status = substr($_, 0, 1);
-		if ($status eq 'M' or $status eq 'A' or $status eq 'R')
+		return ($file, 'modified');
+	}
+	elsif ($status eq 'U' or $status eq 'P')
+	{
+		return ($file, 'outdated');
+	}
+	# how do you tell if it's not outdated _or_ modified?
+	elsif ($status eq 'C')
+	{
+		return ($file, 'conflict');
+	}
+	elsif ($status eq '?')
+	{
+		# CVS is completely moronic about directories, so let's try to make up for that.
+		# if the file is a directory which contains a CVS/ let's assume it's fine.
+		# if the file is a directory which doesn't contain a CVS/ we'll assume it's new (i.e. unknown)
+		# if not a directory, it's definitely unknown
+		if (-d $file)
 		{
-			$status_cache{$file} = 'modified';
-		}
-		elsif ($status eq 'U' or $status eq 'P')
-		{
-			$status_cache{$file} = 'outdated';
-		}
-		# how do you tell if it's not outdated _or_ modified?
-		elsif ($status eq 'C')
-		{
-			$status_cache{$file} = 'conflict';
-		}
-		elsif ($status eq '?')
-		{
-			$status_cache{$file} = 'unknown';
+			return ($file, -d "$file/CVS" ? 'nothing' : 'unknown');
 		}
 		else
 		{
-			fatal_error("can't figure out status line: $_", 3);
+			return ($file, 'unknown');
 		}
+	}
+	else
+	{
+		fatal_error("can't figure out status line: $_", 3);
 	}
 }
 
@@ -513,6 +594,49 @@ sub _interpret_svn_status_output
 }
 
 
+sub _interpret_list_output
+{
+	# use 1st arg, or $_ if no args
+	local $_ = $_[0] if @_;
+
+	# ditch newline
+	chomp;
+
+	# this routine shouldn't use args; just process the line in $_
+	return scalar($vc_func{'list_output'}->());							# use scalar() JIC status_output is doing double duty
+}
+
+sub _collect_cvs_dirs
+{
+	# this super hack stems from the fact that half the time CVS doesn't even know what directories it has in
+	# its tree--some dirs will be listed by things like cvs status, while others won't.  to make things like
+	# vfind --dirfind work, we're going to have to add those dirs that don't show up back in there.
+	#
+	# to do this, we're going to guess that any directory we can find that contains a CVS directory is under
+	# version control.  it ain't perfect, but it should be close enough
+	my (@files) = @_;
+	print STDERR "in _collect_cvs_dirs with args: @files\n" if DEBUG >= 4;
+
+	my @return_files;
+	foreach (@files)
+	{
+		next unless -d;
+		open(FIND, "find $_ -type d -name CVS 2>/dev/null |") or die("can't fork");
+		while ( <FIND> )
+		{
+			print STDERR "<dir collect>:$_" if DEBUG >= 5;
+
+			chomp;
+			s{/CVS$}{};
+			s{^\./}{};
+			push @return_files, $_;
+		}
+	}
+
+	return @return_files;
+}
+
+
 sub _interpret_info_output
 {
 	# use 1st arg, or $_ if no args
@@ -521,17 +645,16 @@ sub _interpret_info_output
 	# ditch newline
 	chomp;
 
-	# pass through to Subversion ATM
-	# CVS version has never been implemented
-	&_interpret_svn_info_output
+	# this routine shouldn't use args; just process the line in $_
+	$vc_func{'info_output'}->();
 }
 
-my $branch_regex;											# cache this for faster lookups
+my $branch_regex;														# cache this for faster lookups
 sub _interpret_svn_info_output
 {
 	my $info = {};
 	($info->{'file'}) = m{^Path:\s*(.*?)/?\s*$}m;
-	return undef unless $info->{'file'};					# this will happen if the file doesn't exist in VC
+	return undef unless $info->{'file'};								# this will happen if the file doesn't exist in VC
 
 	($info->{'rev'}) = m{^Revision:\s*(\d+)\s*$}m;
 	($info->{'server_path'}) = m{^URL:\s*(.*?)\s*$}m;
@@ -559,15 +682,14 @@ sub _interpret_update_output
 	# use 1st arg, or $_ if no args
 	local $_ = $_[0] if @_;
 
-	# pass through to Subversion ATM
-	# could be changed back to CVS (theoretically)
-	&_interpret_svn_update_output
+	# this routine shouldn't use args; just process the line in $_
+	$vc_func{'update_output'}->();
 }
 
 sub _interpret_cvs_update_output
 {
-	next if /^cvs update: Updating/;	# ignore these
-	if ( /^([UPM]) (.*)/ )				# ignore unless verbose is on
+	return if /^cvs update: Updating/;									# ignore these
+	if ( /^([UPM]) (.*)/ )												# ignore unless verbose is on
 	{
 		if (verbose())
 		{
@@ -576,51 +698,27 @@ sub _interpret_cvs_update_output
 	}
 	elsif ( /^[AR\?]/ )
 	{
-		# these indicate local adds or deletes that have never been committed
-		# or files which just aren't in VC at all
-		# Subversion won't report these (and, really, why should it? if you
-		# want that type of info, use "status", not "update")
-		# so we won't either (to keep commonality)
-		next;
+		# these indicate local adds or deletes that have never been committed or files which just aren't in VC
+		# at all.  Subversion won't report these (and, really, why should it? if you want that type of info,
+		# use "status", not "update").  so we won't either (to keep commonality).
+		return;
 	}
 	elsif ( /^C (.*)/ )
 	{
 		print "warning! conflict on file $1 (please attend to immediately)\n";
 		# this should probably email something to people as well
 	}
-	elsif ( /^RCS file:/ )
+	elsif ( /^RCS file:/ or /^retrieving revision/ or /^Merging differences/ or /already contains the differences/ )
 	{
-		# this is _probably_ a merge taking place ... we'll check the next
-		# few lines to be sure, but also save the lines in case something
-		# goes wrong and we need to put the entire output back out
-		my $save = $_;
-
-		# if it's just retrieving various revisions, it's still okay
-		do {
-			$_ = <UPD>;
-			last unless $_;
-			$save .= $_
-		} while /^retrieving revision/;
-
-		# if it's a "merging" informational message, it's still okay
-		if ( /^Merging differences/ )
+		# this is most likely a merge taking place ... just ignore them
+		return;
+	}
+	elsif ( /cvs update: (.*) is no longer in the repository/ )
+	{
+		if (verbose())
 		{
-			$save .= $_;
-			$_ = <UPD>;
-			# if it's a message that the merge is already done, it's okay
-			if ( /already contains the differences/ )
-			{
-				# and we're done ... back to outer loop
-				next UPDATE_LINE;
-			}
-
-			# everything was okay up to here, but we read one line too many
-			redo UPDATE_LINE;
+			info_msg("removed file $1");
 		}
-
-		# at this point, the output has diverged from our pattern too much
-		print STDERR $save;
-		redo UPDATE_LINE;
 	}
 	else
 	{
@@ -631,13 +729,12 @@ sub _interpret_cvs_update_output
 
 sub _interpret_svn_update_output
 {
-	return if /^At revision/;				# ignore these
-	if ( /^([ADUG]) (.*)/ )				# ignore unless verbose is on
+	return if /^At revision/;											# ignore these
+	if ( /^([ADUG]) (.*)/ )												# ignore unless verbose is on
 	{
 		if (verbose())
 		{
-			my %action = ( A => 'added', D => 'removed',
-					U => 'updated', G => 'merged' );
+			my %action = ( A => 'added', D => 'removed', U => 'updated', G => 'merged' );
 
 			info_msg("$action{$1} file $2");
 		}
@@ -662,19 +759,83 @@ sub _interpret_svn_update_output
 }
 
 
+sub _interpret_revert_output
+{
+	# use 1st arg, or $_ if no args
+	local $_ = $_[0] if @_;
+
+	# this routine shouldn't use args; just process the line in $_
+	$vc_func{'revert_output'}->();
+}
+
+my $_cvs_temp_file;
+sub _interpret_cvs_revert_output
+{
+	if ( /^\(Locally modified (.*) moved to (\.#.*)\)$/ )
+	{
+		$_cvs_temp_file = $2;
+		return undef;
+	}
+	elsif ( /^U (.*)$/ )
+	{
+		my $file = $1;
+		my ($vol, $dir) = File::Spec->splitpath($file);
+		my $temp_file = File::Spec->catpath($vol, $dir, $_cvs_temp_file);
+		unlink $temp_file;												# don't really need to leave this lying around
+		return $file;
+	}
+	else
+	{
+		fatal_error("unknown output from revert command: $_");
+	}
+}
+
+sub _interpret_svn_revert_output
+{
+	if ( / ^ Reverted \s+ '(.*)' \s* $ /x )
+	{
+		return $1;
+	}
+	else
+	{
+		fatal_error("unknown output from revert command: $_");
+	}
+}
+
+
 sub _interpret_log_output
 {
 	# use 1st arg, or $_ if no args
 	local $_ = $_[0] if @_;
 
-	# pass through to Subversion ATM
-	# could be changed back to CVS (theoretically)
-	&_interpret_svn_log_output
+	# this routine shouldn't use args; just process the line in $_
+	$vc_func{'log_output'}->();
 }
 
 sub _interpret_cvs_log_output
 {
-	# this was never done for CVS
+	# ignore the separator lines
+	return if /^-+$/ or /^=+$/;
+
+	if ( / ^ revision \s+ (\d+ (?: \.\d+)* ) /x )						# the beginning of a new revision
+	{
+		my $log = { rev => $1, message => '' };
+		push @log_cache, $log;
+	}
+	elsif ( / ^ date: \s+ (.*? \s+ .*?) ; \s+ author: \s+ (\w+) ; /x )	# second line of a new revision:
+	{																	# contains date and author
+		my $log = $log_cache[-1];
+		@$log{ qw< date author > } = (str2time($1), $2);
+	}
+	elsif (@log_cache == 0)												# this is all the useless crap at the top,
+	{																	# before the first revision; just skip it
+		return;
+	}
+	else																# everything else is, by definition,
+	{																	# part of a revision log message
+		# it must belong to the last log in the cache, so just tack it on there
+		$log_cache[-1]->{'message'} .= $_;
+	}
 }
 
 sub _interpret_svn_log_output
@@ -763,17 +924,25 @@ sub _get_lockers
 }
 
 
-sub _make_vc_command
-{
-	# pass through to Subversion ATM
-	# could be changed back to CVS (theoretically)
-	&_make_svn_command
-}
-
 sub _make_cvs_command
 {
 	my $opts = @_ && ref $_[$#_] eq "HASH" ? pop : {};
 	my ($command, @files) = @_;
+	$_ = '"' . $_ . '"' foreach @files;
+	$opts->{REVNO} ||= '';												# to avoid uninitialized warning later
+	print STDERR "_make_cvs_command($command, @files, ", Dumper($opts), ")\n" if DEBUG >= 4;
+
+	# hack for list subcommand: figure out if cvsutils is installed
+	# if it is, cvsu --find is *much* better than using cvs -n -q update for listing files
+	# (cvsutils commands don't go to the server every time)
+	# [NOTE: use "not" because system() returns 0 on success]
+	if ($command eq 'list' and not system("cvsu --help >/dev/null 2>&1"))
+	{
+		$vc_func{'list_output'} = sub { s{^\./}{}; return $_ };			# not much to interpret here
+
+		my $recursive = $opts->{DONT_RECURSE} ? '--local' : '';
+		return "cvsu $recursive --find @files ";
+	}
 
 	my (@global_options, @local_options);
 	push @global_options, "-q" unless $opts->{VERBOSE};
@@ -781,37 +950,41 @@ sub _make_cvs_command
 	push @local_options, "-b -c" if $opts->{IGNORE_BLANKS};
 	push @local_options, "-m '$opts->{MESSAGE}'" if $opts->{MESSAGE};
 	# a bit hack-ish, but functional
-	unless ($command eq 'changelog')										# changelog handles REVNO in a special way
+	unless ($command eq 'changelog')									# changelog handles REVNO in a special way
 	{
 		push @local_options, "-r $opts->{REVNO}" if $opts->{REVNO};
 	}
-	push @local_options, "-b" if $opts->{BRANCH_ONLY};						# really not sure this will work properly!!
+	push @local_options, "-b" if $opts->{BRANCH_ONLY};					# really not sure this will work properly!!
 	my $err_redirect = $opts->{IGNORE_ERRORS} ? "2>/dev/null" : "";
 
 	# command substitutions
 	my %cmd_subs =
 	(
-		# cvs status doesn't work worth a crap
-		# this is better (in general)
-		status		=>	'-n -q update',
-		# try to get cvs to get the dirs right (as best we can)
-		# and avoid the horror of sticky tags
-		update		=>	'update -d -P -A',
-		# this should work for a revert
-		revert		=>	'update -A',
-		# this is sort of right, but not quite (note that REVNO isn't really optional here)
-		changelog	=>	"admin -m$opts->{REVNO}:",
+		diff		=>	'diff -u',										# a bit prettier
+		status		=>	'-n -q update',									# cvs status doesn't work worth a crap
+																		# this is better (in general)
+		list		=>	'-n -q update',									# do list the same as we do for svn
+																		# (although thos one _does_ go out to the server)
+		# we used to use -A for updates, to try to avoid the horror of sticky tags, but unfortunately that
+		# breaks branches, so we had to take it out.  the ideal would be to have a switch that said to clear
+		# sticky tags for dates and options but leave them for branches.  ah well.
+		update		=>	'update -d -P',									# try to get the dirs right (as best we can)
+		remove		=>	'remove -f',									# need -f to actually delete files
+		revert		=>	'update -C',									# this should work for a revert
+		changelog	=>	"admin -m$opts->{REVNO}:",						# this is sort of right, but not quite
+																		# (note that REVNO isn't really optional here)
 	);
+
 	$command = $cmd_subs{$command} if exists $cmd_subs{$command};
 
-	$_ = '"' . $_ . '"' foreach @files;
-	return "cvs -r @global_options -d $vcroot $command @local_options @files $err_redirect ";
+	return "cvs @global_options -d $vcroot $command @local_options @files $err_redirect ";
 }
 
 sub _make_svn_command
 {
 	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
 	my ($command, @files) = @_;
+	$_ = '"' . $_ . '"' foreach @files;
 
 	my @options;
 	push @options, "-v" if $opts->{VERBOSE};
@@ -828,23 +1001,22 @@ sub _make_svn_command
 	push @options, "-r $opts->{REVNO}" if $opts->{REVNO};
 	push @options, "--force" if $opts->{FORCE};
 	push @options, "--stop-on-copy" if $opts->{BRANCH_ONLY};
-	push @options, "--diff-cmd diff -x -b" if $opts->{IGNORE_BLANKS};
+	push @options, "-x -b" if $opts->{IGNORE_BLANKS};
 	my $err_redirect = $opts->{IGNORE_ERRORS} ? "2>/dev/null" : "";
 
 	# command substitutions
 	my %cmd_subs =
 	(
-		# we need to check the server for outdating info
-		# also, without -v, you don't get any output for unmodified files
-		status		=>	'status -uv',
-		# for lists, this is quicker than svn list because it doesn't go out to the server
-		list		=>	'status -v',
-		# doesn't do REVNO specially, like CVS, but will still bomb spectacularly if REVNO not supplied
-		changelog	=>	'propedit svn:log --revprop',
+		status		=>	'status -uv',									# we need to check the server for outdating info
+																		# also, without -v, you don't get unmodified files
+		list		=>	'status -v',									# for lists, this is quicker than svn list
+																		# because it doesn't go out to the server
+		changelog	=>	'propedit svn:log --revprop',					# doesn't do REVNO specially, like CVS, but will
+																		# still bomb spectacularly if REVNO not supplied
 	);
+
 	$command = $cmd_subs{$command} if exists $cmd_subs{$command};
 
-	$_ = '"' . $_ . '"' foreach @files;
 	return "svn $command @options @files $err_redirect ";
 }
 
@@ -852,8 +1024,8 @@ sub _make_svn_command
 # call VC and throw output away
 sub _execute_and_discard_output
 {
-	# just pass args through to _make_vc_command
-	my $cmd = &_make_vc_command;
+	# just pass args through to appropriate make_command function
+	my $cmd = &{$vc_func{'make_command'}};
 	print STDERR "will discard output of: $cmd\n" if DEBUG >= 2;
 
 	my $err = system("$cmd >/dev/null 2>&1");
@@ -864,7 +1036,7 @@ sub _execute_and_discard_output
 		# we want to use fatal_error() to get a graceful exit in most cases,
 		# but we also need a way to be able to call this inside an eval block
 		# without exiting the entire program.  this works.  so sue us.
-		if ($^S)							# i.e., if inside an eval
+		if ($^S)														# i.e., if inside an eval
 		{
 			die("call to VC command $cmd failed with $! ($err)");
 		}
@@ -879,13 +1051,12 @@ sub _execute_and_discard_output
 # call VC and read output as if from a file
 sub _execute_and_get_output
 {
-	# just pass args through to _make_vc_command
-	my $cmd = &_make_vc_command;
+	# just pass args through to appropriate make_command function
+	my $cmd = &{$vc_func{'make_command'}};
 	print STDERR "will process output of: $cmd\n" if DEBUG >= 2;
 
-	# if user has requested us to ignore errors, _make_vc_command will have
-	# redirected STDERR off into the ether;
-	# but if they haven't, let's catch that too
+	# if user has requested us to ignore errors, the make_command function will have redirected STDERR off
+	# into the ether; but if they haven't, let's catch that too
 	$cmd .= " 2>&1" unless @_ and ref $_[-1] eq 'HASH' and $_[-1]->{IGNORE_ERRORS};
 
 	my $fh = new FileHandle("$cmd |") or fatal_error("call to cvs command $cmd failed with $!", 3);
@@ -896,13 +1067,12 @@ sub _execute_and_get_output
 # call VC and return output as one big string
 sub _execute_and_collect_output
 {
-	# just pass args through to _make_vc_command
-	my $cmd = &_make_vc_command;
+	# just pass args through to appropriate make_command function
+	my $cmd = &{$vc_func{'make_command'}};
 	print STDERR "will collect output of: $cmd\n" if DEBUG >= 2;
 
 	my $output = `$cmd`;
-	fatal_error("call to VC command $cmd failed with $!", 3)
-			unless defined $output;
+	fatal_error("call to VC command $cmd failed with $!", 3) unless defined $output;
 	return $output;
 }
 
@@ -910,8 +1080,8 @@ sub _execute_and_collect_output
 # call VC and let it do whatever the hell it wants to
 sub _execute_normally
 {
-	# just pass args through to _make_vc_command
-	my $cmd = &_make_vc_command;
+	# just pass args through to appropriate make_command function
+	my $cmd = &{$vc_func{'make_command'}};
 	print STDERR "will execute: $cmd\n" if DEBUG >= 2;
 
 	my $err = system($cmd);
@@ -960,13 +1130,20 @@ sub _log_format
 	# set up 'filemods' field based on files modified
 	if (verbose())
 	{
-		$log->{'filemods'} = join(' ', @{$log->{'files'}});
+		$log->{'filemods'} = $log->{'files'} ? join(' ', @{$log->{'files'}}) : '';
 	}
 	else
 	{
-		my $count = scalar(@{$log->{files}});
-		$log->{'filemods'} = $log->{files}->[0];
-		$log->{'filemods'} .= " (" . ($count - 1) . " more)" if $count > 1;
+		if ($log->{'files'})
+		{
+			my $count = scalar(@{$log->{'files'}});
+			$log->{'filemods'} = $log->{'files'}->[0];
+			$log->{'filemods'} .= " (" . ($count - 1) . " more)" if $count > 1;
+		}
+		else
+		{
+			$log->{'filemods'} = '';
+		}
 	}
 
 	print STDERR "_log_format: fields are ", join(' // ', @$log{@fields}) if DEBUG >= 4;
@@ -1015,7 +1192,7 @@ sub page_output
 	# view the diff
 	my $pager = $ENV{PAGER} || "less";
 	open(PAGER, "| $pager") or die("can't open pager");
-	print PAGER <$tmpfile>;			# dumps the whole file into PAGER
+	print PAGER <$tmpfile>;												# dumps the whole file into PAGER
 	close(PAGER);
 }
 
@@ -1023,24 +1200,6 @@ sub page_output
 ###########################
 # General Project Subroutines
 ###########################
-
-
-sub auth_check
-{
-	# pass straight through to appropriate VC system
-	&_svn_auth_check;
-}
-
-
-sub current_project
-{
-	# you probably ought to call check_common_errors() instead of this function
-	# that will verify that the VCTOOLS_SHELL var is properly set
-	# and then call this for you
-
-	$ENV{VCTOOLS_SHELL} =~ /proj:(\w+)/;
-	return $1;
-}
 
 
 sub project_group
@@ -1061,7 +1220,8 @@ sub project_group
 sub verify_gid
 {
 	my ($proj) = @_;
-												# to keep % in vi sane: (
+
+	# to keep % in vi sane:       (
 	my $current_group = getgrgid $);
 	my $proj_group = project_group($proj);
 	fatal_error("cannot perform this operation unless "
@@ -1076,8 +1236,10 @@ sub check_common_errors
 
 	if (exists $ENV{VCTOOLS_SHELL})
 	{
-		if (not ($project and current_project() eq $project))
+		$ENV{VCTOOLS_SHELL} =~ /proj:([\w.-]+)/;
+		if (not $project or $1 ne $project)
 		{
+			print STDERR "env: $1, dir: $project\n" if DEBUG >= 3;
 			prompt_to_continue("the project derived from your current dir",
 					"doesn't seem to match what your environment var says");
 		}
@@ -1087,8 +1249,11 @@ sub check_common_errors
 		warning("Warning! not running under vcshell!");
 	}
 
-	# in case someone needs to know what the project is
-	return $project;
+	# set our project (this will also set up routines for whichever VC the project is registered under)
+	_set_project($project);
+
+	# this is deprecated! internal routines should use $PROJ and not rely on client code to supply the project
+	return $PROJ;
 }
 
 
@@ -1099,7 +1264,7 @@ sub verify_files_and_group
 	# all files must exist, be readable, be in the working dir,
 	# and all belong to the same project (preferably the one we're in)
 
-	my $project = check_common_errors();
+	check_common_errors();
 
 	my $file_project;
 	foreach my $file (@files)
@@ -1125,22 +1290,22 @@ sub verify_files_and_group
 	# having the files be in a different project than the current directory
 	# and/or the environment var isn't necessarily fatal, but we should
 	# mention it (unless ignore errors is turned on)
-	if ($file_project ne $project)
+	if ($file_project ne $PROJ)
 	{
 		prompt_to_continue("your files are all in project $file_project",
-				"but your environment seems to refer to project $project",
-				"(if you continue, the project of the files will override)")
+					"but your environment seems to refer to project $PROJ",
+					"(if you continue, the project of the files will override)")
 				unless VCtools::ignore_errors();
 
 		# like the text says, project of the files has to win
-		$project = $file_project;
+		_set_project($file_project);
 	}
 
 	# now make sure we've got the right GID for this project
-	verify_gid($project);
+	verify_gid($PROJ);
 
-	# in case someone needs to know what the project is
-	return $project;
+	# this is deprecated! internal routines should use $PROJ and not rely on client code to supply the project
+	return $PROJ;
 }
 
 
@@ -1209,11 +1374,9 @@ sub create_branch
 
 sub cache_file_status
 {
-	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop
-			: { DONT_RECURSE => not recursive(), };
-	# have to make sure we don't ignore errors, because STDERR will contain
-	# crucial info for us under Subversion (at least)
-	# therefore, override even if client told us to ignore
+	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : { DONT_RECURSE => not recursive(), };
+	# have to make sure we don't ignore errors, because STDERR will contain crucial info for us (in both CVS
+	# and Subversion); therefore, override even if client told us to ignore
 	$opts->{IGNORE_ERRORS} = 0;
 	my (@files) = @_;
 	fatal_error("cannot cache status for non-existent files") unless @files;
@@ -1228,14 +1391,24 @@ sub cache_file_status
 		next unless $file;
 		$status_cache{$file} = $status;
 
-		# directories sometimes come in with trailing slashes, so make sure
-		# lookups for those won't fail
+		# directories sometimes come in with trailing slashes, so make sure lookups for those won't fail
 		$status_cache{"$file/"} = $status if -d $file;
 
 		# and save in case anyone's looking at our return value
 		push @statfiles, $file;
 	}
 	close($st);
+
+	# in case our VC system is too stupid to know its own directories (e.g. CVS)
+	foreach ($vc_func{'collect_dirs'}->(@files))
+	{
+		unless (exists $status_cache{"$_/"})
+		{
+			$status_cache{$_} = 'nothing';								# maybe this should be a different/special status?
+			$status_cache{"$_/"} = 'nothing';
+			push @statfiles, $_;
+		}
+	}
 
 	print STDERR Data::Dumper->Dump( [\%status_cache], [qw<%status_cache>] ) if DEBUG >= 4;
 
@@ -1245,7 +1418,7 @@ sub cache_file_status
 		my @ifiles = grep { $status_cache{$_} ne 'unknown' } @files;
 
 		my $inf = _execute_and_get_output("info", @files, $opts);
-		local ($/) = '';		# info spits out paragraphs, not lines
+		local ($/) = '';												# info spits out paragraphs, not lines
 		while ( <$inf> )
 		{
 			print STDERR "<file info>:$_" if DEBUG >= 5;
@@ -1271,7 +1444,7 @@ sub exists_in_vc
 	my ($file) = @_;
 
 	# if not cached already, go get it
-	cache_file_status($file) unless exists $status_cache{$file};
+	cache_file_status($file, { DONT_RECURSE => 1 }) unless exists $status_cache{$file};
 	print STDERR "file status for $file is $status_cache{$file}\n" if DEBUG >= 3;
 
 	return (exists $status_cache{$file} and $status_cache{$file} ne 'unknown');
@@ -1361,11 +1534,14 @@ sub get_all_files
 	while ( <$st> )
 	{
 		print STDERR "<file list>:$_" if DEBUG >= 5;
-		my $file = _interpret_status_output;
+		my $file = _interpret_list_output;
 
 		push @return_files, $file if $file;
 	}
 	close($st);
+
+	# in case our VC system is too stupid to know its own directories (e.g. CVS)
+	push @return_files, $vc_func{'collect_dirs'}->(@files);
 
 	# now we just need to sort the files we return to simulate a classic breadth-first search (like find)
 	# (it's possible that this might not be necessary, depending on the implementation of the "list" command,
@@ -1385,7 +1561,7 @@ sub get_tree
 	my $ed = _execute_and_get_output("co", $path, $dest);
 	while ( <$ed> )
 	{
-		print "get_files output: $_" if DEBUG >= 5;
+		print "get_tree output: $_" if DEBUG >= 5;
 		if (verbose())
 		{
 			if ( /^[AU]\s+(.*)$/ )
@@ -1436,25 +1612,25 @@ sub parse_vc_file
 	my $wdir = realpath(WORKING_DIR);
 
 	my ($project, $path, $file) = $fullpath =~ m@
-			^					# must match the entire path
-			$wdir				# should start with working directory
-			/					# needs to be at least one dir below
-			([^/]+)				# the next dirname is also the proj name
-			(?:					# don't want to make a backref here, just group
-				(?:				# ditto
-					/(.*)		# any other directories underneath
-				)?				# are optional
-				/([^/]+)		# get the last component separately
-			)?					# these last two things both are optional
-			$					# must match the entire path
+			^															# must match the entire path
+			$wdir														# should start with working directory
+			/															# needs to be at least one dir below
+			([^/]+)														# the next dirname is also the proj name
+			(?:															# don't want to make a backref here, just group
+				(?:														# ditto
+					/(.*)												# any other directories underneath
+				)?														# are optional
+				/([^/]+)												# get the last component separately
+			)?															# these last two things both are optional
+			$															# must match the entire path
 		@x;
 
-	if (!defined($project))		# pattern didn't match; probably doesn't
-	{							# start with WORKING_DIR
+	if (!defined($project))												# pattern didn't match; probably doesn't
+	{																	# start with WORKING_DIR
 		return wantarray ? () : undef;
 	}
 
-	$path ||= ".";				# if path is empty, this stops errors
+	$path ||= ".";														# if path is empty, this stops errors
 	# if file is empty, that should be checked separately
 
 	# in scalar context, return just project; in list context, return all parts
@@ -1479,7 +1655,7 @@ sub branch_point_revno
 	my ($proj, $branch) = @_;
 
 	get_log(_project_path($proj, 'branch', $branch), { BRANCH_ONLY => 1, VERBOSE => 0 });
-	return log_field(-1, 'rev');									# -1 meaning the last log, which is the earliest one
+	return log_field(-1, 'rev');										# -1 meaning the last log, which is the earliest one
 }
 
 
@@ -1495,7 +1671,7 @@ sub prev_merge_point
 	my $from_msg = $from_branch eq 'TRUNK' ? "from trunk" : "from branch $from_branch";
 
 	my ($project, $path) = parse_vc_file($files[0]);
-	die("file is not in the right project!") unless $proj eq $project;		# this should theoretically never happen
+	die("file is not in the right project!") unless $proj eq $project;	# this should theoretically never happen
 	if (@files == 1 and $path eq '.')
 	{
 		# doing entire working copy; this seems to be a special case for some reason (not sure why)
@@ -1612,6 +1788,8 @@ sub get_log
 	}
 	close($fh);
 
+	fatal_error("can't retrive log message(s)") unless @log_cache;
+
 	# generally, the loop goes to far and you end up with one extra revision log which doesn't have a message
 	# so get rid of that if it exists
 	pop @log_cache unless $log_cache[-1]->{message};
@@ -1704,6 +1882,28 @@ sub find_log
 ###########################
 # File Support Subroutines
 ###########################
+
+
+sub reset_timestamp
+{
+	my ($file) = @_;
+
+	get_log($file);
+	my $orig_date = log_field(0, 'date');
+	print STDERR "going to set date of $file to $orig_date\n" if DEBUG >= 2;
+	utime $orig_date, $orig_date, $file;
+}
+
+
+sub filter_file
+{
+	my ($file, $filter, $backup_ext) = @_;
+
+	move($file, "$file.$backup_ext");
+	system("cat $file.$backup_ext | $filter >$file");
+	# if the only difference is whitespace, don't bother to save the backup file
+	unlink("$file.$backup_ext") unless `diff -b $file.$backup_ext $file 2>&1`;
+}
 
 
 sub create_backup_files
@@ -1892,6 +2092,19 @@ sub print_status
 }
 
 
+sub get_files
+{
+	my (@files) = @_;
+
+	my $post_get = get_proj_directive($PROJ, 'PostGet');
+	foreach my $file (@files)
+	{
+		filter_file($file, $post_get, 'postget') if $post_get;
+		revert_timestamp($file);
+	}
+}
+
+
 sub add_files
 {
 	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
@@ -1900,9 +2113,8 @@ sub add_files
 	# for looking up files
 	my $files = _file_hash(@files);
 
-	# the process of adding may very well add files unexpectedly,
-	# if we add recursively.  so collect those filenames and return
-	# them to the client for their edification
+	# the process of adding may very well add files unexpectedly, if we add recursively.  so collect those
+	# filenames and return them to the client for their edification.
 	my @surprise_files;
 
 	my $fh = _execute_and_get_output("add", @files, $opts);
@@ -1977,6 +2189,11 @@ sub remove_files
 			fatal_error("deleted unknown file: $1") unless exists $files->{$1};
 			delete $files->{$1};
 		}
+		elsif ( /cvs remove: use 'cvs commit' to remove these files permanently/ )
+		{
+			# silly CVS message; just ignore it
+			next;
+		}
 		else
 		{
 			fatal_error("unknown output from remove command: $_");
@@ -1988,7 +2205,6 @@ sub remove_files
 }
 
 
-# this is not CVS safe
 sub revert_files
 {
 	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
@@ -2005,14 +2221,9 @@ sub revert_files
 	my $fh = _execute_and_get_output("revert", @files, $o);
 	while ( <$fh> )
 	{
-		if ( / ^ Reverted \s+ '(.*)' \s* $ /x )
-		{
-			warning("unexpectedly reverted file $1") unless exists $files->{$1};
-		}
-		else
-		{
-			fatal_error("unknown output from revert command: $_");
-		}
+		my $rfile = _interpret_revert_output;
+		next unless $rfile;
+		warning("unexpectedly reverted file $rfile") unless exists $files->{$rfile};
 	}
 	close($fh);
 }
@@ -2023,35 +2234,44 @@ sub commit_files
 	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
 	my ($proj, @files) = @_;
 
-	# if a debugging regex is specified, we need to search each file for that pattern.  if we find it,
-	# we ask the user if they're really sure they want to commit a file which apparently still has some
-	# debugging switch turned on
-	# (note: we suspend this check for straight moves.  generally the contents of those files haven't changed)
-	# (further note: obviously no point in checking for removes, since the files aren't there any more anyway)
-	# (further note: we _could_ check for merges, but some may be removes, and they shouldn't really contain
-	# debugging code unless it was previously checked in and that's what got merged ... let's just not bother)
-	if (not exists $opts->{MOVE} and not exists $opts->{DEL} and not exists $opts->{MERGE}
-			and my $debug_pattern = get_proj_directive($proj, 'DebuggingRegex'))
+	# Note: we suspend these checks for straight moves.  generally the contents of those files haven't changed
+	# Further note: obviously no point in checking for removes, since the files aren't there any more anyway
+	# Further note: we _could_ check for merges, but some may be removes, and they shouldn't really contain
+	# debugging code, and hopefully they've already been run through any pre-commit processing ... let's just
+	# not bother
+	if (not exists $opts->{MOVE} and not exists $opts->{DEL} and not exists $opts->{MERGE})
 	{
-		foreach my $file (@files)
+		# if a debugging regex is specified, we need to search each file for that pattern.  if we find it,
+		# we ask the user if they're really sure they want to commit a file which apparently still has some
+		# debugging switch turned on
+		if (my $debug_pattern = get_proj_directive($proj, 'DebuggingRegex'))
 		{
-			# this is a die() instead of a fatal_error() because you really
-			# should have already checked to make sure the file is readable
-			# (see the verify_files_and_group function)
-			open(IN, $file) or die("can't open file $file for reading");
-			while ( <IN> )
+			foreach my $file (@files)
 			{
-				if ( /$debug_pattern/ )
+				# this is a die() instead of a fatal_error() because you really
+				# should have already checked to make sure the file is readable
+				# (see the verify_files_and_group function)
+				open(IN, $file) or die("can't open file $file for reading");
+				while ( <IN> )
 				{
-					warning("$file is apparently still in debugging mode:");
-					print ">>> $_";
-					unless (yesno("Continue anyway?"))
+					if ( /$debug_pattern/ )
 					{
-						exit(1);
+						warning("$file is apparently still in debugging mode:");
+						print ">>> $_";
+						unless (yesno("Continue anyway?"))
+						{
+							exit(1);
+						}
 					}
 				}
+				close(IN);
 			}
-			close(IN);
+		}
+
+		# if a pre-commit command is specified, we need to run each file through that
+		if (my $pre_commit = get_proj_directive($proj, 'PreCommit'))
+		{
+			filter_file($_, $pre_commit, 'precommit') foreach @files;
 		}
 	}
 
@@ -2137,8 +2357,7 @@ sub update_files
 {
 	my (@files) = @_;
 
-	my $upd = _execute_and_get_output("update", @files,
-			{ DONT_RECURSE => not recursive() } );
+	my $upd = _execute_and_get_output("update", @files, { DONT_RECURSE => not recursive() } );
 	while ( <$upd> )
 	{
 		_interpret_update_output;
@@ -2211,7 +2430,7 @@ sub merge_from_branch
 		my $mrg = _execute_and_get_output("merge", $spath, $file, { DONT_RECURSE => 0, REVNO => "$from:$to" } );
 		while ( <$mrg> )
 		{
-			_interpret_update_output;							# merge and update have the same output style
+			_interpret_update_output;									# merge and update have the same output style
 		}
 		close($mrg);
 	}
