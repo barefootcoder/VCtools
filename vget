@@ -1,64 +1,76 @@
 #! /usr/bin/perl
 
+###########################################################################
+#
+# vget
+#
+###########################################################################
+#
+# This command is completely unnecessary from a version control standpoint.  However, it can be useful in that
+# it does a few things, all of them optional:
+#
+#	*	It will reset the date on the file to the last checked in date, which vbuild does not (currently) do.
+#
+#	*	It will filter the file through any PostGet filter specified in the conf file.
+#
+#	*	It will set a marker to indicate that you are currently working on the file, if the conf file
+#		specifies that and the VC system supports it (e.g. cvs edit).
+#
+# #########################################################################
+#
+# All the code herein is released under the Artistic License
+#		( http://www.perl.com/language/misc/Artistic.html )
+# Copyright (c) 2000-2007 Barefoot Software
+#
+###########################################################################
+
 use strict;
+use warnings;
 
-#use Barefoot::debug;							# comment out for production
-
-use Getopt::Std;
-use Cwd qw(getcwd);
-use Barefoot::cvs;
-use Barefoot::input qw(get_yn);
-
-my $me = $0;
-$me =~ s@^.*/@@;
-
-
-# default values
-my $verbose=0;
-my $cvsroot=$::ENV{CVSROOT};
-my $revdate="";
-my $rev="";
+use VCtools::Base;
+use VCtools::Args;
+use VCtools::Common;
 
 
 #################################
 # OPTIONS AND ENVIRONMENT VARS
 #################################
 
-my $opt = {};
-getopts('vd:r:D:', $opt);
-$verbose = 1 if defined $opt->{v};
-$cvsroot = $opt->{d} if defined $opt->{d};
-$revdate = $opt->{D} if defined $opt->{D};
-$rev = $opt->{r} if defined $opt->{r};
+VCtools::args('files', 'list', 'file(s) to get');
+VCtools::getopts();
+
+my @files = VCtools::files();
 
 #################################
 # CHECK FOR ERRORS
 #################################
 
-cvs::check_general_errors();
+my $proj = VCtools::verify_files_and_group(@files);
 
-my $module = $ARGV[0];
-print "$me: Module $module\n" if $verbose;
+# get statuses for everything at once (quicker that way)
+VCtools::cache_file_status(@files, { DONT_RECURSE => 1 });
 
-if (!$module)
+foreach my $file (@files)
 {
-	print STDERR "usage: $me module\n";
-	exit 2;
-}
+	# can't get a directory
+	VCtools::fatal_error("cannot get a directory") if -d $file;
 
-if (!-r $module)
-{
-	print STDERR "$me: $module does not exist or is not readable\n";
-	exit 2;
-}
+	# can't get a file that isn't in VC already
+	VCtools::fatal_error("$file is not in VC") unless VCtools::exists_in_vc($file);
 
-my ($project, $subdir) = cvs::parse_module(getcwd());
+	# can't get a file that already has mods
+	VCtools::fatal_error("file $file has modifications; getting would overwrite those") if VCtools::modified_from_vc($file);
 
+=not_working_with_svn_yet
+	VCtools::fatal_error("$file has already been gotten") if VCtools::user_is_a_locker($file);
 
-if (not cvs::exists($module))
-{
-	print STDERR "$me: $module does not appear to be checked into CVS\n";
-	exit 2;
+	my @lockers = cvs::lockers($file);
+	if (@lockers)
+	{
+		# inform user that others are editing the file
+		VCtools::prompt_to_continue("$file is currently being edited by: @lockers:);
+	}
+=cut
 }
 
 
@@ -66,24 +78,7 @@ if (not cvs::exists($module))
 # MAIN
 #################################
 
-my $user = $::ENV{USER};
-$user = $::ENV{USERNAME} if !$user;
-
-my @lockers = cvs::lockers($module);
-if (@lockers)
-{
-	# inform user that others are editing the file
-	print "$me info: $module is currently being edited by: @lockers\n";
-	if (!get_yn("Do you want to edit it anyway?"))
-	{
-		exit 1;
-	}
-}
-
-# check to see if the user is already editing the file
-print "$me:  you are already editing the file.\n"
-		if cvs::user_is_a_locker($module);
-
+=not_working_with_svn_yet
 if ( $revdate || $rev )
 { 
 	# this is a precaution, as I f#cked myself with conflicts by 
@@ -104,12 +99,17 @@ else
 	print "$me: Syncing $module to latest version.\n" if $verbose;
 	system("cvs -r -d $cvsroot update -A $module");
 }
+=cut
 
-unless (cvs::user_is_a_locker($module))
+=not_working_with_svn_yet
+print "$me: Adding to watch and editors list.\n" if $verbose;
+system("cvs -d $cvsroot edit $module");
+system("cvs -d $cvsroot watch add -a edit $module");
+=cut
+
+foreach my $file (@files)
 {
-	print "$me: Adding to watch and editors list.\n" if $verbose;
-	system("cvs -d $cvsroot edit $module");
-	system("cvs -d $cvsroot watch add -a edit $module");
+	VCtools::commit_files($proj, @files, { MESSAGE => VCtools::message() } );
 }
 
 print "done\n" unless $?;
