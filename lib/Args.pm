@@ -352,6 +352,7 @@ sub getopts
 	# make sure Getopt::Declare doesn't fallback to thinking it should try to get ARGV itself
 	@ARGV = ('--') unless @ARGV;
 
+	print STDERR "about to create Getopt::Declare object\n" if DEBUG >= 5;
 	Getopt::Declare->new($spec, @ARGV) or fatal_error("illegal command line", 'usage');
 
 	print STDERR Dumper($args), "\n" if DEBUG >= 2;
@@ -376,6 +377,7 @@ sub getopts
 sub fatal_error
 {
 	my ($err_msg, $exit_code) = @_;
+	print SDTERR "entering fatal_error with $err_msg and $exit_code\n" if DEBUG >= 4;
 	defined $exit_code or $exit_code = 1;
 
 	if ($exit_code eq 'usage')
