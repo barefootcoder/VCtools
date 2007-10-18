@@ -32,7 +32,7 @@ else
 			alias vcshell="unset VCTOOLS_SHELL ; exec $shellexec"
 			function vcd
 			{
-				cd `vfind -dirfind $1`
+				cd $(vctools-config --working)/${VCTOOLS_SHELL#proj:}/$(vfind -dirfind $1 .)
 			}
 
 			# newgrp often seems to trash $SHELL, so put it back

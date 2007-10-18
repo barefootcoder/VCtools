@@ -21,6 +21,7 @@ VCtools::action('file', 'consider a file only if its basename contains this stri
 VCtools::action('grep', 'search file for (Perl regex) pattern (also prints filename)', 'pattern');
 VCtools::action('dirfind', 'find closest matching dirname (exact matches and least depth preferred)', 'dirname');
 VCtools::getopts();
+print STDERR "finished with opts\n" if DEBUG >= 5;
 
 # remember, directories are files too
 my @files = VCtools::dirs();
@@ -51,14 +52,8 @@ if (VCtools::current_dir())
 }
 else
 {
-	if (@files)
-	{
-		$_ = "$projdir/$_" foreach @files;
-	}
-	else
-	{
-		@files = ($projdir);
-	}
+	chdir $projdir or VCtools::fatal_error("can't change to TLD of project");
+	@files = ('.') unless @files;
 }
 
 # assume false
@@ -70,14 +65,17 @@ if ($grep_pattern)
 {
 	eval { $grep_pattern = qr/$grep_pattern/ } or VCtools::fatal_error("illegal grep pattern: $@");
 }
+print STDERR "set grep pattern to $grep_pattern\n" if DEBUG >= 2;
 
 # ditto
 my $dirmatch = VCtools::dirfind();
 if ($dirmatch)
 {
 	# this shouldn't ever happen, I don't think
+	print STDERR "about to eval dirmatch ...\n" if DEBUG >= 5;
 	eval { $dirmatch = qr{(?:^|/)$dirmatch(.*)$} } or VCtools::fatal_error("can't turn dirname into a pattern: $@");
 }
+print STDERR "set dirmatch to $dirmatch\n" if DEBUG >= 2;
 our %possible_dirs;
 
 # and ditto again
@@ -157,6 +155,7 @@ sub print_file
 sub grep_file
 {
 	my ($file, $pattern) = @_;
+	print STDERR "grep_file($file, $pattern)\n" if DEBUG >= 4;
 	my $retval = 0;
 
 	if (-f $file)

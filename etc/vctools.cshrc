@@ -29,7 +29,7 @@ else
 
 			# these require a bit more work
 			alias vcshell "unsetenv VCTOOLS_SHELL ; exec $shellexec"
-			alias vcd 'cd `vfind -dirfind \!^`'
+			alias vcd 'cd `vctools-config --working`/${VCTOOLS_SHELL:s/proj://}/`vfind -dirfind \!* .`'
 
 			# newgrp often seems to trash $SHELL, so put it back
 			if ( ! $?SHELL ) then
