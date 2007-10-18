@@ -14,8 +14,7 @@ use VCtools::Common;
 
 VCtools::switch('recursive', 'r', 'operate recursively');
 VCtools::switch('show_branches', 'b', 'show the branch name (or TRUNK if no branch) for all files');
-VCtools::switch('only_stat', 'o',
-		'only show files that match given status (modified|outdated|locked|unknown)', 'status');
+VCtools::switch('only_stat', 'o', 'only show files that match given status (modified|outdated|locked|unknown)', 'status');
 VCtools::args('files', 'optlist', 'file(s) (or directory/ies) to show status of (default .)');
 VCtools::getopts();
 

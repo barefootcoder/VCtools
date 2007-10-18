@@ -95,8 +95,7 @@ foreach my $file (@files)
 	unless (VCtools::fix_log())
 	{
 =not_working_with_svn_yet
-		VCtools::fatal_error("you did a 'get' on $file")
-				unless VCtools::user_is_a_locker($file);
+		VCtools::fatal_error("you didn't vget on $file") unless VCtools::user_is_a_locker($file);
 
 		if (@lockers > 1)
 		{

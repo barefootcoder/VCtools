@@ -40,8 +40,7 @@ foreach my $file (@files)
 # MAIN
 #################################
 
-my @new_files = VCtools::add_files(@files,
-		{ DONT_RECURSE => not VCtools::recursive() } );
+my @new_files = VCtools::add_files(@files, { DONT_RECURSE => not VCtools::recursive() } );
 
 # theoretically, we should only see new files in the case of a recursive add
 # let's ask the user if this is okay with them
