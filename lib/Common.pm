@@ -268,6 +268,7 @@ sub _project_path
 
 	# while we're here, do an auth check for this server
 	# (most stuff will fail, possibly silently and/or crashingly, if there's no auth for the server)
+	_set_project($proj) unless $PROJ;						# $PROJ (and consequently %vc_func) might not be set yet
 	$vc_func{'auth_check'}->("$projpath");
 
 	$projpath .= $subdirs{$which};
@@ -955,7 +956,8 @@ sub _make_cvs_command
 		push @local_options, "-r $opts->{REVNO}" if $opts->{REVNO};
 	}
 	push @local_options, "-b" if $opts->{BRANCH_ONLY};					# really not sure this will work properly!!
-	my $err_redirect = $opts->{IGNORE_ERRORS} ? "2>/dev/null" : "";
+	my $err_redirect = $opts->{IGNORE_ERRORS} ? "2>/dev/null" : "2>&1";
+	print STDERR "err_redirect is $err_redirect\n" if DEBUG >= 4;
 
 	# command substitutions
 	my %cmd_subs =
@@ -977,7 +979,8 @@ sub _make_cvs_command
 
 	$command = $cmd_subs{$command} if exists $cmd_subs{$command};
 
-	return "cvs @global_options -d $vcroot $command @local_options @files $err_redirect ";
+	#return "cvs @global_options -d $vcroot $command @local_options @files $err_redirect ";
+	return "cvs @global_options -d $vcroot $command @local_options @files $err_redirect | fgrep --line-buffered -vx 'PERL5LIB: Undefined variable.' ";
 }
 
 sub _make_svn_command
@@ -1083,6 +1086,9 @@ sub _execute_normally
 	# just pass args through to appropriate make_command function
 	my $cmd = &{$vc_func{'make_command'}};
 	print STDERR "will execute: $cmd\n" if DEBUG >= 2;
+
+	# BIG CVS HACK: to handle the PERL5LIB problem
+	$cmd =~ s/2>&1.*// if $cmd =~ /\|/;
 
 	my $err = system($cmd);
 	fatal_error("call to VC command $cmd failed with $! ($err)", 3) if $err;
