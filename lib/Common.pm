@@ -1907,6 +1907,12 @@ sub filter_file
 
 	move($file, "$file.$backup_ext");
 	system("cat $file.$backup_ext | $filter >$file");
+
+	# force perms and dates to be the same
+	my ($mtime, $atime, $mode) = (stat "$file.$backup_ext")[9,8,2];
+	utime $atime, $mtime, $file;
+	chmod $mode, $file;
+
 	# if the only difference is whitespace, don't bother to save the backup file
 	unlink("$file.$backup_ext") unless `diff -b $file.$backup_ext $file 2>&1`;
 }
