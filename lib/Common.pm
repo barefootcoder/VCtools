@@ -534,7 +534,7 @@ sub _interpret_cvs_status_output
 	}
 	else
 	{
-		fatal_error("can't figure out status line: $_", 3);
+		fatal_error("can't figure out status line: $_", 3) unless ignore_errors();
 	}
 }
 
@@ -590,7 +590,7 @@ sub _interpret_svn_status_output
 	}
 	else
 	{
-		fatal_error("can't figure out status line: $_", 3);
+		fatal_error("can't figure out status line: $_", 3) unless ignore_errors();
 	}
 }
 

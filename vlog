@@ -37,7 +37,11 @@ VCtools::cache_file_status(@files, { DONT_RECURSE => 1 });
 
 foreach my $file (@files)
 {
-	VCtools::fatal_error("$file is not in VC") unless VCtools::exists_in_vc($file);
+	unless (VCtools::exists_in_vc($file))
+	{
+		VCtools::fatal_error("$file is not in VC") unless VCtools::ignore_errors();
+		exit;
+	}
 }
 
 
