@@ -497,6 +497,12 @@ sub _interpret_cvs_status_output
 	{
 		return wantarray ? ($1, 'unknown') : $1;
 	}
+	# fourth special case: unknown files get the standard ? if you're querying a whole dir, but if you're
+	# queriying the one file by itself, you get something like this:
+	elsif ( m{cvs update: use `cvs add' to create an entry for (.*)} )
+	{
+		return wantarray ? ($1, 'unknown') : $1;
+	}
 
 	my $file = substr($_, 2);
 	print STDERR "interpreting status output: file is <$file>\n" if DEBUG >= 4;
@@ -947,7 +953,8 @@ sub _make_cvs_command
 
 	my (@global_options, @local_options);
 	push @global_options, "-q" unless $opts->{VERBOSE};
-	push @local_options, "-l" if $opts->{DONT_RECURSE};
+	push @local_options, "-l" if $opts->{DONT_RECURSE}					# hack below annoying but necessary
+			and not ($command eq 'add');
 	push @local_options, "-b -c" if $opts->{IGNORE_BLANKS};
 	push @local_options, "-m '$opts->{MESSAGE}'" if $opts->{MESSAGE};
 	# a bit hack-ish, but functional
@@ -2135,6 +2142,11 @@ sub add_files
 		if ( / ^ A \s+ (?: \Q(bin)\E \s* )? (.*) \s* $ /x )
 		{
 			push @surprise_files, $1 unless exists $files->{$1};
+		}
+		# CVS will give us this "helpful" message; ignore it
+		elsif ( /use 'cvs commit' to add this file permanently/ )
+		{
+			next;
 		}
 		else
 		{
