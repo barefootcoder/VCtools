@@ -36,7 +36,7 @@ if (@files > 1 and not -d $dest)
 # if any of our files are not in VC, this will never return
 in_or_out();
 
-my $proj = VCtools::verify_files_and_group(@files);
+VCtools::verify_files_and_group(@files);
 
 if (-e $dest and not -d $dest)
 {
@@ -51,10 +51,10 @@ foreach (@files)
 		unless (VCtools::force())
 		{
 			VCtools::info_msg("Warning! $_ has been modified");
-			VCtools::info_msg(INDENT => "It's generally a bad idea to move a modified file.");
-			VCtools::info_msg(INDENT => "It would be much better to do it in two steps: vcommit first, then re-run vmv.");
-			VCtools::info_msg(INDENT => "However, if you really insist, rerun this command with the --force switch.");
-			VCtools::info_msg(INDENT => "(Note that your changes will automatically be committed if you do this!)");
+			VCtools::info_msg(-INDENT => "It's generally a bad idea to move a modified file.");
+			VCtools::info_msg(-INDENT => "It would be much better to do it in two steps: vcommit first, then re-run vmv.");
+			VCtools::info_msg(-INDENT => "However, if you really insist, rerun this command with the --force switch.");
+			VCtools::info_msg(-INDENT => "(Note that your changes will automatically be committed if you do this!)");
 			exit;
 		}
 	}
@@ -65,7 +65,7 @@ foreach (@files)
 # MAIN
 #################################
 
-VCtools::move_files($proj, $dest, @files, { FORCE => VCtools::force() });
+VCtools::move_files($dest, @files, { FORCE => VCtools::force() });
 
 print "done\n";
 
@@ -80,6 +80,7 @@ sub in_or_out
 	# this sub checks to see whether all files supplied are in VC or out
 	# if they're all out, we'll just pass through to regular mv
 	# if some are in and some are out, that's a fatal error
+	print STDERR "vmv: in in_or_out()\n" if DEBUG >= 5;
 
 	# no recursion allowed for moving files
 	# also, we'll capture what files actually got cached; if someone's running this completely outside of
@@ -112,4 +113,5 @@ sub in_or_out
 	}
 
 	# else they're all in and all is well with the world
+	print STDERR "vmv: leaving in_or_out()\n" if DEBUG >= 5;
 }
