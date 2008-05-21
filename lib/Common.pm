@@ -170,6 +170,7 @@ sub _set_project
 	{
 		fatal_error("unknown version control system $vctype specified");
 	}
+	print STDERR "_set_project: %vc_func = ", Dumper(\%vc_func) if DEBUG >= 4;
 }
 
 
@@ -268,6 +269,7 @@ sub _project_path
 
 	# while we're here, do an auth check for this server
 	# (most stuff will fail, possibly silently and/or crashingly, if there's no auth for the server)
+	# (note: the above _may_ only be true for svn)
 	_set_project($proj) unless $PROJ;						# $PROJ (and consequently %vc_func) might not be set yet
 	$vc_func{'auth_check'}->("$projpath");
 
@@ -1394,6 +1396,9 @@ sub cache_file_status
 	my (@files) = @_;
 	fatal_error("cannot cache status for non-existent files") unless @files;
 
+	# rarely, $PROJ may not be set, and consequently %vc_func won't be set either, all of which is very bad
+	check_common_errors() unless $PROJ;
+
 	my @statfiles;
 	my $st = _execute_and_get_output("status", @files, $opts);
 	while ( <$st> )
@@ -2162,7 +2167,7 @@ sub add_files
 sub move_files
 {
 	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
-	my ($proj, $dest, @files) = @_;
+	my ($dest, @files) = @_;
 
 	# moves have to be done one file at a time
 	my @dest_files;
@@ -2192,7 +2197,7 @@ sub move_files
 
 	# have to tell commit_files that this was a move, and how many files were moved
 	# that way it can distinguish where one array ends and the other begins
-	commit_files($proj, @files, @dest_files, { MOVE => scalar(@files) } );
+	commit_files($PROJ, @files, @dest_files, { MOVE => scalar(@files) } );
 }
 
 
@@ -2256,7 +2261,7 @@ sub revert_files
 sub commit_files
 {
 	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
-	my ($proj, @files) = @_;
+	my (undef, @files) = @_;											# HACK! need to remove first arg from all calls
 
 	# Note: we suspend these checks for straight moves.  generally the contents of those files haven't changed
 	# Further note: obviously no point in checking for removes, since the files aren't there any more anyway
@@ -2268,7 +2273,7 @@ sub commit_files
 		# if a debugging regex is specified, we need to search each file for that pattern.  if we find it,
 		# we ask the user if they're really sure they want to commit a file which apparently still has some
 		# debugging switch turned on
-		if (my $debug_pattern = get_proj_directive($proj, 'DebuggingRegex'))
+		if (my $debug_pattern = get_proj_directive($PROJ, 'DebuggingRegex'))
 		{
 			foreach my $file (@files)
 			{
@@ -2293,7 +2298,7 @@ sub commit_files
 		}
 
 		# if a pre-commit command is specified, we need to run each file through that
-		if (my $pre_commit = get_proj_directive($proj, 'PreCommit'))
+		if (my $pre_commit = get_proj_directive($PROJ, 'PreCommit'))
 		{
 			filter_file($_, $pre_commit, 'precommit') foreach @files;
 		}
@@ -2305,7 +2310,7 @@ sub commit_files
 	_execute_normally("commit", @files, $opts);
 
 	# now let's send out an email to whoever's on the list (if anyone is)
-	if (my $email_list = get_proj_directive($proj, 'CommitEmails'))
+	if (my $email_list = get_proj_directive($PROJ, 'CommitEmails'))
 	{
 		if ($config->{EmailsFrom})
 		{
@@ -2324,7 +2329,7 @@ sub commit_files
 				print STDERR "getting log for ", _server_path(dirname($files[0])), "\n" if DEBUG >= 2;
 				get_log(_server_path(dirname($files[0])), 1);
 			}
-			my $log_message = log_we_created($proj);
+			my $log_message = log_we_created($PROJ);
 
 			if ($log_message)
 			{
@@ -2337,7 +2342,7 @@ sub commit_files
 					my $mail = {};
 					$mail->{To} = $_;
 					$mail->{From} = $config->{EmailsFrom};
-					$mail->{Subject} = "Commit Notification: project $proj";
+					$mail->{Subject} = "Commit Notification: project $PROJ";
 					if (exists $opts->{DEL})
 					{
 						# remove commits have a special message
