@@ -21,7 +21,7 @@
 #
 #		http://www.perl.com/language/misc/Artistic.html
 #
-# Copyright (c) 1999-2003 Barefoot Software, Copyright (c) 2004 ThinkGeek
+# Copyright (c) 1999-2008 Barefoot Software, Copyright (c) 2004 ThinkGeek
 #
 ###########################################################################
 
@@ -30,6 +30,7 @@ package VCtools;
 ### Private ###############################################################
 
 use strict;
+use warnings;
 
 use Carp;
 use Text::Tabs;
@@ -117,6 +118,7 @@ sub _set_defaults
 	switch('verbose', 'v', 'verbose output');
 	switch('ignore_errors', 'i', 'ignore errors');
 	switch('rootpath', 'R', 'override default VC root path', 'rootpath');
+	switch('pretend', 'p', 'pretend (show native VC commands but do not execute them)');
 }
 
 
@@ -343,11 +345,11 @@ sub action
 # exit with a return value of 2.
 sub getopts
 {
-	print STDERR Dumper($args), "\n" if DEBUG >= 4;
+	print STDERR Dumper($args), "\n" if DEBUG >= 5;
 
 	# Getopt::Declare demands tabs, so let's give 'em to it
 	my $spec = join('', unexpand(@spec));
-	print STDERR ">>>\n$spec<<<\n" if DEBUG >= 3;
+	print STDERR ">>>\n$spec<<<\n" if DEBUG >= 4;
 
 	# make sure Getopt::Declare doesn't fallback to thinking it should try to get ARGV itself
 	@ARGV = ('--') unless @ARGV;
@@ -355,7 +357,7 @@ sub getopts
 	print STDERR "about to create Getopt::Declare object\n" if DEBUG >= 5;
 	Getopt::Declare->new($spec, @ARGV) or fatal_error("illegal command line", 'usage');
 
-	print STDERR Dumper($args), "\n" if DEBUG >= 2;
+	print STDERR Dumper($args), "\n" if DEBUG >= 5;
 }
 
 
@@ -377,7 +379,7 @@ sub getopts
 sub fatal_error
 {
 	my ($err_msg, $exit_code) = @_;
-	print SDTERR "entering fatal_error with $err_msg and $exit_code\n" if DEBUG >= 4;
+	print STDERR "entering fatal_error with $err_msg and $exit_code\n" if DEBUG >= 4;
 	defined $exit_code or $exit_code = 1;
 
 	if ($exit_code eq 'usage')
@@ -414,13 +416,20 @@ sub warning
 sub info_msg
 {
 	my $indent = 0;
-	if ($_[0] eq "-INDENT")
+	if ($_[0] eq '-INDENT')
 	{
 		$indent = 1;
 		shift;
 	}
+	elsif ($_[0] eq '-OFFSET')
+	{
+		$indent = 2;
+		shift;
+	}
 
+	print "\n" if $indent == 2;
 	print join(' ', $indent ? ' ' x (length($me) + 1) : "$me:", @_), "\n";
+	print "\n" if $indent == 2;
 }
 
 

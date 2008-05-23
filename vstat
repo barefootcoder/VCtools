@@ -1,5 +1,23 @@
 #! /usr/bin/perl
 
+###########################################################################
+#
+# vstat
+#
+###########################################################################
+#
+# This command interprets and regroups information on the status of files.  It can show which files are
+# modified, outdated, unknown, etc.  With -v it will show which files are unchanged from the repository.  With
+# -b it will tell you whether the files are on the trunk or a branch (and which branch).
+#
+# #########################################################################
+#
+# All the code herein is released under the Artistic License
+#		( http://www.perl.com/language/misc/Artistic.html )
+# Copyright (c) 2000-2008 Barefoot Software
+#
+###########################################################################
+
 use strict;
 use warnings;
 
@@ -38,10 +56,14 @@ my $proj = VCtools::verify_files_and_group(@files);
 my $retval = 0;
 if (VCtools::only_stat())
 {
-	VCtools::cache_file_status(@files, { SHOW_BRANCHES => VCtools::show_branches() });
+	VCtools::cache_file_status(@files,
+			{ SHOW_BRANCHES => VCtools::show_branches(), IGNORE_ERRORS => VCtools::ignore_errors() });
 	my @stat_files = VCtools::get_all_with_status(VCtools::only_stat());
 	if (@stat_files)
 	{
+		# no need to go further if we're just pretending
+		exit 0 if VCtools::pretend();
+
 		print join("\n", sort @stat_files), "\n";
 	}
 	else

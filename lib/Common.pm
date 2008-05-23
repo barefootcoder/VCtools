@@ -10,7 +10,7 @@
 #
 # All the code herein is released under the Artistic License
 #		( http://www.perl.com/language/misc/Artistic.html )
-# Copyright (c) 1999-2007 Barefoot Software, Copyright (c) 2004-2007 ThinkGeek
+# Copyright (c) 1999-2008 Barefoot Software, Copyright (c) 2004-2007 ThinkGeek
 #
 ###########################################################################
 
@@ -125,6 +125,16 @@ sub _file_dest
 
 	# finally! looks like they're okay now
 	return ($src, $dst);
+}
+
+
+# return 1 if you should actually perform the operation
+sub _really_run
+{
+	my ($opts) = @_;
+
+	return 1 if $opts->{EVEN_IF_PRETEND};								# client requests to run the op even under -p
+	return not pretend();												# otherwise, run if !pretend(), skip if pretend()
 }
 
 
@@ -556,12 +566,27 @@ sub _interpret_svn_status_output
 
 	return wantarray ? () : undef unless length > 40;
 
-	my $file = (split(' ', substr($_, 9)))[3];
+	my $file;
+	if ( /\s* \d+ \s+ \d+ \s+ \w+ \s+ (.*) \s* $/x )
+	{
+		$file = $1;
+	}
+	elsif ( substr($_, 9) =~ /^ \s+ (.*) \s* $/x )
+	{
+		$file = $1;
+	}
+	else
+	{
+		fatal_error("can't figure out filename from status line");
+	}
 	print STDERR "interpreting status output: file is <$file>\n" if DEBUG >= 4;
+
 	# if we're not going to return the status, may as well not bother to figure it out
 	return $file unless wantarray;
 
 	my $status = substr($_, 0, 1);
+	print STDERR "interpreting status output: status is <$status>\n" if DEBUG >= 4;
+
 	# have to check locked and outdated (in that order) before everything
 	# else, because they override other statuses
 	if (substr($_, 2, 1) eq 'L')
@@ -913,7 +938,7 @@ sub _get_lockers
 	{
 		my $lockers = [];
 
-		my $ed = _execute_and_get_output("editors", $file);
+		my $ed = _execute_and_get_output("editors", $file, { EVEN_IF_PRETEND => 1 });
 		while ( <$ed> )
 		{
 			my ($cvs_file, $user) = _interpret_editors_output();
@@ -988,8 +1013,11 @@ sub _make_cvs_command
 
 	$command = $cmd_subs{$command} if exists $cmd_subs{$command};
 
-	#return "cvs @global_options -d $vcroot $command @local_options @files $err_redirect ";
-	return "cvs @global_options -d $vcroot $command @local_options @files $err_redirect | fgrep --line-buffered -vx 'PERL5LIB: Undefined variable.' ";
+	#$command = "cvs @global_options -d $vcroot $command @local_options @files $err_redirect ";
+	$command = "cvs @global_options -d $vcroot $command @local_options @files $err_redirect | fgrep --line-buffered -vx 'PERL5LIB: Undefined variable.' ";
+	my $runit = _really_run($opts);
+	info_msg(-OFFSET => $runit ? "executing:" : "would execute:",  $command) if pretend();
+	return $runit ? $command : undef;
 }
 
 sub _make_svn_command
@@ -1029,7 +1057,10 @@ sub _make_svn_command
 
 	$command = $cmd_subs{$command} if exists $cmd_subs{$command};
 
-	return "svn $command @options @files $err_redirect ";
+	$command = "svn $command @options @files $err_redirect ";
+	my $runit = _really_run($opts);
+	info_msg(-OFFSET => ($runit ? "executing:" : "would execute:"),  $command) if pretend();
+	return $runit ? $command : undef;
 }
 
 
@@ -1038,6 +1069,7 @@ sub _execute_and_discard_output
 {
 	# just pass args through to appropriate make_command function
 	my $cmd = &{$vc_func{'make_command'}};
+	return unless $cmd;
 	print STDERR "will discard output of: $cmd\n" if DEBUG >= 2;
 
 	my $err = system("$cmd >/dev/null 2>&1");
@@ -1065,6 +1097,7 @@ sub _execute_and_get_output
 {
 	# just pass args through to appropriate make_command function
 	my $cmd = &{$vc_func{'make_command'}};
+	return undef unless $cmd;
 	print STDERR "will process output of: $cmd\n" if DEBUG >= 2;
 
 	# if user has requested us to ignore errors, the make_command function will have redirected STDERR off
@@ -1081,6 +1114,7 @@ sub _execute_and_collect_output
 {
 	# just pass args through to appropriate make_command function
 	my $cmd = &{$vc_func{'make_command'}};
+	return '' unless $cmd;
 	print STDERR "will collect output of: $cmd\n" if DEBUG >= 2;
 
 	my $output = `$cmd`;
@@ -1094,6 +1128,7 @@ sub _execute_normally
 {
 	# just pass args through to appropriate make_command function
 	my $cmd = &{$vc_func{'make_command'}};
+	return unless $cmd;
 	print STDERR "will execute: $cmd\n" if DEBUG >= 2;
 
 	# BIG CVS HACK: to handle the PERL5LIB problem
@@ -1393,6 +1428,8 @@ sub cache_file_status
 	# have to make sure we don't ignore errors, because STDERR will contain crucial info for us (in both CVS
 	# and Subversion); therefore, override even if client told us to ignore
 	$opts->{IGNORE_ERRORS} = 0;
+	# also need to make sure we do this even if running under -p (this is a read-only operation, so it's safe)
+	$opts->{EVEN_IF_PRETEND} = 1;
 	my (@files) = @_;
 	fatal_error("cannot cache status for non-existent files") unless @files;
 
@@ -1478,7 +1515,8 @@ sub proj_exists_in_vc
 	# path; if it works, it's good and if it fails, it's bogus
 	return defined eval
 	{
-		_execute_and_discard_output("log", _project_path($project));
+		# this must be run even under pretend(), and it's readonly and therefore safe
+		_execute_and_discard_output("log", _project_path($project), { EVEN_IF_PRETEND => 1 });
 	};
 }
 
@@ -1490,7 +1528,8 @@ sub branch_exists_in_vc
 	# works just like proj_exists_in_vc, so see notes there
 	return defined eval
 	{
-		_execute_and_discard_output("log", _project_path($project, 'branch', $branch));
+		# this must be run even under pretend(), and it's readonly and therefore safe
+		_execute_and_discard_output("log", _project_path($project, 'branch', $branch), { EVEN_IF_PRETEND => 1 });
 	}
 }
 
@@ -1548,7 +1587,8 @@ sub get_all_files
 
 	my @return_files;
 	# we always need to go recursive here, and we can't toss STDERR because sometimes it contains a filename
-	my $st = _execute_and_get_output("list", @files, { DONT_RECURSE => 0, IGNORE_ERRORS => 0 });
+	# and need to execute even if running under -p (and list is always safe to run)
+	my $st = _execute_and_get_output("list", @files, { DONT_RECURSE => 0, IGNORE_ERRORS => 0, EVEN_IF_PRETEND => 1 });
 	while ( <$st> )
 	{
 		print STDERR "<file list>:$_" if DEBUG >= 5;
@@ -1576,7 +1616,7 @@ sub get_tree
 
 	# HACK: CVS would require "-d $dest" instead of just $dest
 	# not sure how to handle that in general fashion
-	my $ed = _execute_and_get_output("co", $path, $dest);
+	my $ed = _execute_and_get_output("co", $path, $dest) or return;
 	while ( <$ed> )
 	{
 		print "get_tree output: $_" if DEBUG >= 5;
@@ -1793,6 +1833,10 @@ sub get_log
 	# have to have verbose to get filenames modified, but caller might not need that
 	# so set it by default, but not if it's set already
 	$opts->{VERBOSE} = 1 unless exists $opts->{VERBOSE};
+
+	# get_log is used by any number of commands to find specific log messages, so we can't not run it, even if
+	# running under pretend()
+	$opts->{EVEN_IF_PRETEND} = 1;
 
 	my $fh = _execute_and_get_output("log", $file, $opts);
 	while ( <$fh> )
@@ -2083,6 +2127,9 @@ sub print_status
 	my $errors = 0;
 
 	cache_file_status(@files, $opts);
+	# no need to go further if we're just pretending
+	return 0 if pretend();
+
 	my $cur_status = '';
 	foreach my $file (sort { $status_cache{$a} cmp $status_cache{$b} or $a cmp $b } keys %status_cache)
 	{
@@ -2141,7 +2188,7 @@ sub add_files
 	# filenames and return them to the client for their edification.
 	my @surprise_files;
 
-	my $fh = _execute_and_get_output("add", @files, $opts);
+	my $fh = _execute_and_get_output("add", @files, $opts) or return;
 	while ( <$fh> )
 	{
 		if ( / ^ A \s+ (?: \Q(bin)\E \s* )? (.*) \s* $ /x )
@@ -2188,7 +2235,10 @@ sub move_files
 					D	\s+		$qr_src_file	\n
 				\Z
 		}x;
-		fatal_error("failed to move $_ to $dest:\n$output") unless $output =~ /$expected/;
+		unless (pretend())
+		{
+			fatal_error("failed to move $_ to $dest:\n$output") unless $output =~ /$expected/;
+		}
 
 		print "$src_file -> $dest_file\n" if verbose();
 		push @dest_files, $dest_file;
@@ -2210,7 +2260,7 @@ sub remove_files
 	# then, at the end, if there's anything left, we know we had a problem
 	my $files = _file_hash(@files);
 
-	my $fh = _execute_and_get_output("remove", @files);
+	my $fh = _execute_and_get_output("remove", @files) or return;
 	while ( <$fh> )
 	{
 		if ( / ^ D \s+ (.*) \s* $ /x )
@@ -2247,7 +2297,7 @@ sub revert_files
 	my $files = _file_hash(@files);
 
 	# expand your recursions before calling this if you need them
-	my $fh = _execute_and_get_output("revert", @files, $o);
+	my $fh = _execute_and_get_output("revert", @files, $o) or return;
 	while ( <$fh> )
 	{
 		my $rfile = _interpret_revert_output;
@@ -2386,7 +2436,7 @@ sub update_files
 {
 	my (@files) = @_;
 
-	my $upd = _execute_and_get_output("update", @files, { DONT_RECURSE => not recursive() } );
+	my $upd = _execute_and_get_output("update", @files, { DONT_RECURSE => not recursive() } ) or return;
 	while ( <$upd> )
 	{
 		_interpret_update_output;
@@ -2456,7 +2506,7 @@ sub merge_from_branch
 		$spath =~ s/\Q$current\E/$merge_from/;
 
 		# merging is ALWAYS recursive
-		my $mrg = _execute_and_get_output("merge", $spath, $file, { DONT_RECURSE => 0, REVNO => "$from:$to" } );
+		my $mrg = _execute_and_get_output("merge", $spath, $file, { DONT_RECURSE => 0, REVNO => "$from:$to" } ) or return;
 		while ( <$mrg> )
 		{
 			_interpret_update_output;									# merge and update have the same output style

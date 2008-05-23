@@ -13,7 +13,7 @@
 #
 # All the code herein is released under the Artistic License
 #		( http://www.perl.com/language/misc/Artistic.html )
-# Copyright (c) 2003-2007 Barefoot Software, Copyright (c) 2004-2007 ThinkGeek
+# Copyright (c) 2003-2008 Barefoot Software, Copyright (c) 2004-2007 ThinkGeek
 #
 ###########################################################################
 
@@ -249,6 +249,12 @@ sub release
 		VCtools::info_msg(-INDENT => "current production file is",
 				$cmp == 0 ? "the same age as" : "newer than", "the development file");
 		return 0 unless VCtools::yesno("Release it anyway?");
+	}
+
+	# if pretending, no need to go further
+	if (VCtools::pretend())
+	{
+		VCtools::info_msg(-OFFSET => "would execute:", "release-method-specific commands to rm, cp, and chgrp");
 	}
 
 	# remove old file

@@ -1,5 +1,22 @@
 #! /usr/bin/perl
 
+###########################################################################
+#
+# vlog
+#
+###########################################################################
+#
+# This command prints the log messages for all revisions of the given file(s).  It pages the output to less or
+# whatever $EDITOR is set to.  It also uses a temp file to avoid locking the repository if applicable.
+#
+# #########################################################################
+#
+# All the code herein is released under the Artistic License
+#		( http://www.perl.com/language/misc/Artistic.html )
+# Copyright (c) 2001-2008 Barefoot Software, Copyright (c) 2004-2006 ThinkGeek
+#
+###########################################################################
+
 use strict;
 use warnings;
 
@@ -57,11 +74,11 @@ foreach (@files)
 	VCtools::get_log($_, $howmany);
 	if (VCtools::latest())
 	{
-		print $header_line, VCtools::log_lines($proj, 0);
+		print $header_line, VCtools::log_lines($proj, 0) unless VCtools::pretend();
 	}
 	else
 	{
-		VCtools::page_output('.vclog', $header_line, VCtools::log_lines($proj));
+		VCtools::page_output('.vclog', $header_line, VCtools::log_lines($proj)) unless VCtools::pretend();
 		print "\n";
 		VCtools::prompt_to_continue("$count more files to view") if --$count;
 	}

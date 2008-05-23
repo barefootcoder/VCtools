@@ -1,5 +1,23 @@
 #! /usr/bin/perl
 
+###########################################################################
+#
+# vfind
+#
+###########################################################################
+#
+# This command performs recursive searches on files and directories in the repository, ignoring the same files
+# that VC commands would ignore, as well as the VC control directories.  You can use it to find files, find
+# directories, or "grep" all files (except that this uses Perl regexen rather than basic or extended ones).
+#
+# #########################################################################
+#
+# All the code herein is released under the Artistic License
+#		( http://www.perl.com/language/misc/Artistic.html )
+# Copyright (c) 2004-2008 Barefoot Software, Copyright (c) 2004-2006 ThinkGeek
+#
+###########################################################################
+
 use strict;
 use warnings;
 
@@ -88,6 +106,7 @@ if ($filematch)
 
 foreach (VCtools::get_all_files(@files))
 {
+	exit if VCtools::pretend();											# no point in going further if running under -p
 	next if $filematch and not /$filematch/;
 
 	if ($grep_pattern)
