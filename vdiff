@@ -50,6 +50,6 @@ VCtools::verify_files_and_group($file);
 #################################
 
 # execute diff and page it out to STDOUT
-my $opts = { IGNORE_BLANKS => VCtools::blanks() };
+my $opts = { IGNORE_BLANKS => VCtools::blanks(), IGNORE_ERRORS => VCtools::ignore_errors() };
 $opts->{'REVNO'} = VCtools::revision() if VCtools::revision();
 VCtools::page_output('.vcdiff', VCtools::get_diffs($file, $opts));
