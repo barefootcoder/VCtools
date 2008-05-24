@@ -1,5 +1,22 @@
 #! /usr/bin/perl
 
+###########################################################################
+#
+# vmerge
+#
+###########################################################################
+#
+# This command merges changes from a branch to the trunk, or from the trunk to a branch.  THIS COMMAND DOES
+# NOT YET WORK WITH CVS!
+#
+# #########################################################################
+#
+# All the code herein is released under the Artistic License
+#		( http://www.perl.com/language/misc/Artistic.html )
+# Copyright (c) 2005-2008 Barefoot Software, Copyright (c) 2005-2005 ThinkGeek
+#
+###########################################################################
+
 use strict;
 use warnings;
 
@@ -120,7 +137,7 @@ CONFLICT_RESOLUTION:
 	if (@problem_files)
 	{
 		VCtools::info_msg("WARNING! There are problem files resulting from the merge.");
-		VCtools::list_files($proj, "have one of the following statuses: conflict, broken, locked, outdated", @problem_files);
+		VCtools::list_files("have one of the following statuses: conflict, broken, locked, outdated", @problem_files);
 		VCtools::info_msg("The merge cannot continue unless these problems are resolved.");
 		VCtools::info_msg("If you like, you can use another window to attempt to resolve the problems then say 'y' below.");
 		if (VCtools::yesno("Do you want to check for problem files again?"))

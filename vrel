@@ -83,7 +83,7 @@ if (not VCtools::determine() and grep { -d } @files)
 }
 
 # need a valid release method
-our $rmethod = VCtools::get_proj_directive($proj, 'ReleaseMethod', '<none specified>');
+our $rmethod = VCtools::get_proj_directive($proj, ReleaseMethod => '<none specified>');
 VCtools::fatal_error("unknown release method $rmethod") unless exists $dispatch->{$rmethod};
 
 unless (VCtools::determine())
@@ -159,7 +159,7 @@ if (VCtools::determine())
 	@files = grep { needs_to_be_released } @files;
 	if (@files)
 	{
-		VCtools::list_files($proj, "need to be released", @files);
+		VCtools::list_files("need to be released", @files);
 		exit unless VCtools::yesno("Proceed with release(s)?");
 	}
 	else

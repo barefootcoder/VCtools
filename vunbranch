@@ -1,5 +1,22 @@
 #! /usr/bin/perl
 
+###########################################################################
+#
+# vunbranch
+#
+###########################################################################
+#
+# This command works just like vbranch, except that it takes a working copy pointing at a branch and switches
+# it back to the trunk.  THIS COMMAND DOES NOT YET WORK WITH CVS!
+#
+# #########################################################################
+#
+# All the code herein is released under the Artistic License
+#		( http://www.perl.com/language/misc/Artistic.html )
+# Copyright (c) 2005-2008 Barefoot Software, Copyright (c) 2005 ThinkGeek
+#
+###########################################################################
+
 use strict;
 use warnings;
 
@@ -64,7 +81,7 @@ foreach my $file (@all_files)
 };
 if (@mod_files)
 {
-	VCtools::list_files($proj, "are modified from the repository versions", @mod_files);
+	VCtools::list_files("are modified from the repository versions", @mod_files);
 	VCtools::prompt_to_continue("If you want these mods to go into the trunk, continue.",
 			"If you want the mods to stay in the branch, stop now and vcommit before you vunbranch.");
 }

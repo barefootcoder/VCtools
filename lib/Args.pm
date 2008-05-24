@@ -440,9 +440,9 @@ sub info_msg
 #	# prints "the following files or directories are really wacked out" and then lists the files
 sub list_files
 {
-	my ($proj, $msg, @files) = @_;
+	my ($msg, @files) = @_;
 
-	my $proj_dir = project_dir($proj);
+	my $proj_dir = project_dir();
 	# this will speed up subsitutions considerably
 	$proj_dir = qr<^\Q$proj_dir/\E>;
 

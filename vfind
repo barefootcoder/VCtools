@@ -56,7 +56,7 @@ my $proj = VCtools::check_common_errors();
 # MAIN
 #################################
 
-my $projdir = VCtools::project_dir($proj);
+my $projdir = VCtools::project_dir();
 # this helps regex'es go faster
 my $projdir_qr = qr[^$projdir/];
 print STDERR "figuring proj is $proj and dir is $projdir\n" if DEBUG >= 2;

@@ -1367,7 +1367,7 @@ sub in_working_dir
 
 sub project_dir
 {
-	return WORKING_DIR . "/" . $_[0];
+	return WORKING_DIR . "/" . ($_[0] || $PROJ);
 }
 
 
@@ -1403,7 +1403,7 @@ sub create_tag
 
 	# this works for Subversion, but it would have to be
 	# radically different for CVS
-	_execute_normally("copy", project_dir($proj), _project_path($proj, 'tag', $tagname));
+	_execute_normally("copy", project_dir(), _project_path($proj, 'tag', $tagname));
 }
 
 
@@ -1413,7 +1413,7 @@ sub create_branch
 
 	# this works for Subversion, but it would have to be
 	# radically different for CVS
-	_execute_normally("copy", project_dir($proj), _project_path($proj, 'branch', $branch));
+	_execute_normally("copy", project_dir(), _project_path($proj, 'branch', $branch));
 }
 
 
@@ -2046,7 +2046,7 @@ sub backup_full_project
 		system("rm", "-rf", $backup_dir);
 	}
 
-	system("cp", "-pri", project_dir($proj), $backup_dir);
+	system("cp", "-pri", project_dir(), $backup_dir);
 }
 
 
@@ -2059,8 +2059,8 @@ sub restore_project_backup
 	my $backup_dir = full_project_backup_name($proj, $opts);
 	die("restore_project_backup: no backup exists $proj$opts->{'ext'}") unless -d $backup_dir;
 
-	system("rm", "-rf", project_dir($proj));
-	system("mv", $backup_dir, project_dir($proj));
+	system("rm", "-rf", project_dir());
+	system("mv", $backup_dir, project_dir());
 }
 
 
