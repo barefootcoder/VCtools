@@ -43,6 +43,17 @@ if (defined $opts->{p})
 print STDERR "controlling shell var is $ENV{VCTOOLS_SHELL}\n" if DEBUG >= 2;
 print STDERR "current PATH is $ENV{PATH}\n" if DEBUG >= 3;
 
+if ($ENV{VCTOOLS_SHELL} and $ENV{VCTOOLS_SHELL} =~ /^proj:(.*)$/)
+{
+	VCtools::fatal_error("already in project $1!") if $1 eq $ARGV[0];
+
+	# trying to go from one vcshell to another; that's okay as long as they confirm
+	# NOTE! if you set your vcshell alias to exec, you better unset $VCTOOLS_SHELL first
+	# otherwise, answering no below will leave you in bad shape
+	VCtools::prompt_to_continue("switching from project $1 to project $ARGV[0]");
+	delete $ENV{VCTOOLS_SHELL};
+}
+
 # being called initially from alias vcshell
 if (not exists $ENV{VCTOOLS_SHELL})
 {
