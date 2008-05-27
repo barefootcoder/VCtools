@@ -119,6 +119,7 @@ sub _set_defaults
 	switch('ignore_errors', 'i', 'ignore errors');
 	switch('rootpath', 'R', 'override default VC root path', 'rootpath');
 	switch('pretend', 'p', 'pretend (show native VC commands but do not execute them)');
+	switch('no_outdated', 'N', "don't check for outdated status (may speed up operations)");
 }
 
 

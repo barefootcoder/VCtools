@@ -223,8 +223,7 @@ sub _svn_auth_check
 sub _project_path
 {
 	# finds the server-side path for the given project
-	# will try to find a ProjectPath, or, failing that, will append the
-	# project name to the first RootPath it can find
+	# will try to find a ProjectPath, or, failing that, will append the project name to the first RootPath it can find
 	# also will try to handle various branch policies
 	# returns a complete path (hopefully)
 	my ($proj, $which, $subname) = @_;
@@ -1037,18 +1036,19 @@ sub _make_svn_command
 	{
 		push @options, "-N" if $opts->{DONT_RECURSE};
 	}
-	push @options, "-m '$opts->{MESSAGE}'" if $opts->{MESSAGE};
-	push @options, "-r $opts->{REVNO}" if $opts->{REVNO};
-	push @options, "--force" if $opts->{FORCE};
-	push @options, "--stop-on-copy" if $opts->{BRANCH_ONLY};
-	push @options, "-x -b" if $opts->{IGNORE_BLANKS};
-	my $err_redirect = $opts->{IGNORE_ERRORS} ? "2>/dev/null" : "";
+	push @options, "-u"													# we need to check the server for outdating info
+			if $command eq 'status' and not no_outdated();				# for doing status, unless -N is specified
+	push @options, "-m '$opts->{MESSAGE}'" if $opts->{MESSAGE};			# specifying a message for commits and such
+	push @options, "-r $opts->{REVNO}" if $opts->{REVNO};				# specifying a revision number
+	push @options, "--force" if $opts->{FORCE};							# -f for vmv
+	push @options, "--stop-on-copy" if $opts->{BRANCH_ONLY};			# need this for vmerge sometimes
+	push @options, "-x -b" if $opts->{IGNORE_BLANKS};					# -b for vdiff
+	my $err_redirect = $opts->{IGNORE_ERRORS} ? "2>/dev/null" : "";		# for -i
 
 	# command substitutions
 	my %cmd_subs =
 	(
-		status		=>	'status -uv',									# we need to check the server for outdating info
-																		# also, without -v, you don't get unmodified files
+		status		=>	'status -v',									# without -v, you don't get unmodified files
 		list		=>	'status -v',									# for lists, this is quicker than svn list
 																		# because it doesn't go out to the server
 		changelog	=>	'propedit svn:log --revprop',					# doesn't do REVNO specially, like CVS, but will
