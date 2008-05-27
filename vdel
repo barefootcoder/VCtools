@@ -1,5 +1,22 @@
 #! /usr/bin/perl
 
+###########################################################################
+#
+# vdel
+#
+###########################################################################
+#
+# This command removes files from VC (technically, it removes them from the HEAD of either trunk or branch,
+# whichever the working copy is pointing at).  It also commits the removal.
+#
+# #########################################################################
+#
+# All the code herein is released under the Artistic License
+#		( http://www.perl.com/language/misc/Artistic.html )
+# Copyright (c) 2001-2008 Barefoot Software, Copyright (c) 2004-2007 ThinkGeek
+#
+###########################################################################
+
 use strict;
 use warnings;
 
@@ -28,10 +45,11 @@ my @files = VCtools::files();
 # CHECK FOR ERRORS
 #################################
 
-my $proj = VCtools::verify_files_and_group(@files);
+VCtools::verify_files_and_group(@files);
+my $opts = { DONT_RECURSE => !VCtools::recursive() };
 
 # get statuses for everything at once (quicker that way)
-VCtools::cache_file_status(@files, { DONT_RECURSE => 1 });
+VCtools::cache_file_status(@files, { DONT_RECURSE => !VCtools::recursive() });
 
 foreach my $file (@files)
 {
@@ -48,7 +66,8 @@ unless (VCtools::force())
 	VCtools::prompt_to_continue("$_ is going to be removed from VC and then deleted") foreach @files;
 }
 
-VCtools::remove_files(@files);
-VCtools::commit_files($proj, @files, { DEL => scalar(@files) });
+VCtools::remove_files(@files, $opts);
+VCtools::commit_files(undef, @files,									# HACK! when first arg removed from lib, remove here
+		{ %$opts, DEL => scalar(@files) });
 
 print "done\n";

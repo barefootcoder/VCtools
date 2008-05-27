@@ -2253,6 +2253,7 @@ sub move_files
 
 sub remove_files
 {
+	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
 	my (@files) = @_;
 
 	# for looking up files
@@ -2260,7 +2261,7 @@ sub remove_files
 	# then, at the end, if there's anything left, we know we had a problem
 	my $files = _file_hash(@files);
 
-	my $fh = _execute_and_get_output("remove", @files) or return;
+	my $fh = _execute_and_get_output("remove", @files, $opts) or return;
 	while ( <$fh> )
 	{
 		if ( / ^ D \s+ (.*) \s* $ /x )
@@ -2356,7 +2357,8 @@ sub commit_files
 
 	# we expect that our filelist has already been expanded for purposes of recursion,
 	# so we're not going to do any recursion here
-	$opts->{DONT_RECURSE} = 1;
+	# however, when removing directories, DONT_RECURSE can be problematic
+	$opts->{DONT_RECURSE} = 1 unless $opts->{DEL};
 	_execute_normally("commit", @files, $opts);
 
 	# now let's send out an email to whoever's on the list (if anyone is)
