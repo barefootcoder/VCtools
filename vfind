@@ -22,6 +22,7 @@ use strict;
 use warnings;
 
 use Data::Dumper;
+use File::Basename;
 
 use VCtools::Base;
 use VCtools::Args;
@@ -34,10 +35,11 @@ use VCtools::Common;
 
 VCtools::switch('current_dir', 'c', 'start from . (default: start from root project dir)');
 VCtools::args('dirs', 'optlist', 'directory/ies to search (default: search all from starting dir)');
-VCtools::action('print', 'print filename (only)  (this is the default action)');
+VCtools::action('print', 'print filename (only)  (this is the default action unless -grep specified)');
 VCtools::action('file', 'consider a file only if its basename contains this string', 'string');
 VCtools::action('grep', 'search file for (Perl regex) pattern (also prints filename)', 'pattern');
 VCtools::action('dirfind', 'find closest matching dirname (exact matches and least depth preferred)', 'dirname');
+VCtools::action('emptydir', 'find all empty directories');
 VCtools::getopts();
 print STDERR "finished with opts\n" if DEBUG >= 5;
 
@@ -49,7 +51,12 @@ my @files = VCtools::dirs();
 # CHECK FOR ERRORS
 #################################
 
-my $proj = VCtools::check_common_errors();
+VCtools::check_common_errors();
+
+if (!!VCtools::grep() + !!VCtools::dirfind() + !!VCtools::emptydir() > 1)
+{
+	VCtools::fatal_error("can only supply one of: -grep, -dirfind, -emptydir");
+}
 
 
 #################################
@@ -59,7 +66,7 @@ my $proj = VCtools::check_common_errors();
 my $projdir = VCtools::project_dir();
 # this helps regex'es go faster
 my $projdir_qr = qr[^$projdir/];
-print STDERR "figuring proj is $proj and dir is $projdir\n" if DEBUG >= 2;
+print STDERR "figuring projdir is $projdir\n" if DEBUG >= 2;
 
 if (VCtools::current_dir())
 {
@@ -104,6 +111,9 @@ if ($filematch)
 	eval { $filematch = qr{[^/]*\Q$filematch\E[^/]*$} } or VCtools::fatal_error("can't turn filename into a pattern: $@");
 }
 
+# need this for emptydir
+our %dir_filecount;
+
 foreach (VCtools::get_all_files(@files))
 {
 	exit if VCtools::pretend();											# no point in going further if running under -p
@@ -116,6 +126,10 @@ foreach (VCtools::get_all_files(@files))
 	elsif ($dirmatch)
 	{
 		$retval |= dir_find($_, $dirmatch);
+	}
+	elsif (VCtools::emptydir())
+	{
+		$retval |= count_files($_);
 	}
 	else
 	{
@@ -145,6 +159,15 @@ if ($dirmatch)
 		# oops, no possibles
 		VCtools::warning("no directories found");
 	}
+}
+
+# ditto for emptydir
+if (VCtools::emptydir())
+{
+	# I hate having to have the blatant ls call in there, but Subversion (at least) refuses to recurse into
+	# unknown directories, so we have to (the ls will make it so it won't work on Windows, but I don't know
+	# that VCtools has much chance of working on Windows anyway)
+	print join("\n", sort grep { $dir_filecount{$_} == 0 && !`ls $_` } keys %dir_filecount), "\n";
 }
 
 # if everything is true, that means no errors,
@@ -238,5 +261,18 @@ sub dir_find
 	# thus we add an arbitrary large number to non-exact matches, making them drop low in the sorting
 	$possible_dirs{$file} = $depth + !$exact * 100;
 
+	return 1;
+}
+
+
+sub count_files
+{
+	my ($file) = @_;
+
+	$dir_filecount{$file} += 0 if -d $file;								# make sure every dir has an entry
+	return 1 if $file eq '.';											# . isn't a subdir of anything
+	++$dir_filecount{dirname($file)};									# but everything else is (even dirs)
+
+	# can't see any way for this to go wrong ...
 	return 1;
 }
