@@ -1283,11 +1283,12 @@ sub verify_gid
 sub check_common_errors
 {
 	my $project = parse_vc_file(".");
+	fatal_error("can't determine project; you don't seem to be in your working directory") unless $project;
 
 	if (exists $ENV{VCTOOLS_SHELL})
 	{
 		$ENV{VCTOOLS_SHELL} =~ /proj:([\w.-]+)/;
-		if (not $project or ($1 ne '*' and $1 ne $project))
+		unless ($1 eq $project or $1 eq '*')
 		{
 			print STDERR "env: $1, dir: $project\n" if DEBUG >= 3;
 			prompt_to_continue("the project derived from your current dir",
