@@ -1287,7 +1287,7 @@ sub check_common_errors
 
 	if (exists $ENV{VCTOOLS_SHELL})
 	{
-		$ENV{VCTOOLS_SHELL} =~ /proj:([\w.-]+)/;
+		$ENV{VCTOOLS_SHELL} =~ /proj:(*|[\w.-]+)/;
 		unless ($1 eq $project or $1 eq '*')
 		{
 			print STDERR "env: $1, dir: $project\n" if DEBUG >= 3;
