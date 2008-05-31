@@ -1287,7 +1287,7 @@ sub check_common_errors
 	if (exists $ENV{VCTOOLS_SHELL})
 	{
 		$ENV{VCTOOLS_SHELL} =~ /proj:([\w.-]+)/;
-		if (not $project or $1 ne $project)
+		if (not $project or ($1 ne '*' and $1 ne $project))
 		{
 			print STDERR "env: $1, dir: $project\n" if DEBUG >= 3;
 			prompt_to_continue("the project derived from your current dir",
@@ -1296,7 +1296,7 @@ sub check_common_errors
 	}
 	else
 	{
-		warning("Warning! not running under vcshell!");
+		warning("Warning! VCTOOLS_SHELL not set in environment!");
 	}
 
 	# set our project (this will also set up routines for whichever VC the project is registered under)
