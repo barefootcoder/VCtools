@@ -57,7 +57,7 @@ print STDERR "mod files are: ", join(', ', @mod_files), "\n" if DEBUG >= 3;
 my $from_branch = VCtools::branch();							# if we're merging from a branch, use that
 if ($from_branch)
 {
-	VCtools::fatal_error("no such branch $from_branch") unless VCtools::branch_exists_in_vc($proj, $from_branch);
+	VCtools::fatal_error("no such branch $from_branch") unless VCtools::branch_exists_in_vc($from_branch);
 }
 else
 {

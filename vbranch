@@ -30,17 +30,42 @@ use VCtools::Common;
 # OPTIONS AND ENVIRONMENT VARS
 #################################
 
-VCtools::switch('create', 'c', 'create new branch with given name');
-VCtools::args('branch', 'single', 'name of branch to switch to (must exist) or create with -c (must not exist)');
-VCtools::args('files', 'optlist', 'file(s) and/or directory/ies to switch over to branch (default: .); not used with -c');
+VCtools::switch('create', 'c', 'create the new branch before switching to it');
+VCtools::switch('message', 'm', 'specify commit message instead of using editor (only works with -c)', 'commit_message');
+VCtools::args('branch', 'single', 'name of branch to switch to (must not exist with -c, or must exist without)');
+VCtools::args('files', 'optlist', 'file(s) and/or directory/ies to switch over to branch (default: .); cannot use with -c');
 VCtools::getopts();
 
 # remember, directories are files too
 my @files = VCtools::files();
-if (not VCtools::create() and not @files)
+# have to check a few things up here to make sure we get @files situated right
+if (VCtools::create())
 {
-	VCtools::prompt_to_continue("Your entire local copy from this directory down will be converted to the branch!");
+	debuggit(2 => "comparing to . :", VCtools::projpath("."));
+	if (VCtools::projpath(".") ne './')
+	{
+		# this means we're not in our TLD
+		VCtools::fatal_error("You need to be in the TLD for your project to create a branch; try vcd with no args");
+	}
+
+	if (@files)
+	{
+		# if we're going to create, we need to do the whole schlemiel
+		VCtools::fatal_error("You can't really restrict branch creation to certain files");
+	}
+
+	VCtools::prompt_to_continue("Going to create the branch, then convert your entire working copy to that branch.");
 	@files = (".");
+}
+else
+{
+	# not creating, so check a few things
+
+	if (not @files)
+	{
+		VCtools::prompt_to_continue("Your entire local copy from this directory down will be converted to the branch!");
+		@files = (".");
+	}
 }
 print STDERR "switch files: @files\n" if DEBUG >= 3;
 
@@ -49,44 +74,45 @@ print STDERR "switch files: @files\n" if DEBUG >= 3;
 # CHECK FOR ERRORS
 #################################
 
-my $proj;
+VCtools::verify_files_and_group(@files);
+VCtools::check_branch_errors();
+
+# make sure that branch either exists or doesn't, as appropriate
 if (VCtools::create())
 {
-	$proj = VCtools::check_common_errors();
-	if (VCtools::branch_exists_in_vc($proj, VCtools::branch()))
+	if (VCtools::branch_exists_in_vc(VCtools::branch()))
 	{
 		VCtools::fatal_error("branch " . VCtools::branch() . " already exists; cannot create");
 	}
 }
 else
 {
-	$proj = VCtools::verify_files_and_group(@files);
-	unless (VCtools::branch_exists_in_vc($proj, VCtools::branch()))
+	unless (VCtools::branch_exists_in_vc(VCtools::branch()))
 	{
 		VCtools::fatal_error("no such branch " . VCtools::branch());
 	}
+}
 
-	# get statuses for everything at once (quicker that way)
-	# remember, vbranch is always recursive
-	my @all_files = VCtools::cache_file_status(@files, { DONT_RECURSE => 0 });
+# get statuses for everything at once (quicker that way)
+# remember, vbranch is always recursive
+my @all_files = VCtools::cache_file_status(@files, { DONT_RECURSE => 0 });
 
-	foreach my $file (@files)
-	{
-		VCtools::fatal_error("$file is not in VC")
-				unless VCtools::exists_in_vc($file);
-	}
+foreach my $file (@files)
+{
+	VCtools::fatal_error("$file is not in VC")
+			unless VCtools::exists_in_vc($file);
+}
 
-	my @mod_files;
-	foreach my $file (@all_files)
-	{
-		push @mod_files, $file if VCtools::modified_from_vc($file);
-	};
-	if (@mod_files)
-	{
-		VCtools::list_files("are modified from the repository versions", @mod_files);
-		VCtools::prompt_to_continue("If you want these mods to go into the branch, continue.",
-				"If you want the mods to stay in the trunk, stop now and vcommit before you vbranch.");
-	}
+my @mod_files;
+foreach my $file (@all_files)
+{
+	push @mod_files, $file if VCtools::modified_from_vc($file);
+};
+if (@mod_files)
+{
+	VCtools::list_files("are modified from the repository versions", @mod_files);
+	VCtools::prompt_to_continue("If you want these mods to go into the branch, continue.",
+			"If you want the mods to stay in the trunk, stop now and vcommit before you vbranch.");
 }
 
 
@@ -96,12 +122,11 @@ else
 
 if (VCtools::create())
 {
-	VCtools::create_branch($proj, VCtools::branch());
+	VCtools::create_branch(VCtools::branch());
 }
-else
-{
-	VCtools::switch_to_branch($proj, VCtools::branch(), @files);
-}
+
+VCtools::switch_to_branch(VCtools::branch(), @files);
+VCtools::initialize_branch(VCtools::branch());
 
 print "done\n" unless $?;
 

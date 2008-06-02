@@ -27,6 +27,7 @@ use File::Spec;
 use File::Copy;
 use Perl6::Form;
 use Date::Parse;
+use Perl6::Slurp;
 use Date::Format;
 use Data::Dumper;
 use File::Basename;
@@ -78,6 +79,11 @@ use constant LOG_OUTPUT_FORMAT => <<END;
 => {'{*}'} (by {'{*}'} on {'{*}'})
    {"{1000}"}
 END
+
+# sort of a "pseudo-constant" ... only reason it's not a true constant is for ease of interpolation
+our $SVNMERGE = $VCtools::config->{VCtoolsBinDir} . '/svnmerge.py';
+# but this one is a real constant
+use constant SVNMERGE_COMMIT => 'svnmerge-commit-message.txt';
 
 
 #=#########################
@@ -143,7 +149,7 @@ sub _set_project
 	($PROJ) = @_;
 
 	# choose the proper routines based on whether it's CVS or Svn
-	my $vctype = get_proj_directive($PROJ, 'VCSystem') || 'svn';		# svn is default for historical reasons
+	my $vctype = _vc_system($PROJ);
 	if ($vctype eq 'cvs')
 	{
 
@@ -181,6 +187,23 @@ sub _set_project
 		fatal_error("unknown version control system $vctype specified");
 	}
 	print STDERR "_set_project: %vc_func = ", Dumper(\%vc_func) if DEBUG >= 4;
+}
+
+
+# THE get_proj_directive() FUNCTIONS:
+# these have to receive $proj (i.e. can't use $PROJ) because they can be called by certain functions which can
+# be, in turn, called before $PROJ is set
+# they're all very simple one-liners, but they provide a consistent place for default values at least
+sub _branch_policy
+{
+	my ($proj) = @_;
+	return get_proj_directive($proj, 'BranchPolicy', 'NONE');
+}
+
+sub _vc_system
+{
+	my ($proj) = @_;
+	return  get_proj_directive($proj, 'VCSystem', 'svn');				# svn is default for historical reasons
 }
 
 
@@ -249,7 +272,7 @@ sub _project_path
 	);
 	die("_project_path: unknown path type $which") unless exists $subdirs{$which};
 
-	my $branch_policy = get_proj_directive($proj, 'BranchPolicy', 'NONE');
+	my $branch_policy = _branch_policy($proj);
 
 	if ($branch_policy eq "NONE")
 	{
@@ -421,6 +444,26 @@ BEGIN
 			}
 		}
 
+	}
+}
+
+
+# run a command and check for error
+# exits immediately if error found
+sub _run_command
+{
+	my ($cmd, $opts) = @_;
+	$opts ||= {};
+
+	# this is a pretty awful hack, but not sure how to get around it right now
+	if ($opts->{CHECK_PRETEND} and pretend())
+	{
+		info_msg(-OFFSET => "would execute:",  $cmd);
+	}
+	else
+	{
+		my $err = system($cmd);
+		fatal_error("call to VC command $cmd failed with $! ($err)", 3) if $err;
 	}
 }
 
@@ -979,7 +1022,7 @@ sub _make_cvs_command
 
 	my (@global_options, @local_options);
 	push @global_options, "-q" unless $opts->{VERBOSE};
-	push @local_options, "-l" if $opts->{DONT_RECURSE}					# hack below annoying but necessary
+	push @local_options, "-l" if $opts->{DONT_RECURSE}					# this hack annoying but necessary
 			and not ($command eq 'add');
 	push @local_options, "-b -c" if $opts->{IGNORE_BLANKS};
 	push @local_options, "-m '$opts->{MESSAGE}'" if $opts->{MESSAGE};
@@ -999,7 +1042,7 @@ sub _make_cvs_command
 		status		=>	'-n -q update',									# cvs status doesn't work worth a crap
 																		# this is better (in general)
 		list		=>	'-n -q update',									# do list the same as we do for svn
-																		# (although thos one _does_ go out to the server)
+																		# (although this one _does_ go out to the server)
 		# we used to use -A for updates, to try to avoid the horror of sticky tags, but unfortunately that
 		# breaks branches, so we had to take it out.  the ideal would be to have a switch that said to clear
 		# sticky tags for dates and options but leave them for branches.  ah well.
@@ -1134,8 +1177,8 @@ sub _execute_normally
 	# BIG CVS HACK: to handle the PERL5LIB problem
 	$cmd =~ s/2>&1.*// if $cmd =~ /\|/;
 
-	my $err = system($cmd);
-	fatal_error("call to VC command $cmd failed with $! ($err)", 3) if $err;
+	# this won't return if there's an error
+	_run_command($cmd);
 }
 
 
@@ -1308,6 +1351,21 @@ sub check_common_errors
 }
 
 
+# this must be run _after_ either check_common_errors() or verify_files_and_group()
+# (expects $PROJ to be set, for one thing)
+sub check_branch_errors
+{
+	# check for rational BranchPolicy
+	fatal_error("This command cannot run with no BranchPolicy set.") if _branch_policy($PROJ) eq 'NONE';
+
+	# now make sure that we have svnmerge.py if we're using Subversion
+	if (_vc_system($PROJ) eq 'svn')
+	{
+		fatal_error("This command requires svnmerge.py to exist in your VCtoolsBinDir.") unless -x $SVNMERGE;
+	}
+}
+
+
 sub verify_files_and_group
 {
 	my @files = @_;
@@ -1410,11 +1468,17 @@ sub create_tag
 
 sub create_branch
 {
-	my ($proj, $branch) = @_;
+	my ($branch) = @_;
+
+	my $msg = message() || get_proj_directive($PROJ, 'BranchCommit');
+	if ($msg)
+	{
+		$msg =~ s/\{\}/$branch/g;
+	}
 
 	# this works for Subversion, but it would have to be
 	# radically different for CVS
-	_execute_normally("copy", project_dir(), _project_path($proj, 'branch', $branch));
+	_execute_normally("copy", project_dir(), _project_path($PROJ, 'branch', $branch), { MESSAGE => $msg });
 }
 
 
@@ -1524,13 +1588,13 @@ sub proj_exists_in_vc
 
 sub branch_exists_in_vc
 {
-	my ($project, $branch) = @_;
+	my ($branch) = @_;
 
 	# works just like proj_exists_in_vc, so see notes there
 	return defined eval
 	{
 		# this must be run even under pretend(), and it's readonly and therefore safe
-		_execute_and_discard_output("log", _project_path($project, 'branch', $branch), { EVEN_IF_PRETEND => 1 });
+		_execute_and_discard_output("log", _project_path($PROJ, 'branch', $branch), { EVEN_IF_PRETEND => 1 });
 	}
 }
 
@@ -2322,12 +2386,14 @@ sub commit_files
 	# not bother
 	if (not exists $opts->{MOVE} and not exists $opts->{DEL} and not exists $opts->{MERGE})
 	{
+		# note in both cases below we have to filter out the directories
+
 		# if a debugging regex is specified, we need to search each file for that pattern.  if we find it,
 		# we ask the user if they're really sure they want to commit a file which apparently still has some
 		# debugging switch turned on
 		if (my $debug_pattern = get_proj_directive($PROJ, 'DebuggingRegex'))
 		{
-			foreach my $file (@files)
+			foreach my $file (grep { ! -d } @files)
 			{
 				# this is a die() instead of a fatal_error() because you really
 				# should have already checked to make sure the file is readable
@@ -2352,7 +2418,7 @@ sub commit_files
 		# if a pre-commit command is specified, we need to run each file through that
 		if (my $pre_commit = get_proj_directive($PROJ, 'PreCommit'))
 		{
-			filter_file($_, $pre_commit, 'precommit') foreach @files;
+			filter_file($_, $pre_commit, 'precommit') foreach grep { ! -d } @files;
 		}
 	}
 
@@ -2459,26 +2525,27 @@ sub edit_commit_log
 }
 
 
-# this couldn't _possibly_ work with CVS
+# originally thought this couldn't work with CVS, but apparently there is a switch to cvs update that might work
+# need to extract this into a vc_command sub and do it the right way
 # note that even though the routine is named 'switch_to_branch', it is also capable of switching to the trunk
 sub switch_to_branch
 {
-	my ($proj, $branch, @files) = @_;
+	my ($branch, @files) = @_;
 
 	my $new;
 	if ($branch eq 'trunk')
 	{
-		$new = _project_path($proj);
+		$new = _project_path($PROJ);
 	}
 	else
 	{
-		$new = _project_path($proj, 'branch', $branch);
+		$new = _project_path($PROJ, 'branch', $branch);
 	}
 
 	foreach my $file (@files)
 	{
 		my $branch = get_branch($file);
-		my $old = $branch ? _project_path($proj, 'branch', $branch) : _project_path($proj);
+		my $old = $branch ? _project_path($PROJ, 'branch', $branch) : _project_path($PROJ);
 
 		my $spath = _server_path($file);
 		$spath =~ s/\Q$old\E/$new/;
@@ -2487,7 +2554,7 @@ sub switch_to_branch
 }
 
 
-# ditto squared
+# don't see how this could possibly work with CVS at all
 sub merge_from_branch
 {
 	my ($proj, $branch, $from, $to, @files) = @_;
@@ -2515,6 +2582,25 @@ sub merge_from_branch
 			_interpret_update_output;									# merge and update have the same output style
 		}
 		close($mrg);
+	}
+}
+
+
+# using svnmerge.py here, so no real CVS equivalent at all
+sub initialize_branch
+{
+	my ($branch) = @_;
+
+	_run_command("$SVNMERGE init", { CHECK_PRETEND => 1 });
+	if (-r SVNMERGE_COMMIT)
+	{
+		my $msg = slurp SVNMERGE_COMMIT;
+		commit_files(undef, '.', { MESSAGE => $msg });					# need dummy 1st arg because commit_files()
+		unlink SVNMERGE_COMMIT;											# not fully converted yet
+	}
+	else
+	{
+		fatal_error("expected commit message file but got none");
 	}
 }
 

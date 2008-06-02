@@ -91,7 +91,7 @@ if (@mod_files)
 # MAIN
 #################################
 
-VCtools::switch_to_branch($proj, 'trunk', @files);
+VCtools::switch_to_branch('trunk', @files);
 
 print "done\n" unless $?;
 
