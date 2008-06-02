@@ -192,7 +192,7 @@ sub _set_debuggit_func
 	}
 	else
 	{
-		eval "sub ${caller_package}::debuggit () { 0 };";
+		eval "sub ${caller_package}::debuggit { 0 };";
 	}
 }
 
