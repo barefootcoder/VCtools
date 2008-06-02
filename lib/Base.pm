@@ -50,7 +50,7 @@
 #
 # All the code herein is released under the Artistic License
 #		( http://www.perl.com/language/misc/Artistic.html )
-# Copyright (c) 1999-2003 Barefoot Software, Copyright (c) 2004 ThinkGeek
+# Copyright (c) 1999-2008 Barefoot Software, Copyright (c) 2004 ThinkGeek
 #
 ###########################################################################
 
@@ -85,6 +85,9 @@ sub import
 	# print STDERR "just before prepending, value is $debug_value\n";
 	redirect_modules_to_testing() if $opts{DEBUG};
 
+	# set up debuggit() function
+	_set_debuggit_func($caller_package, $opts{DEBUG});
+
 	# print STDERR "leaving import now\n";
 }
 
@@ -111,28 +114,15 @@ sub set_up_debug_value
 		# if neither one is defined, assume 0 (debugging off)
 		$debug_value = defined $master_debug ? $master_debug : 0;
 	}
-=comment
-	elsif (exists $word_vals{uc $debug_value})
-	{
-		$debug_value = $word_vals{uc $debug_value};
-	}
-	else
-	{
-		croak("Geek::Dev::Debug: I only understand positive integers "
-				. " and a few select words")
-						unless $debug_value =~ /^\d+$/;
-	}
-=cut
 
 	croak("DEBUG already defined; don't use VCtools::Base(DEBUG => #) twice")
 			if $caller_defined;
 
 	eval "sub ${caller_package}::DEBUG () { return $debug_value; }";
 
-	# also have to tuck this value into the Geek namespace
+	# also have to tuck this value into the main namespace
 	# if it isn't already there
-	eval "sub main::DEBUG () { return $debug_value; }"
-			unless defined $master_debug;
+	eval "sub main::DEBUG () { return $debug_value; }" unless defined $master_debug;
 
 	# return whatever we came up with in case somebody else needs it
 	return $debug_value;
@@ -178,6 +168,32 @@ sub redirect_modules_to_testing
 	};
 
 	$already_prepended = 1;
+}
+
+
+# this is based on several other debuggit()s I've written, so see also:
+# 	Barefoot::debug
+# 	Geek::Dev::Debug
+# 	Barefoot
+# and possibly a few others I've forgotten
+# (mainly the last one, though, from whom this was lifted pretty much verbatim)
+sub _set_debuggit_func
+{
+	my ($caller_package, $debug_value) = @_;
+
+	if ($debug_value)
+	{
+		eval qq{
+			sub ${caller_package}::debuggit
+			{
+				print STDERR join(' ', map { defined \$_ ? \$_ : '<<undef>>' } \@_), "\\n" if DEBUG >= shift;
+			}
+		};
+	}
+	else
+	{
+		eval "sub ${caller_package}::debuggit () { 0 };";
+	}
 }
 
 
