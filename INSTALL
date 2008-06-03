@@ -1,0 +1,96 @@
+To install VCtools, do the following things.  As a convention, command lines that start with "$" should be run
+as your regular user. Those that start with "#" should be run as root.
+
+*	Make sure you have a directory where your projects will live.  You probably already have one.  If not,
+create one.  It can be wherever you want, but most people like to have it right in their home directory.  This
+corresponds to the PersonalDir directive in your VCtools.conf file.  Here's an example:
+
+		$ mkdir ~/proj
+
+*	Go to your project directory.  You must be in this directory when you create a new project.
+
+		$ cd ~/proj
+
+*	Check out VCtools from GoogleCode like so:
+
+		$ svn checkout http://vc-tools.googlecode.com/svn/VCtools/trunk VCtools
+
+*	(Optional) If you want your project files to belong to a different group, set that now.  On a box which is
+devoted to you, this is probably not necessary.  On a shared box, you may have a "dev" group or somesuch:
+
+		$ chgrp -R dev VCtools
+
+*	Switch to root and make the necessary directories.  The first directory is where your VCtools.conf will
+live, and this one is pretty set.  The only way to change it is to change the CONFIG_FILE constant in
+vctools-config.  The second one is where the VCtools Perl library files will live.  It can be anywhere you
+like, but the base dir (i.e. the path without the trailing /VCtools) should either be in your @INC path
+already, or you will have to add it to your $PERL5LIB variable.  The third one can be anywhere you like, and
+corresponds to the VCtoolsBinDir directive in your VCtools.conf file.  You should make all three dirs writable
+by whatever group your VCtools project files belong to.  This might be "users", or a special "dev" group, or
+possibly a group that is the same as your name (but if you performed the optional step above, it should
+definitely match that).
+
+		# mkdir -p /usr/local/etc/VCtools mkdir -p /usr/lib/perl5/site_perl/VCtools mkdir -p
+		# /usr/local/VCtools chgrp dev /usr/local/etc/VCtools /usr/lib/perl5/site_perl/VCtools
+		# /usr/local/VCtools chmod g+w /usr/local/etc/VCtools /usr/lib/perl5/site_perl/VCtools
+		# /usr/local/VCtools
+
+*	Copy the sample config file to it's proper resting place.  Edit it and make necessary changes.  You must
+change the PersonalDir and VCtoolsBinDir directives if you chose alternative locations in the steps above.
+Optionally, you could make the conf file writable by you.  On a shared box, we recommend leaving it as
+editable by root only.
+
+		# cp etc/VCtools.conf /usr/local/etc/VCtools.conf vi /usr/local/etc/VCtools.conf
+
+*	You should now be able to use vrel to get your initial files to the right place:
+
+		$ rel vbranch vbuild vcommit vcshell vctools-config vdel vdiff vfind vget vlog vmerge vmv vnew vrel
+		vstat vsync vtag vunbranch vunget etc/vctools.cshrc etc/vctools.shrc lib/Args.pm lib/Base.pm
+		lib/Common.pm lib/Config.pm
+
+*	The vctools-config file is used by all other VCtools commands to figure out where various directories are.
+It should be symlinked to a place that is already in your path.  Here's a common way to do it (note this is
+done as root):
+
+		# ln -s /usr/local/VCtools/vctools-config /usr/local/bin
+
+*	Add the necessary lines to your startup file to enable your VCtools environment:
+
+		# this is for csh or tcsh
+		if ( -e /usr/local/etc/VCtools/vctools.cshrc ) then source /usr/local/etc/VCtools/vctools.cshrc endif
+
+		# this is for sh, ksh, or bash note that bash will also accept "source" instead of "."
+		if [ -e /usr/local/etc/VCtools/vctools.shrc ] then . /usr/local/etc/VCtools/vctools.shrc endif
+
+At this point, you should be good to go.  You may wish to check the VCtools Wiki at
+http://code.google.com/p/vc-tools/wiki/Overview for any tips about personal modifications to your environment
+(particularly as relates to using (or not using) vcshell), which would go in a ~/.vctoolsrc file.  All that is
+optional, however.
+
+To test if your new setup is working, try this:
+
+		$ vcshell VCtools			# optional; see the Wiki for how to avoid this step if you want to $ vstat
+		-vr
+
+And the output should look roughly like this:
+
+  unchanged from repository => ./                                                          => INSTALL
+  => etc/                                                        => etc/VCtools.conf
+  => etc/vctools.cshrc                                           => etc/vctools.shrc
+  => lib/                                                        => lib/Args.pm
+  => lib/Base.pm                                                 => lib/Common.pm
+  => lib/Config.pm                                               => lib/test_Args
+  => lib/test_Base                                               => lib/test_Base.pm
+  => lib/test_VCtools                                            => vbranch
+  => vbuild                                                      => vcommit
+  => vcshell                                                     => vctools-config
+  => vdel                                                        => vdiff
+  => vfind                                                       => vget
+  => vlog                                                        => vmerge
+  => vmv                                                         => vnew
+  => vrel                                                        => vstat
+  => vsync                                                       => vtag
+  => vunbranch                                                   => vunget                                                      
+
+If you run into any problems, don't hesitate to email Your Humble Author at barefootcoder@gmail.com (or
+bburden@rent.com if you happen to be one of his coworkers).
