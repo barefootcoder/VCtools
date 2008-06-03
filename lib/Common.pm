@@ -2592,9 +2592,9 @@ sub initialize_branch
 	my ($branch) = @_;
 
 	_run_command("$SVNMERGE init", { CHECK_PRETEND => 1 });
-	if (-r SVNMERGE_COMMIT)
+	if (-r SVNMERGE_COMMIT or pretend())
 	{
-		my $msg = slurp SVNMERGE_COMMIT;
+		my $msg = pretend() ? 'commit message goes here' : slurp SVNMERGE_COMMIT;
 		commit_files(undef, '.', { MESSAGE => $msg });					# need dummy 1st arg because commit_files()
 		unlink SVNMERGE_COMMIT;											# not fully converted yet
 	}
