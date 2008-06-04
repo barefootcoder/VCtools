@@ -104,15 +104,16 @@ sub _set_defaults
 
 	# handle this one specially because it has a different type of action
 	push @spec, form(FIRST_SWITCH, "-h", "display this help");
-	my $print_usage = qq[print "usage: \$VCtools::command_line\\n\\n"; \$self->usage()];
+	my $print_usage = q{ print "usage: $VCtools::command_line\n\n"; $self->usage() };
 	push @spec, "              { $print_usage; exit(0); }\n";
 	push @spec, form(SECOND_SWITCH, "--help");
 
 	# this one's special because it sets a global variable directly
-	$VCtools::PROJ_USER = $ENV{'USER'};
-	push @spec, form(FIRST_SWITCH, "-u <username>", "use the project of username (default: current user)");
-	push @spec, "              { \$VCtools::PROJ_USER = \$username; VCtools::re_expand_directives() }\n";
-	push @spec, form(SECOND_SWITCH, "--user <username>");
+	# NOT WORKING YET!
+	#$VCtools::PROJ_USER = $ENV{'USER'};
+	#push @spec, form(FIRST_SWITCH, "-u <username>", "use the project of username (default: current user)");
+	#push @spec, "              { \$VCtools::PROJ_USER = \$username; VCtools::re_expand_directives() }\n";
+	#push @spec, form(SECOND_SWITCH, "--user <username>");
 
 	# these can all be handled in the normal fashion
 	switch('verbose', 'v', 'verbose output');
@@ -132,31 +133,26 @@ sub _set_defaults
 ###########################
 # First, set up any command line switches you will need:
 #
-#	VCtools::switch('long', 'l', 'force a longer display');
-#	VCtools::switch('bmoogle', 'b', 'specify the bmoogle argument', 'arg');
+#		VCtools::switch('long', 'l', 'force a longer display');
+#		VCtools::switch('bmoogle', 'b', 'specify the bmoogle argument', 'arg');
 #
 # These two lines tell the Args module to accept a -l or --long switch, and also to take a -b or --bmoogle
 # switch which itself will accept an argument (the name of this argument--'arg' in the example above--is
 # significant only in the usage message).
 #
-# In addition to whatever switches the client program defines, VCtools::Args itself defines the following
-# ones:
-#
-#	[ 'help', 'h', 'display this help' ]
-#	[ 'verbose', 'v', 'verbose output' ]
-#	[ 'ignore_errors', 'i', 'ignore errors' ]
-#	[ 'rootpath', 'R', 'override default VC root path', 'rootpath' ]
+# In addition to whatever switches the client program defines, VCtools::Args itself defines several default
+# switches.  Please see the private sub _set_defaults for a list.
 #
 # Each of the switches will turn into to a function with no arguments that returns either 1 or 0 (for boolean
 # switches), or a value, possibly undefined (for switches with parameters).  The name of this function will be
 # the same as the long version of the switch.  So, for instance, your code can do this:
 #
-#	if (VCtools::verbose())
-#	{
-#		print "some extra info\n";
-#	}
+#		if (VCtools::verbose())
+#		{
+#			print "some extra info\n";
+#		}
 #
-#	get_stuff_from(VCtools::rootpath() . "/wherever");
+#		get_stuff_from(VCtools::rootpath() . "/wherever");
 BEGIN
 {
 	my %short_forms;
@@ -201,8 +197,8 @@ BEGIN
 # After you set up the switches, you can also have the Args module verify the remainder of the arguments.  For
 # instance:
 #
-#	VCtools::args('pattern', 'single', 'pattern to search for');
-#	VCtools::args('files', 'optlist', 'files to search (search STDIN if no files given)');
+#		VCtools::args('pattern', 'single', 'pattern to search for');
+#		VCtools::args('files', 'optlist', 'files to search (search STDIN if no files given)');
 #
 # would be a series of calls to set up a command line just like grep(1).  The first (non-switch) argument
 # would have to be a pattern; it would be a mandatory single argument.  Any remaining arguments would all be
@@ -216,19 +212,19 @@ BEGIN
 #
 # Like switches, arguments also turn into functions with no arguments that may be called:
 #
-#	if (VCtools::files())
-#	{
-#		foreach my $file (VCtools::files())
+#		if (VCtools::files())
 #		{
-#			open(IN, $file) or VCtools::fatal_error("file $file doesn't exist");
-#			check_for_pattern(VCtools::pattern(), \*IN);
-#			close(IN);
+#			foreach my $file (VCtools::files())
+#			{
+#				open(IN, $file) or VCtools::fatal_error("file $file doesn't exist");
+#				check_for_pattern(VCtools::pattern(), \*IN);
+#				close(IN);
+#			}
 #		}
-#	}
-#	else
-#	{
-#		check_for_pattern(VCtools::pattern(), \*STDIN);
-#	}
+#		else
+#		{
+#			check_for_pattern(VCtools::pattern(), \*STDIN);
+#		}
 #
 # Note that files() returns an array, whereas pattern() returns a scalar.
 sub args
@@ -307,14 +303,14 @@ sub args
 # "actions", which are a bit like switches that come _after_ the arguments.  This allows you to create a
 # command which works like find(1):
 #
-#	VCtools::args('dir', 'list', 'directories to search');
-#	VCtools::action('name', 'only find names matching pattern', 'pattern');
-#	VCtools::action('print', 'print filenames found');
+#		VCtools::args('dir', 'list', 'directories to search');
+#		VCtools::action('name', 'only find names matching pattern', 'pattern');
+#		VCtools::action('print', 'print filenames found');
 #
 # Unlike a switch, there is no long and short version of an action.  The "name" action above would be
 # specified on the command line as "-name" (only).
 #
-# Note that the Args module doesn't really distinguish between conditions and actions.  Also note that this
+# Note that VCtools::Args doesn't really distinguish between conditions and actions.  Also note that this
 # doesn't allow you to do anything as complex as find's -exec (to name but one obvious example).
 sub action
 {
@@ -340,10 +336,10 @@ sub action
 # certainly could be no calls at all, if you're happy with the default switches and don't require any args),
 # call getopts() to do the actual command line processing:
 #
-#	VCtools::getopts();
+#		VCtools::getopts();
 #
 # If there is an error in the command line, getopts() will never return.  It will print the usage message and
-# exit with a return value of 2.
+# exit with a value of 2.
 sub getopts
 {
 	print STDERR Dumper($args), "\n" if DEBUG >= 5;
@@ -371,12 +367,14 @@ sub getopts
 ###########################
 # Consistent printing of error messages with immediate exit.
 #
-#	# print error message and exit w/ error value of 1
-#	VCtools::fatal_error("can't find the flooberbloob");
-#	# or specify your own error value
-#	VCtools::fatal_error("compltely schnozzed up", 3);
-#	# add "(-h for usage)" to the message, and exit w/ error of 2
-#	VCtools::fatal_error("didn't specify a wangdoodle", "usage");
+#		# print error message and exit w/ error value of 1
+#		VCtools::fatal_error("can't find the flooberbloob");
+#
+#		# or specify your own error value
+#		VCtools::fatal_error("compltely schnozzed up", 3);
+#
+#		# add "(-h for usage)" to the message, and exit w/ error of 2
+#		VCtools::fatal_error("didn't specify a wangdoodle", "usage");
 sub fatal_error
 {
 	my ($err_msg, $exit_code) = @_;
@@ -397,9 +395,9 @@ sub fatal_error
 ###########################
 # Consistent printing of error messages _without_ immediate exit.  Also takes -i switch into account.
 #
-#	# print error exactly like fatal_error, but don't exit
-#	# however, don't print if --ignore_errors switch was given
-#	VCtools::warning("Warning! slobberhead was twizzled");
+#		# print error exactly like fatal_error, but don't exit
+#		# however, don't print if --ignore_errors switch was given
+#		VCtools::warning("Warning! slobberhead was twizzled");
 sub warning
 {
 	my ($warning) = @_;
@@ -412,8 +410,17 @@ sub warning
 # Consistent printing of informational (i.e., non-error) messages.  Note that all args to info_msg() are
 # joined together onto one line.
 #
-#	# print message preceded by program name
-#	VCtools::info_msg("some stuff:", $stuff_var, "to print");
+#		# print message preceded by program name
+#		VCtools::info_msg("some stuff:", $stuff_var, "to print");
+#
+# You can also get a few different effects by using special initial arguments:
+#
+#		# for multi-line messages, you may want to indent the second line to line up with the first
+#		VCtools::info_msg("a really really long message which contains a lot of useful information");
+#		VCtools::info_msg(-INDENT => "and goes on for quite a long time");
+#
+#		# if you _really_ want your message to stand out, you can have it completely surrounded by whitespace
+#		VCtools::info_msg(-OFFSET => "This is really super important, guys!");
 sub info_msg
 {
 	my $indent = 0;
@@ -437,8 +444,8 @@ sub info_msg
 ###########################
 # Print an informational message which also includes a list of files that meet some criteria.
 #
-#	VCtools::list_files($project, "are really wacked out", @wacked_out_files);
-#	# prints "the following files or directories are really wacked out" and then lists the files
+#		# prints "the following files or directories are really wacked out" and then lists the files
+#		VCtools::list_files($project, "are really wacked out", @wacked_out_files);
 sub list_files
 {
 	my ($msg, @files) = @_;
@@ -464,10 +471,12 @@ sub list_files
 # Print a multi-line message, then ask the user if they wish to continue.  If they don't, immediately exit the
 # program.
 #
-#	# not necessarily a fatal error, but best bring it up
-#	# (note: default answer is always "no")
-#	VCtools::prompt_to_continue("You have some problems here.",
-#			"Your hard drive might explode if you keep going like this.");
+#		# not necessarily a fatal error, but best bring it up
+#		# (note: default answer is always "no")
+#		VCtools::prompt_to_continue("You have some problems here.",
+#				"Your hard drive might explode if you keep going like this.");
+#
+# Note that unlike info_msg(), here each arg gets its own line.
 sub prompt_to_continue
 {
 	my ($first_line, @other_lines) = @_;
