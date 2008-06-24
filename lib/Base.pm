@@ -183,12 +183,14 @@ sub _set_debuggit_func
 
 	if ($debug_value)
 	{
-		eval qq{
-			sub ${caller_package}::debuggit
+		eval "sub ${caller_package}::debuggit" .
+		q{
 			{
-				print STDERR join(' ', map { defined \$_ ? \$_ : '<<undef>>' } \@_), "\\n" if $debug_value >= shift;
+				print STDERR join(' ', map { !defined $_ ? '<<undef>>' : /^\s+/ || /\s+$/ ? "<<$_>>" : $_ } @_), "\n"
+						if DEBUG >= shift;
 			}
 		};
+		die("cannot create debuggit subroutine: $@") if $@;
 	}
 	else
 	{
