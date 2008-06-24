@@ -109,8 +109,8 @@ sub _set_defaults
 	push @spec, form(SECOND_SWITCH, "--help");
 
 	# this one's special because it sets a global variable directly
+	$VCtools::PROJ_USER = $ENV{'USER'};
 	# NOT WORKING YET!
-	#$VCtools::PROJ_USER = $ENV{'USER'};
 	#push @spec, form(FIRST_SWITCH, "-u <username>", "use the project of username (default: current user)");
 	#push @spec, "              { \$VCtools::PROJ_USER = \$username; VCtools::re_expand_directives() }\n";
 	#push @spec, form(SECOND_SWITCH, "--user <username>");
