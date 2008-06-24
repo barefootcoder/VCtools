@@ -609,7 +609,7 @@ sub _interpret_svn_status_output
 	return wantarray ? () : undef unless length > 40;
 
 	my $file;
-	if ( /\s* \d+ \s+ \d+ \s+ \w+ \s+ (.*) \s* $/x )
+	if ( /\s* (?:\d+|[\?-]) \s+ (?:\d+|[\?-]) \s+ (?:\w+|\?) \s+ (.*) \s* $/x )
 	{
 		$file = $1;
 	}
@@ -627,7 +627,7 @@ sub _interpret_svn_status_output
 	return $file unless wantarray;
 
 	my $status = substr($_, 0, 1);
-	print STDERR "interpreting status output: status is <$status>\n" if DEBUG >= 4;
+	debuggit(4 => "status output: status is <$status>, col 1 is", substr($_, 1, 1), "col 2 is", substr($_, 2, 1));
 
 	# have to check locked and outdated (in that order) before everything
 	# else, because they override other statuses
@@ -647,10 +647,6 @@ sub _interpret_svn_status_output
 	{
 		return ($file, 'modified');
 	}
-	elsif ($status eq ' ')
-	{
-		return ($file, 'nothing');
-	}
 	elsif ($status eq 'C')
 	{
 		return ($file, 'conflict');
@@ -662,6 +658,14 @@ sub _interpret_svn_status_output
 	elsif ($status eq '!' or $status eq '~')
 	{
 		return ($file, 'broken');
+	}
+	elsif (substr($_, 1, 1) eq 'C')
+	{
+		return ($file, 'property-conflict');
+	}
+	elsif ($status eq ' ')
+	{
+		return ($file, 'nothing');
 	}
 	else
 	{
@@ -2168,6 +2172,12 @@ sub print_status
 		'conflict'	=>	{
 							printif		=>	ALWAYS,
 							comment		=>	"has a conflict with repository changes",
+							to_fix		=>	"vcommit after manual correction",
+							is_error	=>	1,
+						},
+		'property-conflict'	=>	{
+							printif		=>	ALWAYS,
+							comment		=>	"has a conflict with repository changes in its properties",
 							to_fix		=>	"vcommit after manual correction",
 							is_error	=>	1,
 						},
