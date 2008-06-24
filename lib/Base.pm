@@ -74,19 +74,19 @@ use FileHandle;
 sub import
 {
 	my ($pkg, %opts) = @_;
-	# print STDERR "==============\n@INC\nin base import\n";
+	# print STDERR "==============\n@INC\nin base import of $0\n";
 
 	my $caller_package = caller;
 	# print STDERR "my calling package is $caller_package\n";
 
 	$opts{DEBUG} = set_up_debug_value($caller_package, $opts{DEBUG});
 
-	# prepend testing dirs into @INC path if we're actually in DEBUG mode
-	# print STDERR "just before prepending, value is $debug_value\n";
-	redirect_modules_to_testing() if $opts{DEBUG};
-
 	# set up debuggit() function
 	_set_debuggit_func($caller_package, $opts{DEBUG});
+
+	# prepend testing dirs into @INC path if we're actually in DEBUG mode
+	# print STDERR "just before prepending, value is $opts{DEBUG}\n";
+	redirect_modules_to_testing() if $opts{DEBUG};
 
 	# print STDERR "leaving import now\n";
 }
@@ -95,8 +95,7 @@ sub import
 sub set_up_debug_value
 {
 	my ($caller_package, $debug_value) = @_;
-	# print STDERR "debug value is ";
-	# print STDERR defined $debug_value ? $debug_value : "undefined", "\n";
+	# print STDERR "from $caller_package: debug value is ", defined $debug_value ? $debug_value : "undefined", "\n";
 	my $caller_defined = defined eval "${caller_package}::DEBUG();";
 
 	# the "master" value is in the main namespace
@@ -115,14 +114,17 @@ sub set_up_debug_value
 		$debug_value = defined $master_debug ? $master_debug : 0;
 	}
 
-	croak("DEBUG already defined; don't use VCtools::Base(DEBUG => #) twice")
-			if $caller_defined;
+	croak("DEBUG already defined; don't use VCtools::Base(DEBUG => #) twice") if $caller_defined;
 
 	eval "sub ${caller_package}::DEBUG () { return $debug_value; }";
+	die("can't set DEBUG in caller package: $@") if $@;
 
 	# also have to tuck this value into the main namespace
 	# if it isn't already there
+	# warn "creating: ", "sub main::DEBUG () { return $debug_value; }" unless defined $master_debug;
 	eval "sub main::DEBUG () { return $debug_value; }" unless defined $master_debug;
+	die("can't set DEBUG in main package: $@") if $@;
+	# print STDERR "after creation: eval returns ", eval "main::DEBUG();", " and eval err is $@\n";
 
 	# return whatever we came up with in case somebody else needs it
 	return $debug_value;
@@ -183,11 +185,11 @@ sub _set_debuggit_func
 
 	if ($debug_value)
 	{
-		eval "sub ${caller_package}::debuggit" .
-		q{
+		my $printout = q{ join(' ', map { !defined $_ ? '<<undef>>' : /^\s+/ || /\s+$/ ? "<<$_>>" : $_ } @_), "\n" };
+		eval qq{
+			sub ${caller_package}::debuggit
 			{
-				print STDERR join(' ', map { !defined $_ ? '<<undef>>' : /^\s+/ || /\s+$/ ? "<<$_>>" : $_ } @_), "\n"
-						if DEBUG >= shift;
+				print $printout if main::DEBUG >= shift;
 			}
 		};
 		die("cannot create debuggit subroutine: $@") if $@;
