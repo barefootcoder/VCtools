@@ -46,14 +46,26 @@ my @files = VCtools::files();
 #################################
 
 VCtools::verify_files_and_group(@files);
-my $opts = { DONT_RECURSE => !VCtools::recursive() };
 
 # get statuses for everything at once (quicker that way)
-VCtools::cache_file_status(@files, { DONT_RECURSE => !VCtools::recursive() });
+my @all_files = VCtools::cache_file_status(@files, { DONT_RECURSE => !VCtools::recursive() });
 
 foreach my $file (@files)
 {
 	VCtools::fatal_error("$file is not in VC") unless VCtools::exists_in_vc($file);
+}
+
+# check for modified files if we don't have force specified
+my @mod_files = VCtools::get_all_with_status('modified');
+my $force_delete = 0;
+if (@mod_files)
+{
+	unless (VCtools::force())
+	{
+		VCtools::list_files("are modified", @mod_files);
+		VCtools::prompt_to_continue("Your modifications will be lost forever!");
+	}
+	$force_delete = 1;													# so VC delete command doesn't freak out
 }
 
 
@@ -63,11 +75,11 @@ foreach my $file (@files)
 
 unless (VCtools::force())
 {
-	VCtools::prompt_to_continue("$_ is going to be removed from VC and then deleted") foreach @files;
+	VCtools::list_files("will be removed", @all_files);
+	VCtools::prompt_to_continue("files will be removed from VC's HEAD and then deleted from the working copy");
 }
 
-VCtools::remove_files(@files, $opts);
-VCtools::commit_files(undef, @files,									# HACK! when first arg removed from lib, remove here
-		{ %$opts, DEL => scalar(@files) });
+VCtools::remove_files(@all_files, { FORCE => $force_delete });
+VCtools::commit_files(undef, @all_files, { DEL => scalar(@all_files) });# HACK! when first arg removed from lib, remove here
 
 print "done\n";

@@ -627,7 +627,7 @@ sub _interpret_svn_status_output
 	return $file unless wantarray;
 
 	my $status = substr($_, 0, 1);
-	debuggit(4 => "status output: status is <$status>, col 1 is", substr($_, 1, 1), "col 2 is", substr($_, 2, 1));
+	warn "status output: status is <$status>, col 1 is ", substr($_, 1, 1), " col 2 is ", substr($_, 2, 1) if DEBUG >= 4;
 
 	# have to check locked and outdated (in that order) before everything
 	# else, because they override other statuses
@@ -2330,11 +2330,13 @@ sub remove_files
 {
 	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
 	my (@files) = @_;
+	warn "removing files @files" if DEBUG >= 2;
 
 	# for looking up files
-	# also, every time we find a file, we're going to remove it from the hash
-	# then, at the end, if there's anything left, we know we had a problem
+	# also, every time we find a file, we're going to set the value in the hash to 0
+	# then, at the end, if there's anything left set to 1, we know we had a problem
 	my $files = _file_hash(@files);
+	warn "file hash: ", Dumper($files) if DEBUG >= 2;
 
 	my $fh = _execute_and_get_output("remove", @files, $opts) or return;
 	while ( <$fh> )
@@ -2342,7 +2344,8 @@ sub remove_files
 		if ( / ^ D \s+ (.*) \s* $ /x )
 		{
 			fatal_error("deleted unknown file: $1") unless exists $files->{$1};
-			delete $files->{$1};
+			warn "deleting file <<$1>>" if DEBUG >= 2;
+			$files->{$1} = 0;
 		}
 		elsif ( /cvs remove: use 'cvs commit' to remove these files permanently/ )
 		{
@@ -2356,7 +2359,8 @@ sub remove_files
 	}
 	close($fh);
 
-	fatal_error("not all files were removed: @{keys %$files}") if %$files;
+	my @leftovers = grep { $files->{$_} == 1 } keys %$files;
+	fatal_error("not all files were removed: @leftovers") if @leftovers;
 }
 
 
@@ -2432,8 +2436,8 @@ sub commit_files
 		}
 	}
 
-	# we expect that our filelist has already been expanded for purposes of recursion,
-	# so we're not going to do any recursion here
+	# we expect that our filelist has already been expanded for purposes of recursion, so we're not going to
+	# do any recursion here
 	# however, when removing directories, DONT_RECURSE can be problematic
 	$opts->{DONT_RECURSE} = 1 unless $opts->{DEL};
 	_execute_normally("commit", @files, $opts);
