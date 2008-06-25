@@ -810,7 +810,7 @@ sub _interpret_cvs_update_output
 sub _interpret_svn_update_output
 {
 	return if /^At revision/;											# ignore these
-	if ( /^([ADUG]) (.*)/ )												# ignore unless verbose is on
+	if ( /^([ADUG])U? (.*)/ )												# ignore unless verbose is on
 	{
 		if (verbose())
 		{
