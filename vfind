@@ -40,6 +40,8 @@ VCtools::action('file', 'consider a file only if its basename contains this stri
 VCtools::action('grep', 'search file for (Perl regex) pattern (also prints filename)', 'pattern');
 VCtools::action('dirfind', 'find closest matching dirname (exact matches and least depth preferred)', 'dirname');
 VCtools::action('emptydir', 'find all empty directories');
+VCtools::action('nocomments', 'try to ignore comments with -grep (may not always work)--CURRENTLY EXTREMELY SLOW!');
+VCtools::action('nolonglines', 'ignore lines over 256 chars with -grep');
 VCtools::getopts();
 print STDERR "finished with opts\n" if DEBUG >= 5;
 
@@ -56,6 +58,21 @@ VCtools::check_common_errors();
 if (!!VCtools::grep() + !!VCtools::dirfind() + !!VCtools::emptydir() > 1)
 {
 	VCtools::fatal_error("can only supply one of: -grep, -dirfind, -emptydir");
+}
+
+my $snoop;
+if (VCtools::nocomments())
+{
+	VCtools::fatal_error("-nocomments doesn't make sense without -grep") unless VCtools::grep();
+
+	eval { require File::Comments } or VCtools::fatal_error("cannot load File::Comments (required for -nocomments)");
+	$snoop = File::Comments->new() or VCtools::fatal_error("cannot instantiate File::Comments object");
+	print STDERR "got snoop object\n" if DEBUG >= 2;
+}
+
+if (VCtools::nolonglines())
+{
+	VCtools::fatal_error("-nolonglines doesn't make sense without -grep") unless VCtools::grep();
 }
 
 
@@ -200,9 +217,27 @@ sub grep_file
 	print STDERR "grep_file($file, $pattern)\n" if DEBUG >= 4;
 	my $retval = 0;
 
-	if (-f $file)
+	# certainly don't try to grep dirs, pipes, sockets, etc
+	return 0 unless -f $file;
+
+	if (-T $file)														# grepping binary files messes up the terminal
 	{
-		if (-T $file)
+		if (VCtools::nocomments())
+		{
+			my $contents = $snoop->stripped($file);
+			if ($contents)
+			{
+				foreach (split($/, $contents))
+				{
+					last unless grep_line($file, $pattern, \$retval);
+				}
+			}
+			else
+			{
+				print STDERR "found empty file $file\n" if DEBUG >= 4;
+			}
+		}
+		else
 		{
 			if (not open(IN, $file))
 			{
@@ -212,33 +247,46 @@ sub grep_file
 
 			while ( <IN> )
 			{
-				if ( /$pattern/ )
-				{
-					$retval = 1;
-
-					# using -grep and -print at the same time indicates that we only want the file name
-					if (VCtools::print())
-					{
-						print_file($file);
-						print "\n";
-						last;
-					}
-					else
-					{
-						print_file($file, ":");
-						print;
-					}
-				}
+				last unless grep_line($file, $pattern, \$retval);
 			}
 			close(IN);
 		}
-		else
-		{
-			VCtools::warning("skipped binary file $file");
-		}
+	}
+	else
+	{
+		VCtools::warning("skipped binary file $file");
 	}
 
 	return $retval;
+}
+
+# this expects its line to be in $_
+sub grep_line
+{
+	my ($file, $pattern, $retval) = @_;
+
+	# don't bother to check super long lines if the user says not to
+	# (but still return 1 so that following lines will be checked)
+	return 1 if VCtools::nolonglines() and length > 256;
+
+	if ( /$pattern/ )
+	{
+		$$retval = 1;
+
+		# using -grep and -print at the same time indicates that we only want the file name
+		if (VCtools::print())
+		{
+			print_file($file, "\n");
+			return 0;
+		}
+		else
+		{
+			print_file($file, ":");
+			print;
+		}
+	}
+
+	return 1;
 }
 
 
