@@ -29,14 +29,18 @@ use VCtools::Common;
 # OPTIONS AND ENVIRONMENT VARS
 #################################
 
+my $DEFAULT_NUM = 100;
+
 VCtools::switch('latest', 'l', 'show only latest log (same as -n1)');
-VCtools::switch('number', 'n', 'show only howmany logs (default: 100)', 'howmany');
+VCtools::switch('number', 'n', "show only howmany logs (default: $DEFAULT_NUM)", 'howmany');
+VCtools::switch('count', 'c', "don't show logs, just count them (useful with -U, not useful with -n)");
+VCtools::switch('commit_user', 'U', 'show only logs from user', 'user');
 VCtools::args('files', 'list', 'file(s) (or directory/ies) to show logs for');
 VCtools::getopts();
 
 # figure out how many logs to show
-my $howmany = VCtools::latest() ? 1 : VCtools::number() || 100;
-print STDERR "number of logs to print: $howmany\n" if DEBUG >= 3;
+my $howmany = VCtools::latest() ? 1 : VCtools::number() || (VCtools::count() ? 0 : $DEFAULT_NUM);
+print STDERR "number of logs to print: $howmany\n" if DEBUG >= 2;
 
 # remember, directories are files too
 my @files = VCtools::files();
@@ -71,20 +75,28 @@ foreach (@files)
 {
 	my $header_line = @files > 1 ? "\n---> $_ <---\n" : "";
 
-	VCtools::get_log($_, $howmany);
+	VCtools::get_log($_, $howmany, { AUTHOR => VCtools::commit_user() });
 	if (VCtools::latest())
 	{
-		print $header_line, VCtools::log_lines($proj, 0) unless VCtools::pretend();
+		print $header_line, VCtools::log_lines(0) unless VCtools::pretend();
+	}
+	elsif (VCtools::count())
+	{
+		VCtools::verbose() ? VCtools::info_msg("found", VCtools::num_logs(), "logs") : print VCtools::num_logs(), "\n";
+		exit 0;
 	}
 	else
 	{
-		VCtools::page_output('.vclog', $header_line, VCtools::log_lines($proj)) unless VCtools::pretend();
+		VCtools::page_output('.vclog', $header_line, VCtools::log_lines()) unless VCtools::pretend();
 		print "\n";
 		VCtools::prompt_to_continue("$count more files to view") if --$count;
 	}
 }
 
-print "\ndone\n";
+print "\n";
+VCtools::info_msg("stopped after printing", $howmany, "log messages;", "there may be more")
+		if VCtools::num_logs() == $howmany;
+print "done\n";
 
 
 #################################

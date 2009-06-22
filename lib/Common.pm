@@ -353,7 +353,7 @@ BEGIN
 	sub _parse_vc_nativepath
 	{
 		my ($nativepath) = @_;
-		print STDERR "parsing native path $nativepath\n" if DEBUG >= 3;
+		print STDERR "parsing native path $nativepath\n" if DEBUG >= 4;
 
 		# This seems remarkably funky, but bear with us:
 		# In order to find the leading crap that needs to be stripped off, we're going to use _project_path()
@@ -885,11 +885,12 @@ sub _interpret_svn_revert_output
 
 sub _interpret_log_output
 {
+	my $opts = @_ && ref $_[$#_] eq "HASH" ? pop : {};
 	# use 1st arg, or $_ if no args
 	local $_ = $_[0] if @_;
 
 	# this routine shouldn't use args; just process the line in $_
-	$vc_func{'log_output'}->();
+	$vc_func{'log_output'}->($opts);
 }
 
 sub _interpret_cvs_log_output
@@ -918,9 +919,24 @@ sub _interpret_cvs_log_output
 	}
 }
 
+my $_svn_inside_log;
 sub _interpret_svn_log_output
 {
-	# ignore the blank lines and the separator lines
+	my ($opts) = @_;
+
+	# separator lines means reset whether we're in a log or not
+	if (/^-+$/)
+	{
+		$_svn_inside_log = 0;
+		return;
+	}
+
+	# ignore blank lines and the line that introduces the filenames
+	# this has the unfortunate side effect of eliminating blank lines _within_ a log message, but I
+	# can't figure out how to get around that without ending up with a useless blank line at the end
+	# of every single log message
+	# also, if you have a log message containing "Changed paths:" as a separate line, that'll get
+	# eaten; possibly this should be fixed someday
 	return if /^\s*$/ or /^-+$/ or /^Changed paths:$/;
 
 	# bit of a shortcut here for the field separators
@@ -930,19 +946,27 @@ sub _interpret_svn_log_output
 		my $log = {};
 		@$log{ qw<rev author date> } = ($1, $2, str2time($3));
 
-		$log->{message} = '';											# this gets filled in below
-		push @log_cache, $log;
+		if (not $opts->{AUTHOR} or $log->{author} eq $opts->{AUTHOR})
+		{
+			$log->{message} = '';										# this gets filled in below
+			push @log_cache, $log;
+			$_svn_inside_log = 1;
+		}
 	}
-	elsif ( m{ ^ \s\s\s ([A-Z]) \s (/.*?) \s+ (\(from .*?\))? \s* $ }x )
+	elsif ( m{ ^ \s\s\s ([A-Z]) \s (/.*?) \s+ (?:\(from \s (/.*?)(:\d+)?\))? \s* $ }x and $_svn_inside_log)
 	{
 		my $log = $log_cache[-1];
 
 		my ($file, $which, $branch) = _parse_vc_nativepath($2);
 		$log->{branch} = $branch unless $which and $which eq 'tag';		# just ignore tags; shouldn't get those anyway
 
-		if ($1 eq 'R')													# dunno WTF these things are
+		if ($4)															# these appear to be merges
 		{
-			$file = "?$file";
+			$file = "M->$file";
+		}
+		elsif ($1 eq 'R')												# replacements (moved from somewhere else)
+		{
+			$file = "-+$file";
 		}
 		elsif ($1 eq 'D')												# deletes
 		{
@@ -951,7 +975,8 @@ sub _interpret_svn_log_output
 		elsif ($1 eq 'A')												# adds
 		{
 			$file = "+$file";
-			$file = "-$file" if $3;										# means it was moved (delete then add)
+			$file = "-+$file" if $3 && $3 ne $file;						# means it was moved (but not sure why it's not R)
+			$file = "?$file" if $3 && $3 eq $file;						# dunno _what_ this is
 		}
 		else															# just a regular mod
 		{
@@ -959,7 +984,7 @@ sub _interpret_svn_log_output
 		}
 		push @{$log->{files}}, $file;
 	}
-	elsif (@log_cache > 0)
+	elsif ($_svn_inside_log)
 	{
 		# assume everything else is just an actual log commit message line
 		# it must belong to the last log in the cache, so just tack it on there
@@ -967,9 +992,8 @@ sub _interpret_svn_log_output
 	}
 	else
 	{
-		# got something that like looks like a log commit message line, but no logs to attach it to
-		# punt!
-		print STDERR;
+		# these are probably lines of log messages that we're ignoring for some reason or other
+		# just do nothing
 	}
 }
 
@@ -1912,10 +1936,14 @@ sub get_log
 	{
 		# if we were passed a number of logs to retrieve and we've retrieved that many, we're done
 		# (you may think this should be >=, but you'd be wrong)
-		last if $number and @log_cache > $number;
+		if ($number and @log_cache > $number)
+		{
+			print STDERR "bailing out of reading log entries because ", scalar(@log_cache), " is > $number\n" if DEBUG >= 3;
+			last;
+		}
 
 		print STDERR "<log output>:$_" if DEBUG >= 5;
-		_interpret_log_output;
+		_interpret_log_output($opts);
 	}
 	close($fh);
 
@@ -1925,22 +1953,23 @@ sub get_log
 	# so get rid of that if it exists
 	pop @log_cache unless $log_cache[-1]->{message};
 
+	print STDERR "got ", scalar(@log_cache), " log entries for $file\n" if DEBUG >= 3;
 	print STDERR Data::Dumper->Dump( [\@log_cache], [qw<@log_cache>] ) if DEBUG >= 4;
 }
 
 
 sub log_lines
 {
-	my ($proj, $which) = @_;
+	my ($which) = @_;
 
-	my $time_fmt = get_proj_directive($proj, 'LogDatetimeFormat', LOG_DATE_FORMAT);
-	my $log_fmt = get_proj_directive($proj, 'LogOutputFormat', LOG_OUTPUT_FORMAT);
+	my $time_fmt = get_proj_directive($PROJ, 'LogDatetimeFormat', LOG_DATE_FORMAT);
+	my $log_fmt = get_proj_directive($PROJ, 'LogOutputFormat', LOG_OUTPUT_FORMAT);
 
 	# ordering of fields takes a little work
 	# first, we have to replace "date" with "datestr" (i.e., the legible version)
 	# (_log_format() will produce the datestr field from the date one)
 	# then we have to split the ordering to produce an array of field names
-	my $field_order = get_proj_directive($proj, 'LogFieldsOrdering', LOG_FIELD_ORDERING);
+	my $field_order = get_proj_directive($PROJ, 'LogFieldsOrdering', LOG_FIELD_ORDERING);
 	$field_order =~ s/\bdate\b/datestr/;
 	my @fields = split(' ', $field_order);
 
@@ -1958,17 +1987,15 @@ sub log_lines
 
 
 ###########################
-# This routine returns the same as log_lines($proj, 0), but _only_ if that log was created by
+# This routine returns the same as log_lines(0), but _only_ if that log was created by
 # the currently running script.  If no such log exists, it returns undef.
 sub log_we_created
 {
-	my ($proj) = @_;
-
 	# $^T is the time the script started running
 	# we'll go 2 seconds before that just to allow for a small amount of discrepancy between us and the server
 	if (@log_cache and $log_cache[0]->{date} > ($^T - 2))
 	{
-		return log_lines($proj, 0);
+		return log_lines(0);
 	}
 
 	return undef;
@@ -2007,6 +2034,12 @@ sub find_log
 	}
 
 	return undef;
+}
+
+
+sub num_logs
+{
+	return scalar(@log_cache);
 }
 
 
@@ -2462,7 +2495,7 @@ sub commit_files
 				print STDERR "getting log for ", _server_path(dirname($files[0])), "\n" if DEBUG >= 2;
 				get_log(_server_path(dirname($files[0])), 1);
 			}
-			my $log_message = log_we_created($PROJ);
+			my $log_message = log_we_created();
 
 			if ($log_message)
 			{
