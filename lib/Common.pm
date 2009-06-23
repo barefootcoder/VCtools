@@ -1345,8 +1345,7 @@ sub verify_gid
 	# to keep % in vi sane:       (
 	my $current_group = getgrgid $);
 	my $proj_group = project_group($proj);
-	fatal_error("cannot perform this operation unless "
-			. "your primary group is $proj_group")
+	fatal_error("cannot perform this operation unless your primary group is $proj_group")
 				unless $current_group eq $proj_group;
 }
 
@@ -1414,8 +1413,7 @@ sub verify_files_and_group
 		fatal_error("$file is not in VC working dir") unless $proj;
 		if (defined $file_project)
 		{
-			fatal_error("all files do not belong to the same project")
-					unless $file_project eq $proj;
+			fatal_error("all files do not belong to the same project") unless $file_project eq $proj;
 		}
 		else
 		{
@@ -1724,8 +1722,7 @@ sub get_tree
 	close($ed);
 	if ($?)
 	{
-		fatal_error("cannot build this project "
-				. "(error at version control layer $!)", 3);
+		fatal_error("cannot build this project (error at version control layer $!)", 3);
 	}
 }
 
