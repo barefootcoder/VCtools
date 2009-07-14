@@ -99,8 +99,7 @@ my @all_files = VCtools::cache_file_status(@files, { DONT_RECURSE => 0 });
 
 foreach my $file (@files)
 {
-	VCtools::fatal_error("$file is not in VC")
-			unless VCtools::exists_in_vc($file);
+	VCtools::fatal_error("$file is not in VC") unless VCtools::exists_in_vc($file);
 }
 
 my @mod_files;
@@ -126,7 +125,7 @@ if (VCtools::create())
 }
 
 VCtools::switch_to_branch(VCtools::branch(), @files);
-VCtools::initialize_branch(VCtools::branch());
+VCtools::initialize_branch(VCtools::branch()) if VCtools::create();
 
 print "done\n" unless $?;
 

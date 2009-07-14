@@ -80,9 +80,7 @@ use constant LOG_OUTPUT_FORMAT => <<END;
    {"{1000}"}
 END
 
-# sort of a "pseudo-constant" ... only reason it's not a true constant is for ease of interpolation
-our $SVNMERGE = $VCtools::config->{VCtoolsBinDir} . '/svnmerge.py';
-# but this one is a real constant
+# only need this one if SvnMerge directive is set in VCtools.conf
 use constant SVNMERGE_COMMIT => 'svnmerge-commit-message.txt';
 
 
@@ -204,6 +202,12 @@ sub _vc_system
 {
 	my ($proj) = @_;
 	return  get_proj_directive($proj, 'VCSystem', 'svn');				# svn is default for historical reasons
+}
+
+# not really a get_proj_directive function, so doesn't require a $proj argument
+sub _svnmerge ()
+{
+	return $config->{'SvnMerge'};										# should return undef if it doesn't exist
 }
 
 
@@ -1386,9 +1390,9 @@ sub check_branch_errors
 	fatal_error("This command cannot run with no BranchPolicy set.") if _branch_policy($PROJ) eq 'NONE';
 
 	# now make sure that we have svnmerge.py if we're using Subversion
-	if (_vc_system($PROJ) eq 'svn')
+	if (_vc_system($PROJ) eq 'svn' and _svnmerge)
 	{
-		fatal_error("This command requires svnmerge.py to exist in your VCtoolsBinDir.") unless -x $SVNMERGE;
+		fatal_error("This command requires svnmerge.py to exist in your VCtoolsBinDir.") unless -x _svnmerge;
 	}
 }
 
@@ -2630,21 +2634,25 @@ sub merge_from_branch
 }
 
 
-# using svnmerge.py here, so no real CVS equivalent at all
+# no real CVS equivalent at all, I don't think
+# and not even needed in Subversion unless using svnmerge.py
 sub initialize_branch
 {
 	my ($branch) = @_;
 
-	_run_command("$SVNMERGE init", { CHECK_PRETEND => 1 });
-	if (-r SVNMERGE_COMMIT or pretend())
+	if (_vc_system($PROJ) eq 'svn' and _svnmerge)
 	{
-		my $msg = pretend() ? 'commit message goes here' : slurp SVNMERGE_COMMIT;
-		commit_files(undef, '.', { MESSAGE => $msg });					# need dummy 1st arg because commit_files()
-		unlink SVNMERGE_COMMIT;											# not fully converted yet
-	}
-	else
-	{
-		fatal_error("expected commit message file but got none");
+		_run_command(_svnmerge . ' init', { CHECK_PRETEND => 1 });
+		if (-r SVNMERGE_COMMIT or pretend())
+		{
+			my $msg = pretend() ? 'commit message goes here' : slurp SVNMERGE_COMMIT;
+			commit_files(undef, '.', { MESSAGE => $msg });				# need dummy 1st arg because commit_files()
+			unlink SVNMERGE_COMMIT;										# not fully converted yet
+		}
+		else
+		{
+			fatal_error("expected commit message file but got none");
+		}
 	}
 }
 
