@@ -43,8 +43,9 @@ my @files = VCtools::files();
 # CHECK FOR ERRORS
 #################################
 
-my $proj = VCtools::verify_files_and_group(@files);
-print STDERR "project is $proj\n" if DEBUG >= 2;
+VCtools::verify_files_and_group(@files);
+my $merge_commit = VCtools::check_branch_errors();
+print STDERR "project is $VCtools::PROJ\n" if DEBUG >= 2;
 
 # get statuses for everything at once (quicker that way)
 # like vbranch, vmerge is always recursive
@@ -88,18 +89,14 @@ elsif ($from_branch eq $to_branch)
 	VCtools::fatal_error("cannot merge from branch $from_branch to itself");
 }
 
-my $merge_commit = VCtools::get_proj_directive($proj, 'MergeCommit');
-VCtools::fatal_error("too dangerous to merge without a MergeCommit directive; fix your config and try again")
-		unless $merge_commit;
-
-my $start = VCtools::branch_point_revno($proj, $from_branch eq 'TRUNK' ? $to_branch : $from_branch);
-my $prev_merge = VCtools::prev_merge_point($proj, $from_branch, $to_branch, @files);
+my $start = VCtools::branch_point_revno($from_branch eq 'TRUNK' ? $to_branch : $from_branch);
+my $prev_merge = VCtools::prev_merge_point($from_branch, $to_branch, @files);
 print STDERR "determined branch point to be $start and previous merge point to be $prev_merge\n" if DEBUG >= 3;
 # I thought this should be $prev_merge + 1, but the Subversion mailing lists seem to indicate this is wrong
 $start = $prev_merge if $prev_merge > $start;
 print STDERR "determined starting revision to be $start\n" if DEBUG >= 2;
 
-my $end = VCtools::revision() || VCtools::head_revno($proj);
+my $end = VCtools::revision() || VCtools::head_revno();
 print STDERR "determined ending revision to be $end\n" if DEBUG >= 2;
 
 VCtools::prompt_to_continue("will merge revisions $start through $end from "
@@ -116,7 +113,7 @@ VCtools::prompt_to_continue("will merge revisions $start through $end from "
 
 use constant BAK_EXT => '.mrgbak';
 
-VCtools::backup_full_project($proj, { ext => BAK_EXT });
+VCtools::backup_full_project({ ext => BAK_EXT });
 
 if (@mod_files)
 {
@@ -126,7 +123,7 @@ if (@mod_files)
 	VCtools::revert_files(@mod_files);
 }
 
-VCtools::merge_from_branch($proj, $from_branch, $start, $end, @files);
+VCtools::merge_from_branch($from_branch, $start, $end, @files);
 
 # now figure out what got modified, if there are any conflicts, etc
 CONFLICT_RESOLUTION:
@@ -147,13 +144,13 @@ CONFLICT_RESOLUTION:
 
 		if (yesno_no_default("Do you wish to restore the project to pre-merge status?"))
 		{
-			VCtools::restore_project_backup($proj, { ext => BAK_EXT });
+			VCtools::restore_project_backup({ ext => BAK_EXT });
 		}
 		else
 		{
 			VCtools::info_msg("Your project is in an unstable state.  After further investigation, you may wish to");
 			VCtools::info_msg(-INDENT => "manually restore the complete project backup located at "
-					. VCtools::full_project_backup_name($proj, { ext => BAK_EXT }));
+					. VCtools::full_project_backup_name({ ext => BAK_EXT }));
 		}
 
 		exit 1;
@@ -170,12 +167,13 @@ if (yesno_no_default("Do you wish to continue by committing the merge operation?
 {
 	my $commit_msg = "$merge_commit\nMerged revisions $start:$end from "
 			. ($from_branch eq 'TRUNK' ? "trunk" : "branch $from_branch");
-	VCtools::commit_files($proj, @new_mod_files, { MERGE => scalar(@new_mod_files), MESSAGE => $commit_msg });
+	# HACK! when first arg removed from lib, remove here
+	VCtools::commit_files(undef, @new_mod_files, { MERGE => scalar(@new_mod_files), MESSAGE => $commit_msg });
 }
 else
 {
 	# they don't like it; let's put everything back
-	VCtools::restore_project_backup($proj, { ext => BAK_EXT });
+	VCtools::restore_project_backup({ ext => BAK_EXT });
 	exit 1;
 }
 
@@ -183,7 +181,7 @@ else
 if (@mod_files)
 {
 	VCtools::restore_backup_files(@mod_files, { ext => BAK_EXT, overwrite => 1 });
-	VCtools::merge_from_branch($proj, $from_branch, $start, $end, @mod_files);
+	VCtools::merge_from_branch($from_branch, $start, $end, @mod_files);
 }
 
 print "done\n";

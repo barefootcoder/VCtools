@@ -210,6 +210,12 @@ sub _merge_tracking
 	return get_proj_directive($proj, 'MergeTracking', 'external');
 }
 
+sub _merge_commit
+{
+	my ($proj) = @_;
+	return get_proj_directive($proj, 'MergeCommit');					# no default for this one
+}
+
 sub _svnmerge
 {
 	my ($proj) = @_;
@@ -1396,11 +1402,20 @@ sub check_branch_errors
 	# check for rational BranchPolicy
 	fatal_error("This command cannot run with no BranchPolicy set.") if _branch_policy($PROJ) eq 'NONE';
 
+	# make sure we have a merge commit message: if we're currently branching, that means we'll
+	# eventually be merging, and we don't want to merge without a merge commit message
+	my $merge_commit = _merge_commit($PROJ);
+	fatal_error("too dangerous to merge without a MergeCommit directive; fix your config and try again")
+			unless $merge_commit;
+
 	# now make sure that we have svnmerge.py if we're using Subversion
 	if (_vc_system($PROJ) eq 'svn' and _svnmerge)
 	{
 		fatal_error("This command requires svnmerge.py to exist in your VCtoolsBinDir.") unless -x _svnmerge;
 	}
+
+	# vmerge needs this
+	return $merge_commit;
 }
 
 
@@ -1800,9 +1815,7 @@ sub parse_vc_file
 # needs adjustment to work for CVS
 sub head_revno
 {
-	my ($proj) = @_;
-
-	my $ppath = _project_path($proj, 'root');
+	my $ppath = _project_path($PROJ, 'root');
 	`svn log -r HEAD $ppath` =~ /r(\d+)/;
 	return $1;
 }
@@ -1811,9 +1824,9 @@ sub head_revno
 # probably wouldn't work for CVS
 sub branch_point_revno
 {
-	my ($proj, $branch) = @_;
+	my ($branch) = @_;
 
-	get_log(_project_path($proj, 'branch', $branch), { BRANCH_ONLY => 1, VERBOSE => 0 });
+	get_log(_project_path($PROJ, 'branch', $branch), { BRANCH_ONLY => 1, VERBOSE => 0 });
 	return log_field(-1, 'rev');										# -1 meaning the last log, which is the earliest one
 }
 
@@ -1821,16 +1834,16 @@ sub branch_point_revno
 # completely fuxored for CVS
 sub prev_merge_point
 {
-	my ($proj, $from_branch, $to_branch, @files) = @_;
+	my ($from_branch, $to_branch, @files) = @_;
 	my $message;
 
-	my $merge_commit = get_proj_directive($proj, 'MergeCommit');
+	my $merge_commit = _merge_commit($PROJ);
 	fatal_error("cannot look for previous merge points without a MergeCommit directive") unless $merge_commit;
 
 	my $from_msg = $from_branch eq 'TRUNK' ? "from trunk" : "from branch $from_branch";
 
 	my ($project, $path) = parse_vc_file($files[0]);
-	die("file is not in the right project!") unless $proj eq $project;	# this should theoretically never happen
+	die("file is not in the right project!") unless $PROJ eq $project;	# this should theoretically never happen
 	if (@files == 1 and $path eq '.')
 	{
 		# doing entire working copy; this seems to be a special case for some reason (not sure why)
@@ -1838,11 +1851,11 @@ sub prev_merge_point
 		# try looking for a project-wide merge point
 		if ($to_branch eq 'TRUNK')
 		{
-			get_log(_project_path($proj), { VERBOSE => 0 });
+			get_log(_project_path($PROJ), { VERBOSE => 0 });
 		}
 		else
 		{
-			get_log(_project_path($proj, 'branch', $to_branch), { BRANCH_ONLY => 1, VERBOSE => 0 });
+			get_log(_project_path($PROJ, 'branch', $to_branch), { BRANCH_ONLY => 1, VERBOSE => 0 });
 		}
 		$message = find_log($merge_commit, 'message', $from_msg) || '';
 	}
@@ -2137,7 +2150,10 @@ sub restore_backup_files
 
 sub full_project_backup_name
 {
-	my ($proj, $opts) = @_;
+	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
+	my ($proj) = @_;
+	$proj ||= $PROJ;
+
 	return project_dir($proj . $opts->{'ext'});
 }
 
@@ -2145,11 +2161,10 @@ sub full_project_backup_name
 sub backup_full_project
 {
 	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
-	my ($proj) = @_;
 
 	die("backup_full_project: must supply backup extension") unless $opts->{'ext'};
 
-	my $backup_dir = full_project_backup_name($proj, $opts);
+	my $backup_dir = full_project_backup_name($PROJ, $opts);
 	if (-d $backup_dir)
 	{
 		prompt_to_continue("a previous backup $backup_dir already exists; must remove it to continue");
@@ -2163,11 +2178,10 @@ sub backup_full_project
 sub restore_project_backup
 {
 	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
-	my ($proj) = @_;
 
 	die("restore_project_backup: must supply backup extension") unless $opts->{'ext'};
-	my $backup_dir = full_project_backup_name($proj, $opts);
-	die("restore_project_backup: no backup exists $proj$opts->{'ext'}") unless -d $backup_dir;
+	my $backup_dir = full_project_backup_name($PROJ, $opts);
+	die("restore_project_backup: no backup exists $backup_dir") unless -d $backup_dir;
 
 	system("rm", "-rf", project_dir());
 	system("mv", $backup_dir, project_dir());
@@ -2612,20 +2626,20 @@ sub switch_to_branch
 # don't see how this could possibly work with CVS at all
 sub merge_from_branch
 {
-	my ($proj, $branch, $from, $to, @files) = @_;
-	print STDERR "action: merge_from_branch $proj, $branch, $from, $to, ", join(', ', @files), "\n" if DEBUG >= 5;
+	my ($branch, $from, $to, @files) = @_;
+	print STDERR "action: merge_from_branch $branch, $from, $to, ", join(', ', @files), "\n" if DEBUG >= 5;
 
 	# we'll need the merge commit message for this project
-	my $merge_commit = get_proj_directive($proj, 'MergeCommit');
+	my $merge_commit = _merge_commit;
 	fatal_error("cannot safely vmerge without a merge commit message specified in the config") unless $merge_commit;
 
-	my $merge_from = $branch eq 'TRUNK' ?  _project_path($proj) : _project_path($proj, 'branch', $branch);
+	my $merge_from = $branch eq 'TRUNK' ?  _project_path($PROJ) : _project_path($PROJ, 'branch', $branch);
 	print STDERR "merge_from_branch: merging from $merge_from\n" if DEBUG >= 3;
 
 	foreach my $file (@files)
 	{
 		my $branch = get_branch($file);
-		my $current = $branch ? _project_path($proj, 'branch', $branch) : _project_path($proj);
+		my $current = $branch ? _project_path($PROJ, 'branch', $branch) : _project_path($PROJ);
 
 		my $spath = _server_path($file);
 		$spath =~ s/\Q$current\E/$merge_from/;
