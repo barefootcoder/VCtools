@@ -80,7 +80,7 @@ use constant LOG_OUTPUT_FORMAT => <<END;
    {"{1000}"}
 END
 
-# only need this one if SvnMerge directive is set in VCtools.conf
+# only need this one if MergeTracking directive in VCtools.conf is set to svnmerge.py
 use constant SVNMERGE_COMMIT => 'svnmerge-commit-message.txt';
 
 
@@ -201,13 +201,20 @@ sub _branch_policy
 sub _vc_system
 {
 	my ($proj) = @_;
-	return  get_proj_directive($proj, 'VCSystem', 'svn');				# svn is default for historical reasons
+	return get_proj_directive($proj, 'VCSystem', 'svn');				# svn is default for historical reasons
 }
 
-# not really a get_proj_directive function, so doesn't require a $proj argument
-sub _svnmerge ()
+sub _merge_tracking
 {
-	return $config->{'SvnMerge'};										# should return undef if it doesn't exist
+	my ($proj) = @_;
+	return get_proj_directive($proj, 'MergeTracking', 'external');
+}
+
+sub _svnmerge
+{
+	my ($proj) = @_;
+	my $mt = _merge_tracking($proj);
+	return $mt =~ /svnmerge/ ? $mt : undef;
 }
 
 
@@ -2640,9 +2647,9 @@ sub initialize_branch
 {
 	my ($branch) = @_;
 
-	if (_vc_system($PROJ) eq 'svn' and _svnmerge)
+	if (_vc_system($PROJ) eq 'svn' and _svnmerge($PROJ))
 	{
-		_run_command(_svnmerge . ' init', { CHECK_PRETEND => 1 });
+		_run_command(_svnmerge($PROJ) . ' init', { CHECK_PRETEND => 1 });
 		if (-r SVNMERGE_COMMIT or pretend())
 		{
 			my $msg = pretend() ? 'commit message goes here' : slurp SVNMERGE_COMMIT;
