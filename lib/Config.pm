@@ -86,16 +86,14 @@ sub _expand_directives
 		elsif ( /Dir$/ )
 		{
 			# $~ thoughtfully provided by File::HomeDir
-			$node->{$_} =~ s@^~(.*?)/@$~{$1 ? $1 : $VCtools::PROJ_USER}/@;
+			$node->{$_} =~ s{^~(.*?)/}{$~{$1 ? $1 : $VCtools::PROJ_USER}/};
 			$node->{$_} =~ s/\$\{?(\w+)\}?/$ENV{$1}/;
 		}
 		elsif ( /Regex$/ )
 		{
-			$node->{$_} =~ m:^/(.*)/$:
-					or fatal_error("directive $path$_ not formatted as regex");
+			$node->{$_} =~ m{^/(.*)/$} or fatal_error("directive $path$_ not formatted as regex");
 			my $regex = $1;
-			eval { $node->{$_} = qr/$regex/ }
-					or fatal_error("illegal regex in directive $path$_");
+			eval { $node->{$_} = qr/$regex/ } or fatal_error("illegal regex in directive $path$_");
 		}
 	}
 }
