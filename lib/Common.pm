@@ -33,8 +33,8 @@ use Data::Dumper;
 use File::Basename;
 use Mail::Sendmail;
 use Fcntl qw<F_SETFD>;
-use Cwd qw<getcwd realpath>;
 use File::Temp qw<tempfile>;
+use Cwd 2.18 qw<getcwd realpath>;						# need at least 2.18 to get useful version of realpath
 
 use VCtools::Base;
 use VCtools::Args;
@@ -125,7 +125,7 @@ sub _file_dest
 	$dst =~ s@^\./@@;
 
 	# make sure they didn't turn into the same path after all that
-	return (undef, undef) if _really_realpath($src) eq _really_realpath($dst);
+	return (undef, undef) if realpath($src) eq realpath($dst);
 
 	# finally! looks like they're okay now
 	return ($src, $dst);
@@ -652,7 +652,7 @@ sub _interpret_svn_status_output
 	{
 		return ($file, 'locked');
 	}
-	elsif ($status eq 'M' and substr($_, 7, 1) eq '*')
+	elsif ($status eq 'M' and substr($_, 7, 3) =~ /\*/)
 	{
 		return ($file, 'modified+outdated');
 	}
@@ -1402,6 +1402,10 @@ sub check_branch_errors
 	# check for rational BranchPolicy
 	fatal_error("This command cannot run with no BranchPolicy set.") if _branch_policy($PROJ) eq 'NONE';
 
+	# need to be in TLD of WC
+	fatal_error("VCtools needs to branch and/or merge from the top-level directory of your working copy")
+		unless getcwd() eq project_dir();
+
 	# make sure we have a merge commit message: if we're currently branching, that means we'll
 	# eventually be merging, and we don't want to merge without a merge commit message
 	my $merge_commit = _merge_commit($PROJ);
@@ -1472,13 +1476,13 @@ sub verify_files_and_group
 
 sub in_working_dir
 {
-	return getcwd() eq _really_realpath(WORKING_DIR);
+	return getcwd() eq realpath(WORKING_DIR);
 }
 
 
 sub project_dir
 {
-	return WORKING_DIR . "/" . ($_[0] || $PROJ);
+	return File::Spec->catdir(WORKING_DIR, $_[0] || $PROJ);
 }
 
 
@@ -1777,9 +1781,8 @@ sub parse_vc_file
 	my ($fullpath) = @_;
 
 	# let's make sure we have an absolute, canonical path
-	# (_really_realpath() provided up above in helpers)
 	print STDERR "fullpath before is $fullpath, " if DEBUG >= 4;
-	$fullpath = _really_realpath($fullpath);
+	$fullpath = realpath($fullpath);
 	print STDERR "after is $fullpath\n" if DEBUG >= 4;
 
 	# also possible for WORKING_DIR to contain symlinks
