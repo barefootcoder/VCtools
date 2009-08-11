@@ -118,6 +118,7 @@ sub re_expand_directives
 sub get_proj_directive
 {
 	my ($proj, $directive, $default) = @_;
+	croak("must supply proj") unless $proj;
 
 	# first check for a project-specific directive
 	if (exists $config->{Project}->{$proj})
