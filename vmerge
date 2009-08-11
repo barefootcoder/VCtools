@@ -32,20 +32,21 @@ use VCtools::Config;
 
 VCtools::switch('branch', 'b', 'merge from this branch (default: merge from trunk)', 'branchname');
 VCtools::switch('revision', 'V', 'merge changes up to this revision (default is HEAD)', 'revno');
-VCtools::args('files', 'list', 'file(s) (or directory/ies) to merge');
 VCtools::getopts();
-
-# remember, directories are files too
-my @files = VCtools::files();
 
 
 #################################
 # CHECK FOR ERRORS
 #################################
 
-VCtools::verify_files_and_group(@files);
+VCtools::verify_files_and_group('.');
 my $merge_commit = VCtools::check_branch_errors();
 print STDERR "project is $VCtools::PROJ\n" if DEBUG >= 2;
+
+# since check_branch_errors() has verified that we're at the TLD, we can just set @files to '.'
+my @files = ('.');
+
+VCtools::fatal_error("too dangerous to run vmerge with -N switch") if VCtools::no_outdated();
 
 # get statuses for everything at once (quicker that way)
 # like vbranch, vmerge is always recursive
@@ -54,6 +55,11 @@ VCtools::cache_file_status(@files, { DONT_RECURSE => 0, SHOW_BRANCHES => 1 });
 # pull out which files are modified
 my @mod_files = VCtools::get_all_with_status('modified');
 print STDERR "mod files are: ", join(', ', @mod_files), "\n" if DEBUG >= 3;
+
+if (VCtools::get_all_with_status('outdated'))
+{
+	VCtools::fatal_error("too dangerous to run vmerge with outdated files; please run vsync first");
+}
 
 my $from_branch = VCtools::branch();							# if we're merging from a branch, use that
 if ($from_branch)
@@ -64,20 +70,10 @@ else
 {
 	$from_branch = 'TRUNK';
 }
-print STDERR "determined from branch to be $from_branch\n" if DEBUG >= 2;
+print STDERR "determined from branch to be $from_branch\n" if DEBUG >= 3;
 
-my $to_branch;
-foreach (@files)												# important for all files to be in the same branch
-{
-	my $br = VCtools::get_branch($_) || 'TRUNK';
-	print STDERR "got $br back from get_branch\n" if DEBUG >= 3;
-
-	if ($to_branch)
-	{
-		VCtools::fatal_error("files are from at least two branches: $to_branch, $br") unless $br eq $to_branch;
-	}
-	$to_branch = $br;
-}
+my $to_branch = VCtools::get_branch('.') || 'TRUNK';
+print STDERR "got $to_branch back from get_branch\n" if DEBUG >= 3;
 
 print STDERR "to branch is $to_branch and from branch is $from_branch\n" if DEBUG >= 2;
 if ($from_branch eq 'TRUNK' and $to_branch eq 'TRUNK')
@@ -89,22 +85,7 @@ elsif ($from_branch eq $to_branch)
 	VCtools::fatal_error("cannot merge from branch $from_branch to itself");
 }
 
-my $start = VCtools::branch_point_revno($from_branch eq 'TRUNK' ? $to_branch : $from_branch);
-my $prev_merge = VCtools::prev_merge_point($from_branch, $to_branch, @files);
-print STDERR "determined branch point to be $start and previous merge point to be $prev_merge\n" if DEBUG >= 3;
-# I thought this should be $prev_merge + 1, but the Subversion mailing lists seem to indicate this is wrong
-$start = $prev_merge if $prev_merge > $start;
-print STDERR "determined starting revision to be $start\n" if DEBUG >= 2;
-
-my $end = VCtools::revision() || VCtools::head_revno();
-print STDERR "determined ending revision to be $end\n" if DEBUG >= 2;
-
-VCtools::prompt_to_continue("will merge revisions $start through $end from "
-				. ($from_branch eq 'TRUNK' ? "trunk" : "branch $from_branch") . " into "
-				. ($to_branch eq 'TRUNK' ? "trunk" : "branch $to_branch"),
-		"If this does not sound right, please do not continue.",
-		"Also, for maximum safety you should always vsync before you vmerge.",
-		"If you haven't vsync'ed lately, please stop now and do so before running again.");
+VCtools::prep_merge_tracking($from_branch, $to_branch);
 
 
 #################################
@@ -117,13 +98,11 @@ VCtools::backup_full_project({ ext => BAK_EXT });
 
 if (@mod_files)
 {
-	# we don't want to commit modified files; rather, we want to commit the merge of what they would have been if they
-	# hadn't been modified ... thus (for modified files only), backup, revert, merge, commit, restore, then merge again
+	# we're just backing up these up out of sheer paranoia; most likely it will be completely unnecessary
 	VCtools::create_backup_files(@mod_files, { ext => BAK_EXT });
-	VCtools::revert_files(@mod_files);
 }
 
-VCtools::merge_from_branch($from_branch, $start, $end, @files);
+VCtools::merge_from_branch();
 
 # now figure out what got modified, if there are any conflicts, etc
 CONFLICT_RESOLUTION:
@@ -156,8 +135,8 @@ CONFLICT_RESOLUTION:
 		exit 1;
 	}
 }
-my @new_mod_files = VCtools::get_all_with_status('modified');
-print STDERR "new mod files are: ", join(', ', @new_mod_files), "\n" if DEBUG >= 3;
+my @merged_files = get_files_to_commit();
+print STDERR "files to be committed are: ", join(', ', @merged_files), "\n" if DEBUG >= 2;
 
 VCtools::info_msg("NOTE! It is *strongly* advised that you go to another window and check the success of this operation.");
 VCtools::info_msg(-INDENT => "If you feel the merge was successful, you should continue (say 'yes' below).");
@@ -165,23 +144,15 @@ VCtools::info_msg(-INDENT => "If you feel the merge failed, you should revert (s
 
 if (yesno_no_default("Do you wish to continue by committing the merge operation?"))
 {
-	my $commit_msg = "$merge_commit\nMerged revisions $start:$end from "
-			. ($from_branch eq 'TRUNK' ? "trunk" : "branch $from_branch");
+	my $commit_msg = VCtools::merge_tracking_commit_msg();
 	# HACK! when first arg removed from lib, remove here
-	VCtools::commit_files(undef, @new_mod_files, { MERGE => scalar(@new_mod_files), MESSAGE => $commit_msg });
+	VCtools::commit_files(undef, @merged_files, { MERGE => scalar(@merged_files), MESSAGE => $commit_msg });
 }
 else
 {
 	# they don't like it; let's put everything back
 	VCtools::restore_project_backup({ ext => BAK_EXT });
 	exit 1;
-}
-
-# finish special processing of modified files
-if (@mod_files)
-{
-	VCtools::restore_backup_files(@mod_files, { ext => BAK_EXT, overwrite => 1 });
-	VCtools::merge_from_branch($from_branch, $start, $end, @mod_files);
 }
 
 print "done\n";
@@ -205,4 +176,20 @@ sub yesno_no_default
 		return 0 if $answer =~ /^n/i;
 		redo loop;
 	}
+}
+
+
+sub get_files_to_commit
+{
+	# first, turn our original mod_files into a hash
+	my %mod_files = map { $_ => 1 } @mod_files;
+
+	# now, find all the newly modified files
+	my @new_mod_files = VCtools::get_all_with_status('modified');
+
+	# now, subtract the originally modified files from the newly modified ones
+	my @merged_files = grep { not exists $mod_files{$_} } @new_mod_files;
+
+	# this should be the list of files which were successfully merged and ready to commit
+	return @merged_files;
 }

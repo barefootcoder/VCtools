@@ -480,6 +480,7 @@ sub _run_command
 	else
 	{
 		my $err = system($cmd);
+		my $cmd_show = length($cmd) <= 80 ? $cmd : substr($cmd, 0, 80) . '...';
 		fatal_error("call to VC command $cmd failed with $! ($err)", 3) if $err;
 	}
 }
@@ -1413,7 +1414,7 @@ sub check_branch_errors
 			unless $merge_commit;
 
 	# now make sure that we have svnmerge.py if we're using Subversion
-	if (_vc_system($PROJ) eq 'svn' and _svnmerge)
+	if (_vc_system($PROJ) eq 'svn' and _svnmerge($PROJ))
 	{
 		fatal_error("This command requires svnmerge.py to exist in your VCtoolsBinDir.") unless -x _svnmerge;
 	}
@@ -1600,6 +1601,15 @@ sub cache_file_status
 			print STDERR "<file info>:$_" if DEBUG >= 5;
 			my $info = _interpret_info_output;
 			my $file = $info->{'file'};
+			unless ($file)
+			{
+				if ( /Not a versioned resource/ )						# kind of a special case, so cheating a bit
+				{
+					fatal_error("failed out-of-date check; please vsync first");
+				}
+				print STDERR "cache_file_status: info struct is ", Dumper($info), " from line:\n>>$_\n" if DEBUG >= 2;
+				fatal_error("cannot determine branch info from line: $_");
+			}
 
 			next unless $info;
 			$info_cache{$file} = $info;
@@ -1894,6 +1904,87 @@ sub prev_merge_point
 }
 
 
+our %merge_tracking;
+sub prep_merge_tracking
+{
+	my ($from, $to) = @_;
+	my $mt = _merge_tracking($PROJ);
+
+	# need to do these regardless of merge tracking method
+	$merge_tracking{'from'} = $from;
+	$merge_tracking{'to'} = $to;
+
+	if ($mt eq 'internal')
+	{
+		my $start = branch_point_revno($from eq 'TRUNK' ? $to : $from);
+		my $prev_merge = prev_merge_point($from, $to, project_dir());
+		print STDERR "determined branch point to be $start and previous merge point to be $prev_merge\n" if DEBUG >= 3;
+		# I thought this should be $prev_merge + 1, but the Subversion mailing lists seem to indicate this is wrong
+		# (although internal merge tracking in practice has had some flakiness, so maybe this SHOULD
+		# be $prev_merge + 1 ... investigate this more thoroughly later!)
+		$start = $prev_merge if $prev_merge > $start;
+		print STDERR "determined starting revision to be $start\n" if DEBUG >= 3;
+
+		my $end = revision() || head_revno();
+		print STDERR "determined ending revision to be $end\n" if DEBUG >= 3;
+
+		VCtools::prompt_to_continue("will merge revisions $start through $end from "
+						. ($from eq 'TRUNK' ? "trunk" : "branch $from") . " into "
+						. ($to eq 'TRUNK' ? "trunk" : "branch $to"),
+				"If this does not sound right, please do not continue.");
+
+		%merge_tracking =
+		(
+			from	=>	$from,
+			to		=>	$to,
+			start	=>	$start,
+			end		=>	$end,
+		);
+	}
+	elsif ($mt =~ /svnmerge/)
+	{
+		# probably need to do something here, but not entirely sure what
+	}
+	elsif ($mt eq 'external')
+	{
+		# nothing to do here
+	}
+	else
+	{
+		fatal_error("do not understand merge tracking type $mt");
+	}
+}
+
+sub merge_tracking_commit_msg
+{
+	my $mt = _merge_tracking($PROJ);
+	my $base_msg = _merge_commit($PROJ);
+
+	my $from_branch = $merge_tracking{'from'}
+			or die("cannot call merge_tracking_commit_msg without calling prep_merge_tracking first");
+	my $from = $from_branch eq 'TRUNK' ? 'trunk' : "branch $from_branch";
+	my $to = $merge_tracking{'to'} eq 'TRUNK' ? 'trunk' : 'branch';
+
+	my %vars;
+	$vars{'branch'} = $from_branch eq 'TRUNK' ? $merge_tracking{'to'} : $from_branch;
+	$base_msg =~ s/\{(\w+)\}/$vars{$1}/eg;
+
+	my $commit_msg;
+	if ($mt eq 'internal')
+	{
+		$commit_msg = "$base_msg\nMerged revisions $merge_tracking{'start'}:$merge_tracking{'end'} from $from into $to";
+	}
+	elsif ($mt =~ /svnmerge/)
+	{
+		# maybe read in the commit message from the one svnmerge.py generates?
+	}
+	elsif ($mt eq 'external')
+	{
+		$commit_msg = "$base_msg\nMerged from $from into $to";
+	}
+}
+
+
 ###########################
 # This routine returns the path *in* the project of the supplied file (don't confuse with _project_path(),
 # above).  More specifically, it returns the given file as a path relative to the TLD of the project's
@@ -1920,6 +2011,7 @@ sub projpath
 sub get_branch
 {
 	my ($file) = @_;
+	croak("must supply file to get_branch") unless $file;
 
 	cache_file_status($file, { SHOW_BRANCHES => 1 }) unless exists $info_cache{$file};
 
@@ -2164,6 +2256,7 @@ sub full_project_backup_name
 sub backup_full_project
 {
 	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : {};
+	info_msg("now backing up up entire project") if verbose();
 
 	die("backup_full_project: must supply backup extension") unless $opts->{'ext'};
 
@@ -2496,8 +2589,8 @@ sub commit_files
 
 	# we expect that our filelist has already been expanded for purposes of recursion, so we're not going to
 	# do any recursion here
-	# however, when removing directories, DONT_RECURSE can be problematic
-	$opts->{DONT_RECURSE} = 1 unless $opts->{DEL};
+	# however, when removing or merging directories, DONT_RECURSE can be problematic
+	$opts->{DONT_RECURSE} = 1 unless $opts->{DEL} or $opts->{MERGE};
 	_execute_normally("commit", @files, $opts);
 
 	# now let's send out an email to whoever's on the list (if anyone is)
@@ -2629,31 +2722,50 @@ sub switch_to_branch
 # don't see how this could possibly work with CVS at all
 sub merge_from_branch
 {
-	my ($branch, $from, $to, @files) = @_;
-	print STDERR "action: merge_from_branch $branch, $from, $to, ", join(', ', @files), "\n" if DEBUG >= 5;
+	my $from_branch = $merge_tracking{'from'}
+			or die("cannot call merge_from_branch without calling prep_merge_tracking first");
 
 	# we'll need the merge commit message for this project
-	my $merge_commit = _merge_commit;
+	my $merge_commit = _merge_commit($PROJ);
 	fatal_error("cannot safely vmerge without a merge commit message specified in the config") unless $merge_commit;
 
-	my $merge_from = $branch eq 'TRUNK' ?  _project_path($PROJ) : _project_path($PROJ, 'branch', $branch);
+	my $merge_from = $from_branch eq 'TRUNK' ?  _project_path($PROJ) : _project_path($PROJ, 'branch', $from_branch);
 	print STDERR "merge_from_branch: merging from $merge_from\n" if DEBUG >= 3;
 
-	foreach my $file (@files)
+	# MUST BE IN TLD!
+	# if you've called check_branch_errors(), this is guaranteed
+	my $curbranch = get_branch('.');
+	my $current = $curbranch ? _project_path($PROJ, 'branch', $curbranch) : _project_path($PROJ);
+
+	my $spath = _server_path('.');
+	$spath =~ s/\Q$current\E/$merge_from/;
+
+	# merging is ALWAYS recursive
+	my $opts = { DONT_RECURSE => 0 };
+	my $mt = _merge_tracking($PROJ);
+	if ($mt eq 'internal')
 	{
-		my $branch = get_branch($file);
-		my $current = $branch ? _project_path($PROJ, 'branch', $branch) : _project_path($PROJ);
-
-		my $spath = _server_path($file);
-		$spath =~ s/\Q$current\E/$merge_from/;
-
-		# merging is ALWAYS recursive
-		my $mrg = _execute_and_get_output("merge", $spath, $file, { DONT_RECURSE => 0, REVNO => "$from:$to" } ) or return;
+		$opts->{'REVNO'} = "$merge_tracking{'from'}:$merge_tracking{'to'}";
+		my $mrg = _execute_and_get_output("merge", $spath, '.', $opts) or return;
 		while ( <$mrg> )
 		{
 			_interpret_update_output;									# merge and update have the same output style
 		}
 		close($mrg);
+	}
+	elsif ($mt =~ /svnmerge/)
+	{
+		# HELP!!! this needs filling in
+		fatal_error("merging via svnmerge not implemented yet");
+	}
+	elsif ($mt eq 'external')
+	{
+		# want to give the user a chance to do interactive conflict resolution
+		_execute_normally("merge", $spath, '.', $opts);
+	}
+	else
+	{
+		fatal_error("do not understand merge tracking type $mt");
 	}
 }
 
