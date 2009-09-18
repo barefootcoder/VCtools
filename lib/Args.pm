@@ -320,7 +320,7 @@ sub action
 	# and stick a small header in the spec
 	if ($spec_position >= 1 and $spec_position < 2)
 	{
-		$command_line .= " [one_action]";
+		$command_line .= " [action ...]";
 		push @spec, "\nActions:\n";
 		$spec_position = 2;
 	}
