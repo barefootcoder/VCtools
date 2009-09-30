@@ -30,10 +30,11 @@ use VCtools::Common;
 # OPTIONS AND ENVIRONMENT VARS
 #################################
 
-VCtools::switch('create', 'c', 'create the new branch before switching to it');
+VCtools::switch('create', 'c', 'create the new branch before switching to it (conflicts with -s)');
+VCtools::switch('show', 's', 'just show what branch files belong to (conflicts with -c)');
 VCtools::switch('message', 'm', 'specify commit message instead of using editor (only works with -c)', 'commit_message');
-VCtools::args('branch', 'single', 'name of branch to switch to (must not exist with -c, or must exist without)');
-VCtools::args('files', 'optlist', 'file(s) and/or directory/ies to switch over to branch (default: .); cannot use with -c');
+VCtools::args('branch', 'opt', "name of branch to switch to (can't exist with -c, must exist without, unused with -s)");
+VCtools::args('files', 'optlist', 'file(s) and/or directory/ies to show (default: .); ONLY WORKS WITH -s');
 VCtools::getopts();
 
 # remember, directories are files too
@@ -41,6 +42,8 @@ my @files = VCtools::files();
 # have to check a few things up here to make sure we get @files situated right
 if (VCtools::create())
 {
+	VCtools::fatal_error("can't mix -c and -s") if VCtools::show();
+
 	debuggit(2 => "comparing to . :", VCtools::projpath("."));
 	if (VCtools::projpath(".") ne './')
 	{
@@ -56,6 +59,15 @@ if (VCtools::create())
 
 	VCtools::prompt_to_continue("Going to create the branch, then convert your entire working copy to that branch.");
 	@files = (".");
+}
+elsif (VCtools::show())
+{
+	# since -s doesn't use branch, anything in VCtools::branch() is actually a file
+	unshift @files, VCtools::branch() if VCtools::branch();
+
+	# we'll actually pay attention to @files in this one
+	# (but . is still the default)
+	@files = ('.') unless @files;
 }
 else
 {
@@ -78,46 +90,75 @@ VCtools::verify_files_and_group(@files);
 VCtools::check_branch_errors();
 
 # make sure that branch either exists or doesn't, as appropriate
-if (VCtools::create())
+# (but not if we're just doing a show)
+unless (VCtools::show())
 {
-	if (VCtools::branch_exists_in_vc(VCtools::branch()))
+	if (VCtools::create())
 	{
-		VCtools::fatal_error("branch " . VCtools::branch() . " already exists; cannot create");
+		if (VCtools::branch_exists_in_vc(VCtools::branch()))
+		{
+			VCtools::fatal_error("branch " . VCtools::branch() . " already exists; cannot create");
+		}
 	}
-}
-else
-{
-	unless (VCtools::branch_exists_in_vc(VCtools::branch()))
+	else
 	{
-		VCtools::fatal_error("no such branch " . VCtools::branch());
+		unless (VCtools::branch_exists_in_vc(VCtools::branch()))
+		{
+			VCtools::fatal_error("no such branch " . VCtools::branch());
+		}
 	}
 }
 
 # get statuses for everything at once (quicker that way)
-# remember, vbranch is always recursive
-my @all_files = VCtools::cache_file_status(@files, { DONT_RECURSE => 0 });
+# for -s:
+# 		we have to show branches, because that's the point of the whole exercise
+# 		we don't care about outdated, and it'll just slow us down, so don't do that
+# 		recursive doesn't make any sense, so ignore it
+# for -c or without either:
+# 		ALWAYS recursive!
+my $opts = VCtools::show() ? { SHOW_BRANCHES => 1, NO_OUTDATED => 1, DONT_RECURSE => 1 } : { DONT_RECURSE => 0 };
+my @all_files = VCtools::cache_file_status(@files, $opts);
 
 foreach my $file (@files)
 {
+	# can skip these errors if -s and -i both specified
+	next if VCtools::show() and VCtools::ignore_errors();
+
 	VCtools::fatal_error("$file is not in VC") unless VCtools::exists_in_vc($file);
 }
 
-my @mod_files;
-foreach my $file (@all_files)
+unless (VCtools::show())
 {
-	push @mod_files, $file if VCtools::modified_from_vc($file);
-};
-if (@mod_files)
-{
-	VCtools::list_files("are modified from the repository versions", @mod_files);
-	VCtools::prompt_to_continue("If you want these mods to go into the branch, continue.",
-			"If you want the mods to stay in the trunk, stop now and vcommit before you vbranch.");
+	my @mod_files;
+	foreach my $file (@all_files)
+	{
+		push @mod_files, $file if VCtools::modified_from_vc($file);
+	};
+	if (@mod_files)
+	{
+		VCtools::list_files("are modified from the repository versions", @mod_files);
+		VCtools::prompt_to_continue("If you want these mods to go into the branch, continue.",
+				"If you want the mods to stay in the trunk, stop now and vcommit before you vbranch.");
+	}
 }
 
 
 #################################
 # MAIN
 #################################
+
+if (VCtools::show())
+{
+	print "\n";
+	foreach (@files)
+	{
+		print "$_ : ";
+		VCtools::print_branch($_);
+		print "\n";
+	}
+	print "\n";
+	exit(0);
+}
 
 if (VCtools::create())
 {
