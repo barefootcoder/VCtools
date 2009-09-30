@@ -677,6 +677,10 @@ sub _interpret_svn_status_output
 	{
 		return ($file, 'broken');
 	}
+	elsif ($status eq 'I')
+	{
+		return ($file, 'ignored');
+	}
 	elsif (substr($_, 1, 1) eq 'C')
 	{
 		return ($file, 'property-conflict');
@@ -1125,8 +1129,9 @@ sub _make_svn_command
 	{
 		push @options, "-N" if $opts->{DONT_RECURSE};
 	}
+	my $skip_outdated_check = no_outdated() || $opts->{NO_OUTDATED};
 	push @options, "-u"													# we need to check the server for outdating info
-			if $command eq 'status' and not no_outdated();				# for doing status, unless -N is specified
+			if $command eq 'status' and not $skip_outdated_check;		# for doing status, unless -N is specified
 	push @options, "-m '$opts->{MESSAGE}'" if $opts->{MESSAGE};			# specifying a message for commits and such
 	push @options, "-r $opts->{REVNO}" if $opts->{REVNO};				# specifying a revision number
 	push @options, "--force" if $opts->{FORCE};							# -f for vmv
@@ -1592,36 +1597,45 @@ sub cache_file_status
 	if ($opts->{'SHOW_BRANCHES'})
 	{
 		# first, make sure we don't try to get info on files that aren't in VC
-		my @ifiles = grep { $status_cache{$_} ne 'unknown' } @files;
+		my @ifiles = grep { $status_cache{$_} ne 'unknown' and $status_cache{$_} ne 'ignored' } @files;
 
-		my $inf = _execute_and_get_output("info", @files, $opts);
-		local ($/) = '';												# info spits out paragraphs, not lines
-		while ( <$inf> )
-		{
-			print STDERR "<file info>:$_" if DEBUG >= 5;
-			my $info = _interpret_info_output;
-			my $file = $info->{'file'};
-			unless ($file)
-			{
-				if ( /Not a versioned resource/ )						# kind of a special case, so cheating a bit
-				{
-					fatal_error("failed out-of-date check; please vsync first");
-				}
-				print STDERR "cache_file_status: info struct is ", Dumper($info), " from line:\n>>$_\n" if DEBUG >= 2;
-				fatal_error("cannot determine branch info from line: $_");
-			}
-
-			next unless $info;
-			$info_cache{$file} = $info;
-
-			# repeat the trailing slash trick for dirs
-			$info_cache{"$file/"} = $info if -d $file;
-		}
-		close($inf);
+		cache_file_info(@ifiles, $opts);
 	}
 
 	# in case someone needs to know what files we collected statuses (stati?) on
 	return @statfiles;
+}
+
+
+sub cache_file_info
+{
+	my $opts = @_ && ref $_[-1] eq 'HASH' ? pop : { DONT_RECURSE => not recursive(), };
+	my (@files) = @_;
+
+	my $inf = _execute_and_get_output("info", @files, $opts);
+	local ($/) = '';												# info spits out paragraphs, not lines
+	while ( <$inf> )
+	{
+		print STDERR "<file info>:$_" if DEBUG >= 5;
+		my $info = _interpret_info_output;
+		my $file = $info->{'file'};
+		unless ($file)
+		{
+			if ( /Not a versioned resource/ )						# kind of a special case, so cheating a bit
+			{
+				fatal_error("failed out-of-date check; please vsync first");
+			}
+			print STDERR "cache_file_status: info struct is ", Dumper($info), " from line:\n>>$_\n" if DEBUG >= 2;
+			fatal_error("cannot determine file info from line: $_");
+		}
+
+		next unless $info;
+		$info_cache{$file} = $info;
+
+		# repeat the trailing slash trick for dirs
+		$info_cache{"$file/"} = $info if -d $file;
+	}
+	close($inf);
 }
 
 
@@ -2320,6 +2334,11 @@ sub print_status
 							comment		=>	"unchanged from repository",
 							is_error	=>	0,
 						},
+		'ignored'	=>	{
+							printif		=>	verbose(),
+							comment		=>	"ignored because of svn:ignore prop or global conf file",
+							is_error	=>	0,
+						},
 		'conflict'	=>	{
 							printif		=>	ALWAYS,
 							comment		=>	"has a conflict with repository changes",
@@ -2378,14 +2397,24 @@ sub print_status
 			printf "    => %-60s", $file;
 			if ($opts->{'SHOW_BRANCHES'} and exists_in_vc($file) and -e $file)
 			{
-				my $branch = get_branch($file);
-				print $branch ? " {BRANCH:$branch}" : " {TRUNK}";
+				print ' ';
+				print_branch($file);
 			}
 			print "\n";
 		}
 	}
 
 	return $errors;
+}
+
+
+sub print_branch
+{
+	my ($file) = @_;
+
+	# this expects that you will have already checked for errors
+	my $branch = get_branch($file);
+	print $branch ? "{BRANCH:$branch}" : "{TRUNK}";
 }
 
 
