@@ -265,6 +265,14 @@ sub args
 			$action = "\$VCtools::args->{$name} = \$$name";
 		}
 	}
+	elsif ($type eq 'opt')
+	{
+		$args->{$name} = undef;
+		$command_line = "$command_line [$name]";
+
+		$arg_spec = "[<$name>]";
+		$action = "\$VCtools::args->{$name} = \$$name";
+	}
 	elsif ($type eq 'list')
 	{
 		$args->{$name} = [];
