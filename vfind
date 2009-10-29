@@ -113,8 +113,10 @@ print STDERR "set grep pattern to $grep_pattern\n" if DEBUG >= 2;
 my $dirmatch = VCtools::dirfind();
 if ($dirmatch)
 {
-	# this shouldn't ever happen, I don't think
+	print ".\n" and exit if $dirmatch eq '.';							# this makes vcd with no args _much_ faster
+
 	print STDERR "about to eval dirmatch ...\n" if DEBUG >= 5;
+	# this shouldn't ever happen, I don't think
 	eval { $dirmatch = qr{(?:^|/)$dirmatch(.*)$} } or VCtools::fatal_error("can't turn dirname into a pattern: $@");
 }
 print STDERR "set dirmatch to $dirmatch\n" if DEBUG >= 2;
