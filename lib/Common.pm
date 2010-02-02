@@ -411,71 +411,73 @@ BEGIN
 			}
 		}
 
-		die("can't parse native path $nativepath") if _branch_policy($PROJ) eq 'NONE';
-
-		if (not $branch_regex)
+		if (_branch_policy($PROJ) ne 'NONE')
 		{
-			print STDERR "trying to build branch reg ex\n" if DEBUG >= 5;
-			my $branchpath = _project_path($PROJ, 'branch') . '/';
-			while ($branchpath)
+			if (not $branch_regex)
 			{
-				if ( $nativepath =~ s{^\Q$branchpath\E(.*?)/}{} )
+				print STDERR "trying to build branch reg ex\n" if DEBUG >= 5;
+				my $branchpath = _project_path($PROJ, 'branch') . '/';
+				while ($branchpath)
 				{
-					$branch_regex = qr{^\Q$branchpath\E(.*?)/};
+					if ( $nativepath =~ s{^\Q$branchpath\E(.*?)/}{} )
+					{
+						$branch_regex = qr{^\Q$branchpath\E(.*?)/};
 
+						return ($nativepath, branch => $1);
+					}
+					else
+					{
+						$branchpath =~ s{^.+?(?=/)}{};
+						$branchpath = '' if $branchpath eq '/';
+					}
+				}
+			}
+			else
+			{
+				if ( $nativepath =~ s/$branch_regex// )
+				{
 					return ($nativepath, branch => $1);
 				}
-				else
+				elsif ( "$nativepath/" =~ /$branch_regex$/ )
 				{
-					$branchpath =~ s{^.+?(?=/)}{};
-					$branchpath = '' if $branchpath eq '/';
+					return ('.', branch => $1);
 				}
 			}
-		}
-		else
-		{
-			if ( $nativepath =~ s/$branch_regex// )
-			{
-				return ($nativepath, branch => $1);
-			}
-			elsif ( "$nativepath/" =~ /$branch_regex$/ )
-			{
-				return ('.', branch => $1);
-			}
-		}
 
-		if (not $tag_regex)
-		{
-			print STDERR "trying to build tag reg ex\n" if DEBUG >= 5;
-			my $tagpath = _project_path($PROJ, 'tag') . '/';
-			while ($tagpath)
+			if (not $tag_regex)
 			{
-				if ( $nativepath =~ s{^\Q$tagpath\E(.*?)/}{} )
+				print STDERR "trying to build tag reg ex\n" if DEBUG >= 5;
+				my $tagpath = _project_path($PROJ, 'tag') . '/';
+				while ($tagpath)
 				{
-					$tag_regex = qr{^\Q$tagpath\E(.*?)/};
+					if ( $nativepath =~ s{^\Q$tagpath\E(.*?)/}{} )
+					{
+						$tag_regex = qr{^\Q$tagpath\E(.*?)/};
 
+						return ($nativepath, tag => $1);
+					}
+					else
+					{
+						$tagpath =~ s{^.+?(?=/)}{};
+						$tagpath = '' if $tagpath eq '/';
+					}
+				}
+			}
+			else
+			{
+				if ( $nativepath =~ s/$tag_regex// )
+				{
 					return ($nativepath, tag => $1);
 				}
-				else
+				elsif ( "$nativepath/" =~ /$tag_regex$/ )
 				{
-					$tagpath =~ s{^.+?(?=/)}{};
-					$tagpath = '' if $tagpath eq '/';
+					return ('.', tag => $1);
 				}
 			}
 		}
-		else
-		{
-			if ( $nativepath =~ s/$tag_regex// )
-			{
-				return ($nativepath, tag => $1);
-			}
-			elsif ( "$nativepath/" =~ /$tag_regex$/ )
-			{
-				return ('.', tag => $1);
-			}
-		}
 
-		die("can't parse native path $nativepath");
+		# no clue what it is; just pass through
+		return $nativepath;
 	}
 }
 
