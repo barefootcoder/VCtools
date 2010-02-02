@@ -370,7 +370,7 @@ BEGIN
 	sub _parse_vc_nativepath
 	{
 		my ($nativepath) = @_;
-		print STDERR "parsing native path $nativepath\n" if DEBUG >= 4;
+		print STDERR "parsing native path $nativepath (trunk: $trunk_regex, branch: $branch_regex)\n" if DEBUG >= 4;
 
 		# This seems remarkably funky, but bear with us:
 		# In order to find the leading crap that needs to be stripped off, we're going to use _project_path()
@@ -405,7 +405,13 @@ BEGIN
 			{
 				return ($nativepath, 'trunk');
 			}
+			elsif ( "$nativepath/" =~ /$trunk_regex$/ )
+			{
+				return ('.', 'trunk');
+			}
 		}
+
+		die("can't parse native path $nativepath") if _branch_policy($PROJ) eq 'NONE';
 
 		if (not $branch_regex)
 		{
@@ -431,6 +437,10 @@ BEGIN
 			if ( $nativepath =~ s/$branch_regex// )
 			{
 				return ($nativepath, branch => $1);
+			}
+			elsif ( "$nativepath/" =~ /$branch_regex$/ )
+			{
+				return ('.', branch => $1);
 			}
 		}
 
@@ -459,8 +469,13 @@ BEGIN
 			{
 				return ($nativepath, tag => $1);
 			}
+			elsif ( "$nativepath/" =~ /$tag_regex$/ )
+			{
+				return ('.', tag => $1);
+			}
 		}
 
+		die("can't parse native path $nativepath");
 	}
 }
 
