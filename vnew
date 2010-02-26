@@ -54,29 +54,44 @@ my $proj = VCtools::verify_files_and_group(@files);
 # get statuses for everything at once (quicker that way)
 VCtools::cache_file_status(@files);
 
+my @files_to_add;
 foreach my $file (@files)
 {
-	VCtools::fatal_error("$file is already in VC") if VCtools::exists_in_vc($file);
+	if (VCtools::exists_in_vc($file))
+	{
+		print STDERR "not adding file to list\n";
+		VCtools::fatal_error("$file is already in VC") unless VCtools::ignore_errors();
+	}
+	else
+	{
+		print STDERR "adding file to list\n";
+		push @files_to_add, $file;
+	}
 }
+print STDERR "files_to_add: @files_to_add\n" if DEBUG >= 2;
 
 
 #################################
 # MAIN
 #################################
 
-my @new_files = VCtools::add_files(@files, { DONT_RECURSE => not VCtools::recursive() } );
-
-# theoretically, we should only see new files in the case of a recursive add
-# let's ask the user if this is okay with them
-# (if not, we'll just revert the adds)
-if (@new_files)
+my @new_files;
+if (@files_to_add)
 {
-	VCtools::list_files("have been added unexpectedly", @new_files);
-	unless (VCtools::yesno("is this okay?"))
+	@new_files = VCtools::add_files(@files_to_add, { DONT_RECURSE => not VCtools::recursive() } );
+
+	# theoretically, we should only see new files in the case of a recursive add
+	# let's ask the user if this is okay with them
+	# (if not, we'll just revert the adds)
+	if (@new_files)
 	{
-		VCtools::revert_files(@new_files, @files);
-		VCtools::info_msg("no files have been added");
-		exit;
+		VCtools::list_files("have been added unexpectedly", @new_files);
+		unless (VCtools::yesno("is this okay?"))
+		{
+			VCtools::revert_files(@new_files, @files);
+			VCtools::info_msg("no files have been added");
+			exit;
+		}
 	}
 }
 
