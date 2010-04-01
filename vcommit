@@ -86,7 +86,7 @@ foreach my $file (@files)
 		}
 		else
 		{
-			VCtools::fatal_error("$file is not in VC") unless VCtools::ignore_errors();
+			VCtools::fatal_error("$file is not in VC");
 		}
 	}
 

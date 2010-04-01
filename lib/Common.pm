@@ -1459,8 +1459,15 @@ sub verify_files_and_group
 	foreach my $file (@files)
 	{
 		print STDERR "verifying file $file\n" if DEBUG >= 4;
-		fatal_error("$file does not exist") unless -e $file;
-		fatal_error("$file is not readable") unless -r _;
+		if (-e $file)
+		{
+			fatal_error("$file is not readable") unless -r _;
+		}
+		else
+		{
+			my $msg = "$file does not exist";
+			VCtools::ignore_errors() ? prompt_to_continue($msg) : fatal_error($msg);
+		}
 
 		my $proj = parse_vc_file($file);
 		fatal_error("$file is not in VC working dir") unless $proj;
