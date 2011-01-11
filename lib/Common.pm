@@ -235,7 +235,9 @@ sub _svn_auth_check
 	# a short, simple log will ask the password question, if necessary
 	# we'll throw away the output, but we can't redirect STDERR or we'd lose the password and certificate prompts
 	# and if no auth is necessary, this won't produce any visible output
-	system("svn log -r HEAD $rootpath >/dev/null");
+	my $cmd = "svn log -r HEAD $rootpath >/dev/null";
+	print STDERR "auth check : $cmd\n" if DEBUG >= 4;
+	system($cmd);
 }
 
 
