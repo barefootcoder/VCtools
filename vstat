@@ -32,6 +32,7 @@ use VCtools::Common;
 
 VCtools::switch('recursive', 'r', 'operate recursively');
 VCtools::switch('show_branches', 'b', 'show the branch name (or TRUNK if no branch) for all files');
+VCtools::switch('top_branch', 'B', 'show the branch name for . only (similar to vbranch -s .)');
 VCtools::switch('only_stat', 'o', 'only show files that match given status (modified|outdated|locked|unknown)', 'status');
 VCtools::args('files', 'optlist', 'file(s) (or directory/ies) to show status of (default .)');
 VCtools::getopts();
@@ -46,12 +47,29 @@ print STDERR "status for files: @files\n" if DEBUG >= 3;
 # CHECK FOR ERRORS
 #################################
 
+if (VCtools::top_branch())
+{
+	# 	we have to show branches, because that's the point of the whole exercise
+	# 	we don't care about outdated, and it's slower, so don't do that
+	# 	just care about . so don't need recursive
+	VCtools::cache_file_status( '.', { SHOW_BRANCHES => 1, NO_OUTDATED => 1, DONT_RECURSE => 1 } );
+
+	VCtools::fatal_error("current directory is not in VC") unless VCtools::exists_in_vc('.');
+}
+
 my $proj = VCtools::verify_files_and_group(@files);
 
 
 #################################
 # MAIN
 #################################
+
+if (VCtools::top_branch())
+{
+	print "\nCURRENT BRANCH : ";
+	VCtools::print_branch('.');
+	print "\n";
+}
 
 my $retval = 0;
 if (VCtools::only_stat())
