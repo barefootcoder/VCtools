@@ -29,6 +29,9 @@ use VCtools::Args;
 use VCtools::Common;
 
 
+use constant LONG_LINE => 512;
+
+
 #################################
 # OPTIONS AND ARGUMENTS
 #################################
@@ -41,7 +44,7 @@ VCtools::action('grep', 'search file for (Perl regex) pattern (also prints filen
 VCtools::action('dirfind', 'find closest matching dirname (exact matches and least depth preferred)', 'dirname');
 VCtools::action('emptydir', 'find all empty directories');
 VCtools::action('nocomments', 'try to ignore comments with -grep (may not always work)--CURRENTLY EXTREMELY SLOW!');
-VCtools::action('nolonglines', 'ignore lines over 256 chars with -grep');
+VCtools::action('nolonglines', 'ignore lines over ' . LONG_LINE . ' chars with -grep');
 VCtools::getopts();
 print STDERR "finished with opts\n" if DEBUG >= 5;
 
@@ -269,7 +272,7 @@ sub grep_line
 
 	# don't bother to check super long lines if the user says not to
 	# (but still return 1 so that following lines will be checked)
-	return 1 if VCtools::nolonglines() and length > 256;
+	return 1 if VCtools::nolonglines() and length > LONG_LINE;
 
 	if ( /$pattern/ )
 	{
