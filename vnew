@@ -59,12 +59,12 @@ foreach my $file (@files)
 {
 	if (VCtools::exists_in_vc($file))
 	{
-		print STDERR "not adding file to list\n";
+		print STDERR "not adding file to list\n" if DEBUG >= 3;
 		VCtools::fatal_error("$file is already in VC") unless VCtools::ignore_errors();
 	}
 	else
 	{
-		print STDERR "adding file to list\n";
+		print STDERR "adding file to list\n" if DEBUG >= 3;
 		push @files_to_add, $file;
 	}
 }

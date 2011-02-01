@@ -2218,6 +2218,14 @@ sub reset_timestamp
 sub filter_file
 {
 	my ($file, $filter, $backup_ext) = @_;
+	return if -B $file;													# don't try to filter binary files!
+	print STDERR "going to filter $file with backup $backup_ext\n" if DEBUG >= 3;
+
+	if ( pretend() )
+	{
+		info_msg(-OFFSET => "would filter file $file to backup extension $backup_ext:");
+		return;
+	}
 
 	move($file, "$file.$backup_ext");
 	system("cat $file.$backup_ext | $filter >$file");
