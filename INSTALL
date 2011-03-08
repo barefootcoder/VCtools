@@ -30,10 +30,11 @@ by whatever group your VCtools project files belong to.  This might be "users", 
 possibly a group that is the same as your name (but if you performed the optional step above, it should
 definitely match that).
 
-		# mkdir -p /usr/local/etc/VCtools mkdir -p /usr/lib/perl5/site_perl/VCtools mkdir -p
-		# /usr/local/VCtools chgrp dev /usr/local/etc/VCtools /usr/lib/perl5/site_perl/VCtools
-		# /usr/local/VCtools chmod g+w /usr/local/etc/VCtools /usr/lib/perl5/site_perl/VCtools
-		# /usr/local/VCtools
+		# mkdir -p /usr/local/etc/VCtools
+		# mkdir -p /usr/lib/perl5/site_perl/VCtools
+		# mkdir -p /usr/local/VCtools
+		# chgrp dev /usr/local/etc/VCtools /usr/lib/perl5/site_perl/VCtools /usr/local/VCtools
+		# chmod g+w /usr/local/etc/VCtools /usr/lib/perl5/site_perl/VCtools /usr/local/VCtools
 
 *	Copy the sample config file to it's proper resting place.  Edit it and make necessary changes.  You must
 change the PersonalDir and VCtoolsBinDir directives if you chose alternative locations in the steps above.

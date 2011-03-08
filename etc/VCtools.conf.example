@@ -33,7 +33,7 @@ DefaultMergeCommit = *** MERGE POINT ***								# commit for committing a merge 
 # this is the project for VCtools
 # the only things you should really change here are:
 # 	*	change the paths in ReleasePaths if you want to use different ones
-# 	*	chnage the http: in RootPath to https: if you have commit access to the VCtools repository
+# 	*	change the http: in RootPath to https: if you have commit access to the VCtools repository
 <Project VCtools>
 	RootPath = http://vc-tools.googlecode.com/svn
 	BranchPolicy = trunk,branches
