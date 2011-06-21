@@ -91,9 +91,18 @@ sub _expand_directives
 		}
 		elsif ( /Regex$/ )
 		{
-			$node->{$_} =~ m{^/(.*)/$} or fatal_error("directive $path$_ not formatted as regex");
-			my $regex = $1;
-			eval { $node->{$_} = qr/$regex/ } or fatal_error("illegal regex in directive $path$_");
+			$node->{$_} =~ m{^/(.*)/$};									# surrounding slashes indicate non-/x regex
+			my $slash_x = !defined $1;
+			my $regex = $1 || $node->{$_};
+
+			my @regexen;
+			foreach my $re (split("\n", $regex))
+			{
+				$re = '(?x)' . $re if $slash_x;
+				eval { push @regexen, qr{$re} } or fatal_error("illegal regex $re in directive $path$_");
+			}
+
+			$node->{$_} = @regexen == 1 ? $regexen[0] : [ @regexen];
 		}
 	}
 }
@@ -174,8 +183,7 @@ sub release_path
 		$full_release_path =~ s[^$rpath][$rpaths->{$rpath}];
 	}
 
-	print STDERR "release_path: going to return $full_release_path\n"
-			if DEBUG >= 2;
+	print STDERR "release_path: going to return $full_release_path\n" if DEBUG >= 2;
 	return $full_release_path;
 }
 

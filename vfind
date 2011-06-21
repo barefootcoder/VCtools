@@ -45,6 +45,7 @@ VCtools::action('dirfind', 'find closest matching dirname (exact matches and lea
 VCtools::action('emptydir', 'find all empty directories');
 VCtools::action('nocomments', 'try to ignore comments with -grep (may not always work)--CURRENTLY EXTREMELY SLOW!');
 VCtools::action('nolonglines', 'ignore lines over ' . LONG_LINE . ' chars with -grep');
+VCtools::action('codeonly', 'ignore non-code file patterns (as defined in config)');
 VCtools::getopts();
 print STDERR "finished with opts\n" if DEBUG >= 5;
 
@@ -56,7 +57,7 @@ my @files = VCtools::dirs();
 # CHECK FOR ERRORS
 #################################
 
-VCtools::check_common_errors();
+my $proj = VCtools::check_common_errors();
 
 if (!!VCtools::grep() + !!VCtools::dirfind() + !!VCtools::emptydir() > 1)
 {
@@ -133,13 +134,28 @@ if ($filematch)
 	eval { $filematch = qr{[^/]*\Q$filematch\E[^/]*$} } or VCtools::fatal_error("can't turn filename into a pattern: $@");
 }
 
+# set up non-code patterns to check against if any and if applicable
+my @non_code;
+if (VCtools::codeonly())
+{
+	my $noncode = VCtools::get_proj_directive($proj, NonCodeRegex => []);
+	@non_code = ref $noncode ? @$noncode : ($noncode);
+}
+print STDERR "non-code set to list:\n", join("\n", @non_code), "\n[LIST ENDS]\n" if DEBUG >= 3;
+
+
 # need this for emptydir
 our %dir_filecount;
 
-foreach (VCtools::get_all_files(@files))
+FILE: foreach (VCtools::get_all_files(@files))
 {
 	exit if VCtools::pretend();											# no point in going further if running under -p
 	next if $filematch and not /$filematch/;
+	foreach my $re (@non_code)
+	{
+		print STDERR "checking $_ against $re\nand it ", /$re/ ? 'passes' : 'fails', "\n" if DEBUG >= 6;
+		next FILE if /$re/;
+	}
 
 	if ($grep_pattern)
 	{
