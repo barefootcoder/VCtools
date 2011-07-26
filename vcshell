@@ -122,9 +122,9 @@ if (not exists $ENV{VCTOOLS_SHELL})
 		error("you are not a member of $group");
 	}
 
-	$ENV{VCTOOLS_SHELL} = $buildit ? "b:$buildit" : "proj:$project";
-	print STDERR "about to newgrp to $group ",
-			"with shellvar $ENV{VCTOOLS_SHELL}\n" if DEBUG >= 4;
+	$ENV{VCTOOLS_SHELL} = $buildit ? "b:$buildit"
+			: VCtools::get_project_directive($project, 'VCSystem') ? "git" : "proj:$project";
+	print STDERR "about to newgrp to $group ", "with shellvar $ENV{VCTOOLS_SHELL}\n" if DEBUG >= 4;
 	exec("newgrp", $group) or error("cannot execute newgrp");
 }
 # being called by newgrp, but originally came from vbuild alias
