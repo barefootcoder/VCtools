@@ -45,6 +45,13 @@ else
 			umask 2
 			breaksw
 
+		case "git":
+			# quick hack for git repo's
+			# set your own aliases in ~/.vctoolsrc until this is more useful
+			setenv PATH `$shellexec -p`
+			umask 2
+			breaksw
+
 		default:
 			# obviously $shellexec has more work to do
 			# let it try again

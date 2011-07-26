@@ -50,6 +50,13 @@ else
 
 			umask 2
 			;;
+
+		git)
+			# quick hack for git repo's
+			# set your own aliases in ~/.vctoolsrc until this is more useful
+			export PATH=`$shellexec -p`
+			umask 2
+			;;
 		*)
 			# obviously $shellexec has more work to do
 			# let it try again
