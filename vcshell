@@ -84,7 +84,8 @@ if (not exists $ENV{VCTOOLS_SHELL})
 			error("no such directory $pdir");
 		}
 		print STDERR "start dir $pdir\n" if DEBUG >= 3;
-		$ENV{VCTOOLS_SHELL_STARTDIR} = $pdir;
+		#$ENV{VCTOOLS_SHELL_STARTDIR} = $pdir;
+		chdir $pdir;
 	}
 	else
 	{
@@ -123,8 +124,9 @@ if (not exists $ENV{VCTOOLS_SHELL})
 	}
 
 	$ENV{VCTOOLS_SHELL} = $buildit ? "b:$buildit"
-			: VCtools::get_proj_directive($project, 'VCSystem') ? "git" : "proj:$project";
-	print STDERR "about to newgrp to $group ", "with shellvar $ENV{VCTOOLS_SHELL}\n" if DEBUG >= 4;
+			: VCtools::get_proj_directive($project, 'VCSystem') eq 'git' ? "git" : "proj:$project";
+	print STDERR "about to newgrp to $group with shellvar $ENV{VCTOOLS_SHELL} for proj $project, which has VC system: ",
+			VCtools::get_proj_directive($project, 'VCSystem'), "\n" if DEBUG >= 4;
 	exec("newgrp", $group) or error("cannot execute newgrp");
 }
 # being called by newgrp, but originally came from vbuild alias

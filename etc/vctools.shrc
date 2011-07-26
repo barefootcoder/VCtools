@@ -41,11 +41,13 @@ else
 				export SHELL=`which $0`
 			fi
 
+			# deprecated; vcshell should be chdir'ing directly now
 			if [ -n "$VCTOOLS_SHELL_STARTDIR" ]
 			then
 				cd $VCTOOLS_SHELL_STARTDIR
 				unset VCTOOLS_SHELL_STARTDIR
 			fi
+
 			umask 2
 			;;
 		*)

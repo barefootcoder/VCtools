@@ -36,10 +36,12 @@ else
 				setenv SHELL `which $0`
 			endif
 
+			# deprecated; vcshell should be chdir'ing directly now
 			if ( $?VCTOOLS_SHELL_STARTDIR ) then
 				cd $VCTOOLS_SHELL_STARTDIR
 				unsetenv VCTOOLS_SHELL_STARTDIR
 			endif
+
 			umask 2
 			breaksw
 
