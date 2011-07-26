@@ -123,7 +123,7 @@ if (not exists $ENV{VCTOOLS_SHELL})
 	}
 
 	$ENV{VCTOOLS_SHELL} = $buildit ? "b:$buildit"
-			: VCtools::get_project_directive($project, 'VCSystem') ? "git" : "proj:$project";
+			: VCtools::get_proj_directive($project, 'VCSystem') ? "git" : "proj:$project";
 	print STDERR "about to newgrp to $group ", "with shellvar $ENV{VCTOOLS_SHELL}\n" if DEBUG >= 4;
 	exec("newgrp", $group) or error("cannot execute newgrp");
 }
