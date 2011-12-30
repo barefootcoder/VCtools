@@ -1,0 +1,59 @@
+#! /usr/bin/perl
+
+###########################################################################
+#
+# vconfig_directive
+#
+###########################################################################
+#
+# This is a quick utility to figure out your project, based on the current directory, then look that
+# project up in the VCtools config file.  You pass it a directive name on the command line, and it
+# prints out the value of that directive for the current project.
+#
+# This is handier than trying to deal parse the config file yourself, especially since it takes
+# default (i.e. global) values into consideration.
+#
+# #########################################################################
+#
+# All the code herein is released under the Artistic License
+#		( http://www.perl.com/language/misc/Artistic.html )
+# Copyright (c) 2011 Barefoot Software
+#
+###########################################################################
+
+use strict;
+use warnings;
+
+use VCtools::Base;
+use VCtools::Args;
+use VCtools::Common;
+use VCtools::Config;
+
+
+#################################
+# OPTIONS AND ENVIRONMENT VARS
+#################################
+
+VCtools::args('directive', 'single', 'directive to read from config file for the current project');
+VCtools::getopts();
+
+my $directive = VCtools::directive();
+
+
+#################################
+# CHECK FOR ERRORS
+#################################
+
+my $proj = VCtools::parse_vc_file('.');
+VCtools::fatal_error("current directory does not appear to be a working copy") unless $proj;
+
+my $val = VCtools::get_proj_directive($proj, $directive);
+VCtools::fatal_error("directive $directive not found") unless $val;
+
+
+#################################
+# MAIN
+#################################
+
+print "printing directive for project: $proj\n" if VCtools::verbose();
+print "$val\n";
