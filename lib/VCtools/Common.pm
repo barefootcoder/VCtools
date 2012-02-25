@@ -645,19 +645,17 @@ sub _interpret_svn_status_output
 
 	return wantarray ? () : undef unless length > 40;
 
-	my $file;
-	if ( /\s* (?:\d+|[\?-]) \s+ (?:\d+|[\?-]) \s+ (?:\w+|\?) \s+ (.*) \s* $/x )
+	my $post_flags = substr($_, 9);
+	print STDERR "starting with status line: post-flags <$post_flags>\n" if DEBUG >= 4;
+	my ($rev1, $rev2, $user, $file) = split(' ', $post_flags, 4);
+	print STDERR "got fields: rev1/rev2/user/file <$rev1> <$rev2> <$user> <$file>\n" if DEBUG >= 4;
+	unless ( $rev1 =~ /^\d+$/ and $rev2 =~ /^\d+$/ )
 	{
-		$file = $1;
+		$file = $post_flags;
+		$file =~ s/^\s+//;
+		$file =~ s/\s+$//;
 	}
-	elsif ( substr($_, 9) =~ /^ \s+ (.*) \s* $/x )
-	{
-		$file = $1;
-	}
-	else
-	{
-		fatal_error("can't figure out filename from status line");
-	}
+	fatal_error("can't figure out filename from status line") unless $file and -e $file;
 	print STDERR "interpreting status output: file is <$file>\n" if DEBUG >= 4;
 
 	# if we're not going to return the status, may as well not bother to figure it out
