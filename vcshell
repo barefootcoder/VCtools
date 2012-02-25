@@ -55,7 +55,7 @@ if ($ENV{VCTOOLS_SHELL} and $ENV{VCTOOLS_SHELL} =~ /^proj:(.*)$/)
 }
 
 # being called initially from alias vcshell
-if (not exists $ENV{VCTOOLS_SHELL})
+if (not exists $ENV{VCTOOLS_SHELL} or $ENV{VCTOOLS_SHELL} =~ /^proj:/ or $ENV{VCTOOLS_SHELL} eq 'git')
 {
 	# are we going to transmogrify ourselves into vbuild?
 	my $buildit = exists $opts->{b};
