@@ -85,8 +85,7 @@ sub _expand_directives
 		}
 		elsif ( /Dir$/ )
 		{
-			# $~ thoughtfully provided by File::HomeDir
-			$node->{$_} =~ s{^~(.*?)/}{$~{$1 ? $1 : $VCtools::PROJ_USER}/};
+			$node->{$_} =~ s{^~(.*?)/}{File::HomeDir->users_home($1 ? $1 : $VCtools::PROJ_USER) . '/'}e;
 			$node->{$_} =~ s/\$\{?(\w+)\}?/$ENV{$1}/;
 		}
 		elsif ( /Regex$/ )
