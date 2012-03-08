@@ -56,4 +56,4 @@ VCtools::fatal_error("directive $directive not found") unless $val;
 #################################
 
 print "printing directive for project: $proj\n" if VCtools::verbose();
-print "$val\n";
+print ref $val eq 'ARRAY' ? join("\n", @$val) : $val, "\n";
