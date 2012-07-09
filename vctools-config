@@ -17,6 +17,7 @@ use constant CONFIG_FILE => '/usr/local/etc/VCtools/VCtools.conf';
 BEGIN { $ENV{VCTOOLS_CONFIG} = CONFIG_FILE; }
 
 use VCtools::Config;
+use VCtools::Common;
 
 
 our $BINDIR = DEBUG ? dirname($0) : $VCtools::config->{VCtoolsBinDir};
@@ -30,9 +31,11 @@ my $params = <<END;
 
 	--config		show master configuration file
 					{ print CONFIG_FILE(), "\n"; }
+	--project		show current project (based on pwd)
+					{ print scalar VCtools::parse_vc_file("."), "\n"; }
 	--working		show working directory
 					{ print "$VCtools::config->{PersonalDir}\n"; }
-	--bin			show working directory
+	--bin			show bin directory
 					{ print "$BINDIR\n"; }
 END
 my $opts = Getopt::Declare->new($params);

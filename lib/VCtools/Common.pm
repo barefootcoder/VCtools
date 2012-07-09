@@ -1849,6 +1849,7 @@ sub parse_vc_file
 			)?															# these last two things both are optional
 			$															# must match the entire path
 		@x;
+	debuggit(3 => "project", $project, "path", $path, "file", $file);
 
 	if (!defined($project))												# pattern didn't match; probably doesn't
 	{																	# start with WORKING_DIR
