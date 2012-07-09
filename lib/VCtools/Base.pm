@@ -99,7 +99,8 @@ sub set_up_debug_value
 {
 	my ($caller_package, $debug_value) = @_;
 	# print STDERR "from $caller_package: debug value is ", defined $debug_value ? $debug_value : "undefined", "\n";
-	my $caller_defined = defined eval "${caller_package}::DEBUG();";
+	my $caller_debug = eval "${caller_package}::DEBUG();";
+	my $caller_defined = defined $caller_debug;
 
 	# the "master" value is in the main namespace
 	# get the master value: if it's undefined, we'll need to define it;
@@ -111,7 +112,7 @@ sub set_up_debug_value
 	{
 		# if already defined in the caller, just assume that all is well
 		# with the world; in this one case (only) a duplicate is allowed
-		return if $caller_defined;
+		return $caller_debug if $caller_defined;
 
 		# if neither one is defined, assume 0 (debugging off)
 		$debug_value = defined $master_debug ? $master_debug : 0;
