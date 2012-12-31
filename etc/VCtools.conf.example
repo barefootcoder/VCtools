@@ -44,7 +44,7 @@ DefaultMergeCommit = *** MERGE POINT ***								# commit for committing a merge 
 	<ReleasePaths>
 		. = /usr/local/VCtools
 		etc = /usr/local/etc/VCtools
-		lib = /usr/lib/perl5/site_perl/VCtools
+		lib = /usr/lib/perl5/site_perl
 	</ReleasePaths>
 </Project>
 
