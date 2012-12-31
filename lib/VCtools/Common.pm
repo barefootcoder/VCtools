@@ -10,7 +10,7 @@
 #
 # All the code herein is released under the Artistic License
 #		( http://www.perl.com/language/misc/Artistic.html )
-# Copyright (c) 1999-2008 Barefoot Software, Copyright (c) 2004-2007 ThinkGeek
+# Copyright (c) 1999-2012 Barefoot Software, Copyright (c) 2004-2007 ThinkGeek
 #
 ###########################################################################
 

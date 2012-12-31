@@ -21,7 +21,7 @@
 #
 #		http://www.perl.com/language/misc/Artistic.html
 #
-# Copyright (c) 1999-2008 Barefoot Software, Copyright (c) 2004 ThinkGeek
+# Copyright (c) 1999-2011 Barefoot Software, Copyright (c) 2004 ThinkGeek
 #
 ###########################################################################
 
