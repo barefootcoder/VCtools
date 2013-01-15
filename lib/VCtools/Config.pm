@@ -41,9 +41,8 @@ our $config;
 
 # suck in configuration file
 fatal_error("required environment variable VCTOOLS_CONFIG is not set", 3) unless exists $ENV{VCTOOLS_CONFIG};
-my %_save_config = ParseConfig($ENV{VCTOOLS_CONFIG});
-$config = dclone(\%_save_config);
-_expand_directives($config);
+my %_save_config;
+_read_config();
 
 print STDERR Data::Dumper->Dump( [$config], [qw<$config>] ) if DEBUG >= 3;
 
@@ -67,6 +66,13 @@ sub VCtools::Config::import
 # Private Subroutines:
 ###########################
 
+
+sub _read_config
+{
+	%_save_config = ParseConfig($ENV{VCTOOLS_CONFIG});
+	$config = dclone(\%_save_config);
+	_expand_directives($config);
+}
 
 sub _expand_directives
 {
@@ -126,7 +132,11 @@ sub re_expand_directives
 sub get_proj_directive
 {
 	my ($proj, $directive, $default) = @_;
+	print STDERR "calling get_proj_directive with: $proj, $directive, $default\n" if DEBUG >= 4;
 	croak("must supply proj") unless $proj;
+
+	# reread config if debugging
+	_read_config() if DEBUG;
 
 	# first check for a project-specific directive
 	if (exists $config->{Project}->{$proj})

@@ -112,9 +112,11 @@ if (not exists $ENV{VCTOOLS_SHELL} or $ENV{VCTOOLS_SHELL} =~ /^proj:/ or $ENV{VC
 		$project = VCtools::parse_vc_file($pwd)
 				or error("can't figure out project of $pwd");
 	}
+	print STDERR "passed through arg checking\n" if DEBUG >= 5;
 
 	# now get the group for the discovered project
 	my $group = VCtools::project_group($project);
+	print STDERR "got project group $group\n" if DEBUG >= 4;
 
 	# crude but hopefully effective method to determine whether
 	# we actually can newgrp to this group

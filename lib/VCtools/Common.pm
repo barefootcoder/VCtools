@@ -1369,8 +1369,10 @@ sub project_group
 	# not finding a group is a fatal error: better to bomb out than let people who might not have the right
 	# permissions do stuff
 	my ($proj) = @_;
+	print STDERR "entering project_group (for $proj)\n" if DEBUG >= 5;
 
 	my $group = get_proj_directive($proj, 'UnixGroup');
+	print STDERR "project_group: returning $group\n" if DEBUG >= 4;
 
 	fatal_error("configuration error--can't determine Unix group for project $proj") unless $group;
 
