@@ -62,6 +62,7 @@ use strict;
 
 use Carp;
 use FileHandle;
+use File::Spec;
 
 # print STDERR "at top of Base: PATH is $ENV{PATH}\n";
 
@@ -86,10 +87,7 @@ sub import
 
 	# prepend testing dirs into @INC path if we're actually in DEBUG mode
 	# print STDERR "just before prepending, value is $opts{DEBUG}\n";
-	# NOTE
-	# moving modules in lib/ dir to lib/VCtools, so this should not be necessary any more
-	# we'll see ...
-	#redirect_modules_to_testing() if $opts{DEBUG};
+	redirect_modules_to_testing() if $opts{DEBUG};
 
 	# print STDERR "leaving import now\n";
 }
@@ -135,43 +133,16 @@ sub set_up_debug_value
 }
 
 
+# this is much simpler than it used to be ...
 my $already_prepended;
 sub redirect_modules_to_testing
 {
 	# print STDERR "going to prepend testing dirs\n";
 	return if $already_prepended;
 
-	# actually, that whole rigamarole up above notwithstanding, all
-	# we really need to do is make sure we have a secure path before
-	# calling vctools-config.  so the "untainting" below isn't necessary
-	# right now.  comments left for edification of future generations.
-	$ENV{PATH} = "/bin:/usr/bin:/usr/local/bin";
-	my $working_dir = `vctools-config --working`;
-	chomp $working_dir;
-	# print STDERR "PATH is $ENV{PATH}\n" unless $working_dir;
-	die("can't determine VCtools working dir") unless $working_dir;
-	my $lib_testing_dir = "$working_dir/VCtools/lib";
-
-	unshift @INC, sub
-	{
-		my ($this, $module) = @_;
-
-		if ($module =~ m@^VCtools/(.*)$@)
-		{
-			my $vc_module = "$lib_testing_dir/$1";
-			# print STDERR "module is $vc_module\n";
-			if (-d $lib_testing_dir and -f $vc_module)
-			{
-				my $fh = new FileHandle $vc_module;
-				if ($fh)
-				{
-					$INC{$module} = $vc_module;
-					return $fh;
-				}
-			}
-		}
-		return undef;
-	};
+	my @path = File::Spec->splitpath($0);
+	$path[2] = 'lib';
+	unshift @INC, File::Spec->catpath(@path);
 
 	$already_prepended = 1;
 }
