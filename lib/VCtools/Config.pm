@@ -141,6 +141,7 @@ sub get_proj_directive
 	# first check for a project-specific directive
 	if (exists $config->{Project}->{$proj})
 	{
+		fatal_error("multiple definitions found for project $proj") if ref $config->{Project}->{$proj} eq 'ARRAY';
 		return $config->{Project}->{$proj}->{$directive}
 				if exists $config->{Project}->{$proj}->{$directive};
 	}
