@@ -35,6 +35,7 @@ use VCtools::Config;
 #################################
 
 VCtools::args('directive', 'single', 'directive to read from config file for the current project');
+VCtools::args('fallbacks', 'optlist', "directive(s) to read from config file in case the main directive isn't found");
 VCtools::getopts();
 
 my $directive = VCtools::directive();
@@ -47,8 +48,23 @@ my $directive = VCtools::directive();
 my $proj = VCtools::parse_vc_file('.');
 VCtools::fatal_error("current directory does not appear to be a working copy") unless $proj;
 
-my $val = VCtools::get_proj_directive($proj, $directive);
-VCtools::fatal_error("directive $directive not found") unless $val;
+my $val = directive($proj, $directive);
+if (not $val)
+{
+	if (VCtools::fallbacks())
+	{
+		foreach (VCtools::fallbacks())
+		{
+			$val = directive($proj, $_);
+			last if $val;
+		}
+		VCtools::fatal_error("directive $directive not found and all fallbacks failed") unless $val;
+	}
+	else
+	{
+		VCtools::fatal_error("directive $directive not found");
+	}
+}
 
 
 #################################
@@ -57,3 +73,16 @@ VCtools::fatal_error("directive $directive not found") unless $val;
 
 print "printing directive for project: $proj\n" if VCtools::verbose();
 print ref $val eq 'ARRAY' ? join("\n", @$val) : $val, "\n";
+
+
+#################################
+# SUBS
+#################################
+
+sub directive
+{
+	my ($proj, $key) = @_;
+
+	return $proj if $key eq 'Project';
+	return VCtools::get_proj_directive($proj, $key);
+}
