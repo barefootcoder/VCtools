@@ -36,18 +36,17 @@ definitely match that).
 		# chgrp dev /usr/local/etc/VCtools /usr/lib/perl5/site_perl/VCtools /usr/local/VCtools
 		# chmod g+w /usr/local/etc/VCtools /usr/lib/perl5/site_perl/VCtools /usr/local/VCtools
 
-*	Copy the sample config file to it's proper resting place.  Edit it and make necessary changes.  You must
+*	Copy the sample config file to its proper resting place.  Edit it and make necessary changes.  You must
 change the PersonalDir and VCtoolsBinDir directives if you chose alternative locations in the steps above.
 Optionally, you could make the conf file writable by you.  On a shared box, we recommend leaving it as
 editable by root only.
 
-		# cp etc/VCtools.conf /usr/local/etc/VCtools.conf vi /usr/local/etc/VCtools.conf
+		# cp etc/VCtools.conf /usr/local/etc/VCtools.conf
+		# vi /usr/local/etc/VCtools.conf
 
 *	You should now be able to use vrel to get your initial files to the right place:
 
-		$ rel vbranch vbuild vcommit vcshell vctools-config vdel vdiff vfind vget vlog vmerge vmv vnew vrel
-		vstat vsync vtag vunbranch vunget etc/vctools.cshrc etc/vctools.shrc lib/Args.pm lib/Base.pm
-		lib/Common.pm lib/Config.pm
+		$ vrel v* etc/vctools.* lib/VCtools/*
 
 *	The vctools-config file is used by all other VCtools commands to figure out where various directories are.
 It should be symlinked to a place that is already in your path.  Here's a common way to do it (note this is
@@ -70,8 +69,8 @@ optional, however.
 
 To test if your new setup is working, try this:
 
-		$ vcshell VCtools			# optional; see the Wiki for how to avoid this step if you want to $ vstat
-		-vr
+		$ vcshell VCtools			# optional; see the Wiki for how to avoid this step if you want to
+		$ vstat -vr
 
 And the output should look roughly like this:
 
