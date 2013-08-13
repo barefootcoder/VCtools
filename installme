@@ -1,0 +1,70 @@
+#! /bin/bash
+
+if [[ ! $(dirname $0) -ef $(pwd) ]]
+then
+	echo "must run this from VCtools checkout dir" >&2
+	exit 1
+fi
+me=$(basename $(pwd))
+
+function create_dir
+{
+	if [[ ! -d $1 ]]
+	then
+		sudo mkdir -p $1
+		sudo chgrp dev $1
+		sudo chmod g+ws $1
+	fi
+}
+
+function release_if_necessary
+{
+	echo "checking to see what files need to be released ..."
+	prog='BEGIN { $/="vrel:" } /release info for file (.*?) \.\.\./ and $f = $1; print " $f" if $f and !/no need to release/'
+	files="$(sg dev -c "perl -Ilib vrel -I $*" | perl -ne "$prog")"
+	if [[ -z $files ]]
+	then
+		echo "nothing to release"
+	else
+		echo "releasing necessary files ..."
+		sg dev -c "perl -Ilib vrel $files"
+	fi
+}
+
+for search in site_perl share local
+do
+	perllibdir=$(perl -le 'print foreach @INC' | fgrep $search | tail -n1)
+	if [[ -n $perllibdir ]]
+	then
+		break
+	fi
+done
+echo "lib files will go in $perllibdir; be sure to update VCtools.conf with this"
+echo -n "press enter ..." && read
+
+chgrp -R dev .
+
+create_dir /usr/local/etc/VCtools
+create_dir $perllibdir/VCtools
+create_dir /usr/local/VCtools
+
+conf_file=/usr/local/etc/VCtools/VCtools.conf
+if [[ ! -f $conf_file ]]
+then
+	cp etc/VCtools.conf.example $conf_file
+	vi $conf_file
+fi
+
+export VCTOOLS_CONFIG=$conf_file
+export VCTOOLS_SHELL=proj:$me
+release_if_necessary vbuild vcommit vconfig_directive vcshell vctools-config vdiff vfind vlog vnew vstat vsync 		\
+		vbranch vdel vget vmerge vmv vrel vtag vunbranch vunget														\
+		etc/vctools.cshrc etc/vctools.shrc																			\
+		lib/VCtools/Args.pm lib/VCtools/Base.pm lib/VCtools/Common.pm lib/VCtools/Config.pm
+
+if [[ ! -L /usr/local/bin/vctools-config ]]
+then
+	sudo ln -s /usr/local/VCtools/vctools-config /usr/local/bin
+fi
+
+echo "you need to resrc now"
