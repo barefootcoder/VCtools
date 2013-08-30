@@ -1,0 +1,21 @@
+#! /usr/bin/env perl
+
+use Path::Class;
+
+use Debuggit DataPrinter => 1, DEBUG => 1;
+
+
+# figure out where we came from
+my $me = file($0);
+# here we're turning /something/something/bin/thisscript into /something/something/lib
+my $lib_dir = $me->dir->parent->subdir('lib');
+# now jam said lib into @INC
+# (no, we can't use `use lib` here, unless we want to put all the above into a BEGIN block)
+# (and why bother?)
+unshift @INC, "$lib_dir";
+
+# now we can go get the app class
+require App::VC;
+
+# now just run the damn thing
+App::VC->run;
