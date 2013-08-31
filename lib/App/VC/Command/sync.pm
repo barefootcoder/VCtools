@@ -22,6 +22,11 @@ class App::VC::Command::sync extends App::VC::Command
 	}
 
 
+	method validate_args ($opt, ArrayRef $args)
+	{
+		$self->verify_project;
+	}
+
 	augment execute (...)
 	{
 	}

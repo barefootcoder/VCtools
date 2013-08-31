@@ -6,7 +6,7 @@ use MooseX::Declare;
 use Method::Signatures::Modifiers;
 
 
-class App::VC::Command::stat extends App::VC::Command
+class App::VC::Command::commit extends App::VC::Command
 {
 	use Path::Class;
 	use MooseX::Has::Sugar;
@@ -16,19 +16,15 @@ class App::VC::Command::stat extends App::VC::Command
 	method description
 	{
 		return	"\n"
-			.	"Show status of working copy.\n"
+			.	"Commit changes in working copy (previously staged, files specified on command line, or all changes).\n"
 			.	"\n"
 			;
 	}
 
 
-	method validate_args ($opt, ArrayRef $args)
-	{
-		$self->verify_project;
-	}
-
 	augment execute (...)
 	{
+		$self->fatal("no changes to commit") unless $self->is_dirty;
 	}
 }
 
@@ -38,7 +34,7 @@ class App::VC::Command::stat extends App::VC::Command
 
 =head1 NAME
 
-App::VC::Command::stat - print working copy status
+App::VC::Command::commit - commit changes
 
 
 =cut

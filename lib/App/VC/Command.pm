@@ -14,15 +14,24 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 	use CLASS;
 	use Path::Class;
+	use File::HomeDir;
 	use MooseX::Has::Sugar;
 	use MooseX::Types::Moose qw< :all >;
 
 
 	# CONFIGURATION ATTRIBUTES
 	# (figured out by reading config file or from command line invocation)
+	has _wcdir_info	=>	(
+							traits => [qw< NoGetopt >],
+							ro, isa => HashRef, lazy, builder => '_discover_project',
+						);
 	has config		=>	(
 							traits => [qw< NoGetopt >],
 							ro, isa => HashRef, lazy, builder => '_read_config',
+						);
+	has me			=>	(
+							traits => [qw< NoGetopt >],
+							ro, isa => Str, lazy, default => method { $self->app->arg0 },
 						);
 	has command		=>	(
 							traits => [qw< NoGetopt >],
@@ -30,7 +39,12 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 						);
 	has project		=>	(
 							traits => [qw< NoGetopt >],
-							ro, isa => Maybe[Str], lazy, builder => '_discover_project', predicate => 'has_project',
+							ro, isa => Maybe[Str], lazy, predicate => 'has_project',
+								default => method { $self->_wcdir_info->{'project'} },
+						);
+	has proj_root	=>	(
+							traits => [qw< NoGetopt >],
+							ro, isa => Maybe[Str], lazy, default => method { $self->_wcdir_info->{'project_root'} },
 						);
 	has vc			=>	(
 							traits => [qw< NoGetopt >],
@@ -70,6 +84,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 	# BUILDERS
 
+# line 88
 	method _read_config
 	{
 		use Config::General;
@@ -82,17 +97,50 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 	method _discover_project
 	{
-		my $pwd = dir()->resolve;
-		foreach my $wdir (map { dir($_) } $self->directive('WorkingDir'))
+		# we can't let any calls to directive() here try to look up project
+		# since project is what we're trying to determine (chicken and egg issue)
+		# so we always specify it explicitly, even if only as undef
+
+		my $info =
 		{
-			foreach my $proj (grep { -d } $wdir->children)
+			project_root	=>	undef,
+			project			=>	undef,
+		};
+
+		my $pwd = dir()->resolve;
+
+		foreach my $proj (keys %{ $self->config->{'Project'} })
+		{
+			my $projdir = $self->directive('ProjectDir', project => $proj);
+			debuggit(4 => "checking project", $proj, "got dir", $projdir);
+			next unless $projdir;
+
+			debuggit(4 => "checking", $pwd, "against", $projdir);
+			my $realpath = dir($projdir)->resolve;						# make a copy so resolve() won't change the path
+			if ($realpath->contains($pwd))
 			{
-				debuggit(4 => "checking", $pwd, "against", $proj);
-				return $proj->basename if $proj->resolve->contains($pwd);
+				$info->{'project'} = $proj;
+				$info->{'project_root'} = "$projdir";
+				return $info;
 			}
 		}
 
-		return undef;
+		foreach my $wdir (map { dir($_) } $self->directive('WorkingDir', project => undef))
+		{
+			foreach my $projdir (grep { -d } $wdir->children)
+			{
+				debuggit(4 => "checking", $pwd, "against", $projdir);
+				my $realpath = dir($projdir)->resolve;					# make a copy so resolve() won't change the path
+				if ($realpath->contains($pwd))
+				{
+					$info->{'project'} = $projdir->basename;
+					$info->{'project_root'} = "$projdir";
+					return $info;
+				}
+			}
+		}
+
+		return $info;
 	}
 
 	method _fetch_info ($att, $type)
@@ -121,7 +169,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 	# PRIVATE METHODS
 
-# line 117
+# line 173
 	method _process_cmdline ($type, $line)
 	{
 		local $@;
@@ -159,6 +207,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			}
 			else
 			{
+				$cmd =~ s/%(\w+)/join(' ', $self->$1)/eg;
 				debuggit(4 => "sending to system: $cmd");
 				given ($type)
 				{
@@ -187,15 +236,19 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 	# SUPPORT METHODS
 
-	method directive ($key)
+	method directive ($key, :$project = $self->project)
 	{
-		debuggit(5 => "caller info:", DUMP => [ caller(1) ]);
-		my $called_internally = (caller(1))[3] eq "${CLASS}::_discover_project";
-
 		my $value;
-		$value //= $self->config->{'Project'}->{$self->project}->{$key} unless $called_internally;
+		$value //= $self->config->{'Project'}->{$project}->{$key} if $project;
 		$value //= $self->config->{$key};
 		$value //= $self->config->{"Default$key"};
+
+		# special processing for dirs
+		if ($key =~ /Dir$/ and $value and not ref $value)
+		{
+			$value =~ s/^~/ File::HomeDir->my_home /e;
+			$value = dir($value);
+		}
 
 		given (ref $value)
 		{
@@ -216,6 +269,16 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	}
 
 
+	# VALIDATION METHODS
+	# (call these from validate_args)
+
+# line 279
+	method verify_project
+	{
+		$self->fatal("Can't determine project") unless $self->project;
+	}
+
+
 	# ACTION METHODS
 	# (augment these)
 
@@ -231,8 +294,11 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	# INTERACTION METHODS
 	# (for communicating with the user)
 
+# line 301
     method color_msg (Str $color, @msgs)
     {
+		debuggit(4 => "color_msg args:", $color, join(' // ', @msgs));
+
         my $msg = join('', @msgs);
         if ( -t STDOUT and !$self->no_color and eval { require Term::ANSIColor } )
         {
@@ -243,6 +309,13 @@ class App::VC::Command extends MooseX::App::Cmd::Command
             return $msg;
         }
     }
+
+# line 317
+	method fatal ($msg)
+	{
+		say $self->me . ' ' . $self->command . ': ' . $self->color_msg(red => $msg);
+		exit 1;
+	}
 
 	method pretend_msg ($msg)
 	{

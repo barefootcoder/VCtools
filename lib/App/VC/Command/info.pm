@@ -46,6 +46,10 @@ class App::VC::Command::info extends App::VC::Command
 			{
 				say $self->project // "CANNOT DETERMINE PROJECT";
 			}
+			when ('project:root')
+			{
+				say $self->proj_root // "CANNOT DETERMINE PROJECT";
+			}
 			when (/^%(\w+)/)
 			{
 				debuggit(3 => "going to run method", $1);
@@ -53,7 +57,7 @@ class App::VC::Command::info extends App::VC::Command
 			}
 			default
 			{
-				say join(' ', $self->directive($_));
+				say join(' ', $self->directive($_) // "DO NOT RECOGNIZE DIRECTIVE");
 			}
 		}
 	}
