@@ -48,7 +48,9 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 						);
 	has vc			=>	(
 							traits => [qw< NoGetopt >],
-							ro, isa => Str, lazy, default => method { $self->directive('VC') },
+							ro, isa => Str, lazy, predicate => 'has_vc',
+								# disallow recursion by specifically setting vc param to undef
+								default => method { $self->directive('VC', vc => undef) },
 						);
 
 	# INFO ATTRIBUTES
@@ -236,10 +238,13 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 	# SUPPORT METHODS
 
-	method directive ($key, :$project = $self->project)
+	method directive ($key, :$project = $self->project, :$vc = $self->has_project && $self->vc)
 	{
+		debuggit(4 => ":directive => key", $key, "project", $project, "has project", $self->has_project, "vc", $vc);
+
 		my $value;
 		$value //= $self->config->{'Project'}->{$project}->{$key} if $project;
+		$value //= $self->config->{$self->vc}->{"Default$key"} if $vc;
 		$value //= $self->config->{$key};
 		$value //= $self->config->{"Default$key"};
 
