@@ -284,6 +284,16 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		return undef;
 	}
 
+# line 288
+	# If, OTOH, you just want to know all the possible projects, this is the one you want.
+	method list_all_projects
+	{
+		my @explicit_projects = keys $self->config->{'Project'};
+		my @implicit_projects = map { $_->basename } grep { -d } map { dir($_)->children }
+				$self->directive('WorkingDir', project => undef);
+		return sort { lc $a cmp lc $b } keys { map { $_ => 1 } @explicit_projects, @implicit_projects };
+	}
+
 	method command_lines ($type, $cmd)
 	{
 		debuggit(3 => "running command_lines: command //", $cmd, "// for", $self->vc);

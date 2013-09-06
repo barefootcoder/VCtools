@@ -57,6 +57,10 @@ class App::VC::Command::info extends App::VC::Command
 				my $root = $self->alt_project ? $self->root_for_project($self->alt_project) : $self->proj_root;
 				say $root // "CANNOT DETERMINE PROJECT ROOT";
 			}
+			when ('project:all')
+			{
+				say foreach $self->list_all_projects;
+			}
 			when (/^%(\w+)/)
 			{
 				debuggit(3 => "going to run method", $1);
