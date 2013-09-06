@@ -97,6 +97,8 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		return $config;
 	}
 
+	# This builder method figures out a project and a project root from nothing (based on `pwd`).
+	# If you already know the specific project you want and just want the root, try root_for_project().
 	method _discover_project
 	{
 		# we can't let any calls to directive() here try to look up project
@@ -261,6 +263,25 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			return %$value	when 'HASH';
 		}
 		return $value;
+	}
+
+	# Normally, the project root is "discovered" (based on `pwd`) at the same time as the project
+	# (see _discover_project()).  However, if you want a project root for a given project, it's much
+	# easier to determine, so here's how you can do that.
+	method root_for_project ($project)
+	{
+		my $root = $self->directive('ProjectDir', project => $project);
+		return $root if $root;
+
+		# no such luck; start trying children of the working dir
+		foreach my $wdir (map { dir($_) } $self->directive('WorkingDir', project => undef))
+		{
+			$root = $wdir->subdir($project);
+			return $root if -d $root;
+		}
+
+		# no luck at *all*
+		return undef;
 	}
 
 	method command_lines ($type, $cmd)

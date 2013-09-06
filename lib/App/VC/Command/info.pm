@@ -16,6 +16,12 @@ class App::VC::Command::info extends App::VC::Command
 	use MooseX::Types::Moose qw< :all >;
 
 
+	has alt_project	=>	(
+							traits => [qw< Getopt >],
+								documentation => "Use this project (instead of whatever project we're in).",
+									cmd_aliases => [ 'P', 'alt-project' ],
+							ro, isa => Str,
+						);
 	has key			=>	(
 							traits => [qw< NoGetopt >],
 							rw, isa => Str,
@@ -44,11 +50,12 @@ class App::VC::Command::info extends App::VC::Command
 		{
 			when ('project')
 			{
-				say $self->project // "CANNOT DETERMINE PROJECT";
+				say $self->alt_project // $self->project // "CANNOT DETERMINE PROJECT";
 			}
 			when ('project:root')
 			{
-				say $self->proj_root // "CANNOT DETERMINE PROJECT";
+				my $root = $self->alt_project ? $self->root_for_project($self->alt_project) : $self->proj_root;
+				say $root // "CANNOT DETERMINE PROJECT ROOT";
 			}
 			when (/^%(\w+)/)
 			{
@@ -57,7 +64,8 @@ class App::VC::Command::info extends App::VC::Command
 			}
 			default
 			{
-				say join(' ', $self->directive($_) // "DO NOT RECOGNIZE DIRECTIVE");
+				my %args = $self->alt_project ? (project => $self->alt_project) : ();
+				say join(' ', $self->directive($_, %args) // "DO NOT RECOGNIZE DIRECTIVE");
 			}
 		}
 	}
