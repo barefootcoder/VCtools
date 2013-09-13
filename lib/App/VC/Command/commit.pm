@@ -13,6 +13,13 @@ class App::VC::Command::commit extends App::VC::Command
 	use MooseX::Types::Moose qw< :all >;
 
 
+	has _files		=>	(
+							traits => [qw< NoGetopt Array >],
+								handles => { files => 'elements' },
+							ro, isa => ArrayRef[Str], writer => '_set_files',
+						);
+
+
 	method description
 	{
 		return	"\n"
@@ -21,6 +28,11 @@ class App::VC::Command::commit extends App::VC::Command
 			;
 	}
 
+
+	method validate_args ($opt, ArrayRef $args)
+	{
+		$self->_set_files($args);
+	}
 
 	augment execute (...)
 	{

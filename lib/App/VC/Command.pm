@@ -59,6 +59,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	(
 		status		=>	'Str',
 		is_dirty	=>	'Bool',
+		has_staged	=>	'Bool',
 	);
 	while (my ($att, $type) = each %INFO_ATTRIBUTES)
 	{
@@ -179,7 +180,8 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		$line =~ s{\$(\w+)}{ $ENV{$1} // '' }eg;
 
 		my ($condition, $cmd) = $line =~ /^(.*?)\s+->\s+(.*)$/ ? ($1, $2) : ('1', $line);
-		$condition =~ s/%(\w+)/$self->$1/eg;
+		$condition =~ s/%(\w+)/'$self->' . $1/eg;
+		debuggit(4 => "...initial condition is", $condition, "will evaluate to", eval $condition) if DEBUG;
 		$condition = eval $condition;
 		die if $@;
 
@@ -194,7 +196,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			}
 			elsif ($cmd =~ s/^\@//)
 			{
-				$cmd =~ s/%(\w+)/'$self->$1'/eg;
+				$cmd =~ s/%(\w+)/'$self->' . $1/eg;
 				my $e = eval $cmd;
 				die if $@;
 				return $e;
@@ -297,6 +299,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 		my $lines = $self->config->{$self->vc}->{$type}->{$cmd};
 		return () unless $lines;
+		debuggit(4 => "lines is //$lines//");
 
 		return map { s/^\s+//; $_ } split("\n", $lines);
 	}
