@@ -86,7 +86,6 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 	# BUILDERS
 
-# line 88
 	method _read_config
 	{
 		use Config::General;
@@ -173,7 +172,6 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 	# PRIVATE METHODS
 
-# line 173
 	method _process_cmdline ($type, $line)
 	{
 		local $@;
@@ -284,7 +282,6 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		return undef;
 	}
 
-# line 288
 	# If, OTOH, you just want to know all the possible projects, this is the one you want.
 	method list_all_projects
 	{
@@ -308,7 +305,6 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	# VALIDATION METHODS
 	# (call these from validate_args)
 
-# line 279
 	method verify_project
 	{
 		$self->fatal("Can't determine project") unless $self->project;
@@ -330,7 +326,6 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	# INTERACTION METHODS
 	# (for communicating with the user)
 
-# line 301
     method color_msg (Str $color, @msgs)
     {
 		debuggit(4 => "color_msg args:", $color, join(' // ', @msgs));
@@ -346,7 +341,6 @@ class App::VC::Command extends MooseX::App::Cmd::Command
         }
     }
 
-# line 317
 	method fatal ($msg)
 	{
 		say $self->me . ' ' . $self->command . ': ' . $self->color_msg(red => $msg);
