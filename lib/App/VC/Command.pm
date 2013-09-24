@@ -226,6 +226,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 					}
 					when ('capture')
 					{
+						$self->pretend_msg(actual => $cmd) if $self->pretend;
 						return `$cmd`;
 					}
 				}
@@ -365,9 +366,17 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		exit 1;
 	}
 
-	method pretend_msg ($msg)
+	method pretend_msg ($msg, ...)
 	{
-		say $self->color_msg(cyan => "would run: "), $msg;
+		my $mode = 'pretend';
+		($mode, $msg) = @_ if @_ > 1;
+
+		given ($mode)
+		{
+			say $self->color_msg(cyan => "would run:   "), $msg		when 'pretend';
+			say $self->color_msg(cyan => "now running: "), $msg		when 'actual';
+			die("illegal mode: $_");								# otherwise
+		}
 	}
 
 }
