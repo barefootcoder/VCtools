@@ -182,9 +182,8 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	{
 		local $@;
 
-		$line =~ s{\$(\w+)}{ $ENV{$1} // '' }eg;
-
 		my ($condition, $cmd) = $line =~ /^(.*?)\s+->\s+(.*)$/ ? ($1, $2) : ('1', $line);
+		$condition =~ s{\$(\w+)}{ $ENV{$1} // '' }eg;
 		$condition =~ s/%(\w+)/'$self->' . $1/eg;
 		debuggit(4 => "...initial condition is", $condition, "will evaluate to", eval $condition) if DEBUG;
 		$condition = eval $condition;
