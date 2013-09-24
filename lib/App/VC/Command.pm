@@ -188,7 +188,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		$condition =~ s/%(\w+)/'$self->' . $1/eg;
 		debuggit(4 => "...initial condition is", $condition, "will evaluate to", eval $condition) if DEBUG;
 		$condition = eval $condition;
-		die if $@;
+		die "bad condition: $@" if $@;
 
 		debuggit(3 => "// line:", $line, "// condition:", $condition, "// cmd:", $cmd);
 		if ($condition)
