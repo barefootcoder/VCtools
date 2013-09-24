@@ -60,6 +60,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		status		=>	'Str',
 		is_dirty	=>	'Bool',
 		has_staged	=>	'Bool',
+		mod_files	=>	'ArrayRef'
 	);
 	while (my ($att, $type) = each %INFO_ATTRIBUTES)
 	{
@@ -163,6 +164,10 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 				my $result = reduce { $a && $b } map { $self->_process_cmdline(capture => $_) } @lines;
 				return $result ? 1 : 0;
 			}
+			when ('ArrayRef')
+			{
+				return [ split("\n", join('', map { $self->_process_cmdline(capture => $_) } @lines)) ];
+			}
 			default
 			{
 				die("dunno how to deal with info type: $_");
@@ -240,6 +245,19 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 	# SUPPORT METHODS
 
+	method deref ($ref)
+	{
+		given (ref $ref)
+		{
+			return @$ref							when 'ARRAY';
+			return %$ref							when 'HASH';
+			return $ref								when '';
+			return "$ref"							when qw< Path::Class::Dir >;
+			die("don't know how to deref a $_");	# otherwise
+		}
+	}
+
+
 	method directive ($key, :$project = $self->project, :$vc = $self->has_project && $self->vc)
 	{
 		debuggit(4 => ":directive => key", $key, "project", $project, "has project", $self->has_project, "vc", $vc);
@@ -257,13 +275,10 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			$value = dir($value);
 		}
 
-		given (ref $value)
-		{
-			return @$value	when 'ARRAY';
-			return %$value	when 'HASH';
-		}
-		return $value;
+		debuggit(6 => "in", wantarray, "context, sending", $value, "to deref, which is really", DUMP => [ $value ]);
+		return $self->deref($value);
 	}
+
 
 	# Normally, the project root is "discovered" (based on `pwd`) at the same time as the project
 	# (see _discover_project()).  However, if you want a project root for a given project, it's much
@@ -292,6 +307,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 				$self->directive('WorkingDir', project => undef);
 		return sort { lc $a cmp lc $b } keys { map { $_ => 1 } @explicit_projects, @implicit_projects };
 	}
+
 
 	method command_lines ($type, $cmd)
 	{

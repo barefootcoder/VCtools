@@ -64,12 +64,13 @@ class App::VC::Command::info extends App::VC::Command
 			when (/^%(\w+)/)
 			{
 				debuggit(3 => "going to run method", $1);
-				say $self->$1;
+				say join(', ', $self->deref($self->$1));
 			}
 			default
 			{
 				my %args = $self->alt_project ? (project => $self->alt_project) : ();
-				say join(' ', $self->directive($_, %args) // "DO NOT RECOGNIZE DIRECTIVE");
+				my @vals = $self->directive($_, %args);
+				say @vals ? join(' ', @vals) : "DO NOT RECOGNIZE DIRECTIVE";
 			}
 		}
 	}
