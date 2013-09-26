@@ -8,6 +8,8 @@ use Method::Signatures::Modifiers;
 
 class App::VC::Command::show_branches extends App::VC::Command
 {
+	use autodie qw< :all >;
+
 	use Path::Class;
 	use MooseX::Has::Sugar;
 	use MooseX::Types::Moose qw< :all >;

@@ -1,4 +1,6 @@
-use 5.0.12;
+use 5.012;
+use autodie qw< :all >;
+use warnings FATAL => 'all';
 
 use MooseX::Declare;
 use Method::Signatures::Modifiers;

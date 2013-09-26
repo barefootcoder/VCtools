@@ -8,6 +8,8 @@ use Method::Signatures::Modifiers;
 
 class App::VC::Command::stage extends App::VC::Command
 {
+	use autodie qw< :all >;
+
 	use Path::Class;
 	use MooseX::Has::Sugar;
 	use MooseX::Types::Moose qw< :all >;
