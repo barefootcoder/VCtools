@@ -1,8 +1,20 @@
 #! /usr/bin/env perl
 
-use Path::Class;
+use strict;									# using this instead of 5.012 so we can do a better error message
+use autodie;								# not doing :all here so we don't die if missing IPC::System::Simple
+use warnings;
 
-use Debuggit DataPrinter => 1, DEBUG => 1;
+
+# We're going to load modules very cautiously so that, if anything is missing, we can catch that and
+# possibly do something about it.  This is handled by the check_prereqs() function below, which is
+# mostly a moderately thin wrapper around bin/vctools-prereq-verify (which is just a separate
+# program so we can move all that logic into it's own file, and it's also convenient to be able to
+# run it directly).  So, if just about anything goes wrong, we'll call check_prereqs().  If it
+# happens _not_ to be a missing prereq, that will be handled appropriately as well.
+
+eval { require Path::Class } ? Path::Class->import : check_prereqs();
+
+eval { require Debuggit } ? Debuggit->import( DataPrinter => 1, DEBUG => 1 ) : check_prereqs();
 
 
 # figure out where we came from
@@ -11,11 +23,48 @@ my $me = file($0);
 my $lib_dir = $me->dir->parent->subdir('lib');
 # now jam said lib into @INC
 # (no, we can't use `use lib` here, unless we want to put all the above into a BEGIN block)
-# (and why bother?)
+# (and that would screw up all our prereq checking)
 unshift @INC, "$lib_dir";
 
 # now we can go get the app class
-require App::VC;
+check_prereqs() unless eval { require App::VC };
 
 # now just run the damn thing
-App::VC->run;
+# (not sure this could generate a missing module error, but, hey, why take chances?)
+check_prereqs() unless eval { App::VC->run; 1; };
+
+
+
+sub check_prereqs
+{
+	use File::Spec;							# this is in core since 5.004, so should be safe to use
+	use File::Basename;						# this has been core even longer than that (also safe)
+
+	# make sure this is something we can do something about
+	die unless $@ =~ /Can't locate .* in \@INC/ or $@ =~ /Perl .* required/;
+
+	my $prereq_checker = File::Spec->catfile( dirname($0), 'vctools-prereq-verify' );
+	unless ( -r $prereq_checker )
+	{
+		print STDERR "$0: cannot find the program to check that prerequisites are installed\n";
+		print STDERR "I expected to find $prereq_checker,\n";
+		if ( -e $prereq_checker )
+		{
+			print STDERR "which is either the wrong sort of file, or lacks proper permissions.\n";
+		}
+		else
+		{
+			print STDERR "which is not there.  Looks like you either didn't get the full package,\n";
+			print STDERR "or perhaps you moved me to a different directory (don't do that).\n";
+		}
+		print STDERR "Either way, I can't continue.  Sorry.\n\n";
+		exit 1;
+	}
+
+	# since we didn't do :all with autodie, we have to check this ourselves
+	die("$0: some prerequisistes may not be installed [$?]") unless system($^X, $prereq_checker) == 0;
+
+	print STDERR "\nThe problem should be corrected now.\n";
+	print STDERR "Please try your command again.\n\n";
+	exit 0;
+}
