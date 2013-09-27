@@ -9,6 +9,7 @@ use Method::Signatures::Modifiers;
 class App::VC::Command::resolved extends App::VC::Command
 {
 	use autodie qw< :all >;
+	use experimental 'smartmatch';
 
 	use Path::Class;
 	use MooseX::Has::Sugar;

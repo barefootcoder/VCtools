@@ -11,6 +11,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 {
 	use Debuggit;
 	use autodie qw< :all >;
+	use experimental 'smartmatch';
 
 	use CLASS;
 	use Path::Class;

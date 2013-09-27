@@ -10,6 +10,7 @@ class App::VC::Command::info extends App::VC::Command
 {
 	use Debuggit;
 	use autodie qw< :all >;
+	use experimental 'smartmatch';
 
 	use Path::Class;
 	use MooseX::Has::Sugar;
