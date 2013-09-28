@@ -15,6 +15,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 	use CLASS;
 	use Path::Class;
+	use Perl6::Slurp;
 	use File::HomeDir;
 	use MooseX::Has::Sugar;
 	use MooseX::Types::Moose qw< :all >;
@@ -93,8 +94,16 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	{
 		use Config::General;
 
-		my $config_file = file($ENV{'HOME'}, '.vctools.conf');
-		my $config = { Config::General::ParseConfig($config_file) };
+		my $home = File::HomeDir->my_home;
+		my $config_file = file($home, '.vctools.conf');
+
+		# a small bit of pre-processing to allow ~ to refer to the user's home directory
+		# but only for *Dir directives, or in <<include>> statements
+		my $raw_config = slurp "$config_file";							# quotes to remove Path::Class magic
+		$raw_config =~ s{ ^ (\s* \w+Dir \s* = \s*) ~/ }{ $1 . $home . '/' }gmex;
+		$raw_config =~ s{ ^ (\s* << \s* include \s+) ~/ }{ $1 . $home . '/' }gmex;
+
+		my $config = { Config::General::ParseConfig( -String => $raw_config ) };
 		debuggit(3 => "read config:", DUMP => $config);
 		return $config;
 	}
@@ -268,13 +277,6 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		$value //= $self->config->{$self->vc}->{"Default$key"} if $vc;
 		$value //= $self->config->{$key};
 		$value //= $self->config->{"Default$key"};
-
-		# special processing for dirs
-		if ($key =~ /Dir$/ and $value and not ref $value)
-		{
-			$value =~ s/^~/ File::HomeDir->my_home /e;
-			$value = dir($value);
-		}
 
 		debuggit(6 => "in", wantarray, "context, sending", $value, "to deref, which is really", DUMP => [ $value ]);
 		return $self->deref($value);
