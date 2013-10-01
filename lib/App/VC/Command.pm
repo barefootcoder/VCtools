@@ -294,6 +294,12 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		$value //= $self->config->{$key};
 		$value //= $self->config->{"Default$key"};
 
+		# for now, I'm going to just hardcode those directives that are allowed to have %info expansions
+		# if we do it for everything, I'm worried we'll replace too aggressively
+		state $ALLOWED_INFO_EXPANSION = { map { $_ => 1 } qw< SourcePath > };
+		# the line below stolen from _process_cmdline; maybe this should be refactored into a method?
+		$value =~ s/%(\w+)/join(' ', $self->$1)/eg if $ALLOWED_INFO_EXPANSION->{$key};
+
 		debuggit(6 => "in", wantarray, "context, sending", $value, "to deref, which is really", DUMP => [ $value ]);
 		return $self->deref($value);
 	}
