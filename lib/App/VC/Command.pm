@@ -16,6 +16,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 	use CLASS;
 	use Path::Class;
+	use Const::Fast;
 	use Perl6::Slurp;
 	use File::HomeDir;
 	use MooseX::Has::Sugar;
@@ -288,9 +289,19 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	{
 		debuggit(4 => ":directive => key", $key, "project", $project, "has project", $self->has_project, "vc", $vc);
 
+		const my $POLICY_KEY => 'ProjectPolicy';
+		my $policy;
+		unless ($key eq $POLICY_KEY)
+		{
+			$policy = $self->directive($POLICY_KEY, project => $project, vc => $vc);
+			debuggit(4 => ":directive => got policy of", $policy);
+		}
+
 		my $value;
-		$value //= $self->config->{'Project'}->{$project}->{$key} if $project;
-		$value //= $self->config->{$self->vc}->{"Default$key"} if $vc;
+		$value //= $self->config->{'Project'}->{$project}->{$key}						if $project;
+		$value //= $self->config->{'Policy'}->{$policy}->{$self->vc}->{"Default$key"}	if $policy and $vc;
+		$value //= $self->config->{'Policy'}->{$policy}->{"Default$key"}				if $policy;
+		$value //= $self->config->{$self->vc}->{"Default$key"}							if $vc;
 		$value //= $self->config->{$key};
 		$value //= $self->config->{"Default$key"};
 
