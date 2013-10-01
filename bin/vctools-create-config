@@ -1,0 +1,265 @@
+#! /usr/bin/env perl
+
+use 5.012;
+use autodie qw< :all >;
+use warnings FATAL => 'all';
+
+use Debuggit DataPrinter => 1, DEBUG => 1;
+
+use Path::Class;
+use Tie::IxHash;
+use IO::Prompter;
+use File::HomeDir;
+use Method::Signatures;
+use List::Util qw< first >;
+
+
+# this line is repeated from lib/App/VC/Command.pm
+# however, in order not to repeat this one line, I'd have to repeat the 3 lines from bin/vc that set
+# up lib/ in @INC, and then include a module, so I think this is better, overall
+my $config_file = file(File::HomeDir->my_home, '.vctools.conf');
+
+say '';
+
+if (-e $config_file)
+{
+	say "You already have a config file: ", $config_file->resolve;
+	if (-w $config_file)
+	{
+		say "If you continue here, that file will overwritten.";
+		exit unless prompt -y1, "Are you sure you want to continue?";
+		exit unless prompt -y1, "The existing file will be lost forever.  Are you really sure?";
+	}
+	else
+	{
+		say "I don't have permission to overwrite the existing config.";
+		say "Therefore, bailing out.  Sorry.";
+		exit 1;
+	}
+	unlink $config_file;
+}
+
+
+my $wdirs = [];
+my $vc_list = [];
+my $projects = {};
+if (prompt -y1, "Would you like me to try to autodiscover as much as possible?")
+{
+	my %VC_dirs =
+	(
+		'.git'	=>	'git',
+		'.svn'	=>	'svn',
+		'CVS'	=>	'cvs',
+	);
+
+	my $home = File::HomeDir->my_home;
+	my @vc_dirs = map { file($_) } map { glob("$home/*/*/$_") } keys %VC_dirs;
+	if (@vc_dirs)
+	{
+		# working dirs, in order of most working copies in them, but only if they have at least 3
+		my %wdir_counts;
+		++$wdir_counts{$_->dir->parent} foreach @vc_dirs;
+		$wdirs = [ grep { $wdir_counts{$_} >= 3 } sort { $wdir_counts{$b} <=> $wdir_counts{$a} } keys %wdir_counts ];
+
+		# projects, with working copy dir and VC type
+		$projects = { map { $_->dir => $VC_dirs{$_->basename} } @vc_dirs };
+
+		# from projects, we can determine what VCs are used, from most used to least used
+		my %vc_counts;
+		++$vc_counts{$_} foreach values %$projects;
+		$vc_list = [ sort { $vc_counts{$b} <=> $vc_counts{$a} } keys %vc_counts ];
+
+		debuggit(2 => wdirs => DUMP => $wdirs, vc_list => DUMP => $vc_list, projects => DUMP => $projects);
+	}
+	else
+	{
+		say "I can't seem to find any VC working copies in your home dir.";
+		say "Falling back to just asking you questions.";
+	}
+}
+
+my $skip_questions = 0;
+if (%$projects)
+{
+	$skip_questions = prompt -y1, "Auto-discovery proved fruitful.  Go with that and ask nothing further?";
+}
+
+unless ($skip_questions)
+{
+	# *** VC systems (including default VC) ***
+
+	tie my %VC_systems, 'Tie::IxHash',
+	(
+		'Git'			=>	'git',
+		'Subversion'	=>	'svn',
+		'CVS'			=>	'cvs',
+	);
+	tie my %VC_list, 'Tie::IxHash', %VC_systems;						# make a copy which we can modify
+	my $vc_index = 0;
+	my $def_vc = simple_menu( "Which VC is your primary one?", \%VC_list, $vc_list->[$vc_index] );
+	$vc_list->[$vc_index] = $def_vc;
+	map { delete $VC_list{$_} if $VC_list{$_} eq $def_vc } keys %VC_list;
+	$VC_list{'none'} = 'none';										# fake VC to bail out early
+	debuggit(3 => "def VC", $def_vc, "remaining", DUMP => \%VC_list);
+
+	while (keys %VC_list > 1)
+	{
+		++$vc_index;
+		debuggit(4 => "sending index", $vc_index, "with value", $vc_list->[$vc_index]);
+		my $next_vc = simple_menu( "What other VC do you use?", \%VC_list, $vc_list->[$vc_index] // 'none' );
+		last if $next_vc eq 'none';
+		$vc_list->[$vc_index] = $next_vc;
+		map { delete $VC_list{$_} if $VC_list{$_} eq $next_vc } keys %VC_list;
+	}
+	say '';
+
+	# *** working directories ***
+
+	my $wd_index = 0;
+	my $primary_wdir = simple_prompt("What dir holds most of your VC working copies (~/ syntax okay)?",
+			$wdirs->[$wd_index]);
+	die("must supply at least one dir to hold working copies") unless $primary_wdir;
+	$wdirs->[$wd_index] = (glob($primary_wdir))[0];						# to expand any tilde's that might be there
+
+	say "\nList any other dirs where you typically store VC working copies.";
+	my $other_prompt = "Next dir? (leave blank or ^D to end)";
+	while (my $other_wdir = simple_prompt($other_prompt, $wdirs->[++$wd_index]))
+	{
+		debuggit(4 => 'next working dir:', $other_wdir, 'len', length($other_wdir));
+		$wdirs->[$wd_index] = (glob($other_wdir))[0];					# to expand any tilde's that might be there
+	}
+	say '';
+
+	# *** projects which are outside of wdirs or don't use default VC ***
+
+	if (prompt -y1, "Do you have any working copies outside of these dirs: ", join(' ', @$wdirs), ' ?')
+	{
+		while (1)
+		{
+			say "\nGetting directories outside working copies dirs.  Leave blank or ^D when done.";
+			my $dir = prompt "Working copy directory: (~/ syntax okay)";
+			debuggit(4 => 'next project dir:', $dir, 'len', length($dir));
+			last unless "$dir";											# again, quotes remove Contextual::Return magic
+			my $vc = simple_menu("What VC does this project use?", \%VC_systems, $vc_list->[0]);
+			$projects->{ (glob($dir))[0] } = $vc;						# again, using glob to expand any tilde's
+		}
+		say '';
+	}
+
+	if (@$vc_list > 1)
+	{
+		VC: foreach my $vc (@$vc_list[1..$#$vc_list])
+		{
+			my $choices = [ grep { -d } map { glob("$_/*") } @$wdirs ];
+			my $bail_out = "no more working copies using $vc";
+			unshift @$choices, $bail_out;
+			my $dir = prompt -menu => $choices, -number => "Which working copy dir above uses $vc? [no more]",
+					-default => $bail_out;
+			unless ($dir =~ /^no more working copies/)
+			{
+				$projects->{$dir} = $vc;
+				redo VC;
+			}
+		}
+	}
+	say '';
+}
+
+say "Here is the config file we're going to create:\n";
+my $config = create_config($wdirs, $vc_list, $projects);
+print $config;
+unless (prompt -y1, "\nDoes this look okay?")
+{
+	say STDERR "$0: config NOT written; try again later.";
+	exit 1;
+}
+
+write_config($config);
+say "\nConfig successfully written.\n";
+
+
+######################
+# SUBS
+######################
+
+func simple_menu ($prompt, HashRef $choices, $default?)
+{
+	debuggit(4 => prompt => $prompt, default => $default, choices => DUMP => $choices);
+	my @common_args = ( -single, -menu => [ keys %$choices ], );
+	my $result;
+	if (defined $default)
+	{
+		# "useless" quotes around $default remove any Contextual::Return magic that may have crept in
+		$result = prompt @common_args, "$prompt [$default]", -default => "$default";
+		return "$result" if $result eq $default;						# again, quotes to remove magic
+	}
+	else
+	{
+		$result = prompt @common_args, $prompt;
+	}
+	return $choices->{$result};
+}
+
+func simple_prompt ($prompt, $default?)
+{
+	my $result;
+	if (defined $default)
+	{
+		$result = prompt "$prompt [$default]", -default => $default;
+	}
+	else
+	{
+		$result = prompt $prompt;
+	}
+	return "$result";													# again again w/ the quotes ... see above
+}
+
+
+func prettify_path ($path)
+{
+	my $home = File::HomeDir->my_home;
+	$path = file($path)->absolute;
+	$path =~ s{^$home}{~};
+	return $path;
+}
+
+func create_config (ArrayRef $working, ArrayRef $vc_list, HashRef $projs)
+{
+	# WorkingDir directives
+	my $wdir = join("\n", map { "WorkingDir=$_" } map { prettify_path($_) } @$working);
+
+	# include base configs for all relevant VC systems, plus set the default VC
+	my $def_vc = $vc_list->[0];
+	my $conf_dir = file($0)->dir->parent->subdir('share', 'conf');
+	my $vc = join("\n", "DefaultVC=$def_vc",
+			map { "<<include $_>>" } map { prettify_path($conf_dir->file("$_.conf")) } @$vc_list);
+
+	# only keep projects that either aren't in in a standard working dir or don't use the default VC
+	my %projects;
+	while (my ($dir, $vc) = each %$projs)
+	{
+		my $name = dir($dir)->basename;
+		my $wdir = first { dir($_)->contains($dir) } @$working;
+		debuggit(4 => "project:", $name, "dir:", $dir, "vc:", $vc, "wdir:", $wdir, "def VC:", $def_vc);
+
+		$projects{$name}->{'VC'} = $vc unless $vc eq $def_vc;
+		$projects{$name}->{'ProjectDir'} = prettify_path($dir) unless $wdir;
+	}
+	debuggit(3 => "projects:", DUMP => \%projects);
+	my $projects = join("\n",
+			map { my ($name, $proj) = @$_; $proj =~ s/^/    /gm; "<Project $name>\n$proj\n</Project>\n" }
+			map { my $p = $projects{$_}; [ $_, join("\n", map { $p->{$_} ? "$_ = $p->{$_}" : () } qw< VC ProjectDir >) ] }
+			sort keys %projects
+	);
+
+	# now mash it all together
+	return join("\n\n", $wdir, $vc, $projects);
+}
+
+
+func write_config (Str $config)
+{
+	open(CONF, '>', $config_file);
+	print CONF $config;
+	close(CONF);
+}
