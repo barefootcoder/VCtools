@@ -60,6 +60,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	# (user-defined by VC-specific sections in config file)
 	my %INFO_ATTRIBUTES =
 	(
+		user		=>	'Str',
 		status		=>	'Str',
 		is_dirty	=>	'Bool',
 		has_staged	=>	'Bool',
@@ -179,7 +180,10 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		{
 			when ('Str')
 			{
-				return join('', map { $self->_process_cmdline(capture => $_) } @lines);
+				my $string = join('', map { $self->_process_cmdline(capture => $_) } @lines);
+				my $num_lines =()= $string =~ /\n/g;
+				chomp $string if $num_lines == 1;						# if it's only one line, don't want the trailing \n
+				return $string;
 			}
 			when ('Bool')
 			{
