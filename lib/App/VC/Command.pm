@@ -9,7 +9,6 @@ use MooseX::Attribute::ENV;
 
 class App::VC::Command extends MooseX::App::Cmd::Command
 {
-	use TryCatch;
 	use Debuggit;
 	use autodie qw< :all >;
 	use experimental 'smartmatch';
@@ -17,21 +16,18 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	use CLASS;
 	use Path::Class;
 	use Const::Fast;
-	use Perl6::Slurp;
-	use File::HomeDir;
 	use MooseX::Has::Sugar;
 	use MooseX::Types::Moose qw< :all >;
 
+
+	# EXTENSION OF INHERITED ATTRIBUTES
+	has '+app' => ( handles => [qw< config >], );						# pass on config() to our app (App::VC)
 
 	# CONFIGURATION ATTRIBUTES
 	# (figured out by reading config file or from command line invocation)
 	has _wcdir_info	=>	(
 							traits => [qw< NoGetopt >],
 							ro, isa => HashRef, lazy, builder => '_discover_project',
-						);
-	has config		=>	(
-							traits => [qw< NoGetopt >],
-							ro, isa => HashRef, lazy, builder => '_read_config',
 						);
 	has me			=>	(
 							traits => [qw< NoGetopt >],
@@ -92,35 +88,6 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 
 	# BUILDERS
-
-	method _read_config
-	{
-		use Config::General;
-
-		my $home = File::HomeDir->my_home;
-		my $config_file = file($home, '.vctools.conf');
-
-		my $raw_config;
-		try
-		{
-			$raw_config = slurp "$config_file";							# quotes to remove Path::Class magic
-
-			# a small bit of pre-processing to allow ~ to refer to the user's home directory
-			# but only for *Dir directives, or in <<include>> statements
-			$raw_config =~ s{ ^ (\s* \w+Dir \s* = \s*) ~/ }{ $1 . $home . '/' }gmex;
-			$raw_config =~ s{ ^ (\s* << \s* include \s+) ~/ }{ $1 . $home . '/' }gmex;
-		}
-		catch ($e where {/Can't open '$config_file'/})
-		{
-			$self->warning("config file not found; trying to create");
-			system(file($0)->dir->file('vctools-create-config'));
-			$self->fatal("If config file was successfully created, try your command again.");
-		}
-
-		my $config = { Config::General::ParseConfig( -String => $raw_config ) };
-		debuggit(3 => "read config:", DUMP => $config);
-		return $config;
-	}
 
 	# This builder method figures out a project and a project root from nothing (based on `pwd`).
 	# If you already know the specific project you want and just want the root, try root_for_project().
