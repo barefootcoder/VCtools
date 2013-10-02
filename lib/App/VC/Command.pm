@@ -316,7 +316,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	{
 		debuggit(3 => "running command_lines: command //", $cmd, "// for", $self->vc);
 
-		my $lines = $self->config->{$self->vc}->{$type}->{$cmd};
+		my $lines = $type eq 'custom' ? $cmd : $self->config->{$self->vc}->{$type}->{$cmd};
 		return () unless $lines;
 		debuggit(4 => "lines is //$lines//");
 

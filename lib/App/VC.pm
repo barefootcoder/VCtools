@@ -55,6 +55,33 @@ class App::VC extends MooseX::App::Cmd
 		debuggit(3 => "read config:", DUMP => $config);
 		return $config;
 	}
+
+
+	# PRIVATE METHODS
+
+	# The easiest way to provide on-the-fly commands in an App::Cmd structure is to catch the system
+	# right before it proclaims a command not found.  The method that does that is
+	# App::Cmd::_bad_command.  So, we're overriding a private method, which is a bit squicky, but
+	# I've done this a few times now and it seems to work well.
+	override _bad_command ($command, $opt, @args)
+	{
+		# first see if we can find a custom command with this name
+		my $custom = $self->config->{'CustomCommand'}->{$command};
+
+		# if we couldn't find one, just forward on to the real _bad_command
+		# but if we could, run the custom command
+		if (!defined $custom)
+		{
+			super();
+		}
+		else
+		{
+			use App::VC::CustomCommand;
+			my $custom_command = App::VC::CustomCommand->new( $self, $command, $custom, @args );
+			debuggit(2 => "custom command", $command, DUMP => $custom_command);
+			return $custom_command->prepare;
+		}
+	}
 }
 
 
