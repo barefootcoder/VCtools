@@ -76,10 +76,13 @@ class App::VC extends MooseX::App::Cmd
 		}
 		else
 		{
+			# I really want to this to be loaded at runtime.  But, every time I try, something in
+			# App::Cmd barfs on it.  Maybe the plugin system is trying to load it ... ?  (Although why
+			# that makes it barf, I have no idea.)  Anyways, if anyone can see how to make it work,
+			# I'd love to hear about it.  Right now everyone is paying a price for custom commands,
+			# even if they never use any.  (Although I suspect the price is pretty small.)
 			use App::VC::CustomCommand;
-			my $custom_command = App::VC::CustomCommand->new( $self, $command, $custom, @args );
-			debuggit(2 => "custom command", $command, DUMP => $custom_command);
-			return $custom_command->prepare;
+			return App::VC::CustomCommand->prepare_custom( $self, $command, $custom, @args );
 		}
 	}
 }

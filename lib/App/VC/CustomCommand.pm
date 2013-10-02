@@ -6,7 +6,7 @@ use MooseX::Declare;
 use Method::Signatures::Modifiers;
 
 
-class App::VC::CustomCommand is mutable
+class App::VC::CustomCommand extends App::VC::Command is mutable
 {
 	use Debuggit;
 	use autodie qw< :all >;
@@ -19,23 +19,18 @@ class App::VC::CustomCommand is mutable
 
 	# ATTRIBUTES
 
-	# originally thought we'd use inheritance for this, but some chicken and egg issues make
-	# composition + delegation work better (see e.g. BUILDARGS)
-	has cmd				=>	(
-								ro, isa => 'App::VC::Command', required,
-								handles => [qw< verify_project command_lines _process_cmdline fatal >],
+	has _command_names	=>	( ro, isa => ArrayRef, writer => '_set_command_names' );
+	has arguments		=>	( ro, isa => ArrayRef, writer => '_set_arguments' );
+
+	has min_files		=>	( ro, isa => Int, writer => '_set_min_files' );
+	has max_files		=>	( ro, isa => Int, writer => '_set_max_files' );
+	has _files			=>	(
+								traits => [qw< Array >],
+									handles => { files => 'elements' },
+								ro, isa => ArrayRef[Str], writer => '_set_files',
 							);
-	has cmd_opts		=>	( ro, isa => HashRef, required, );
-	has cmd_args		=>	( ro, isa => ArrayRef, required, );
 
-	has _command_names	=>	( ro, isa => ArrayRef, required, );
-	has arguments		=>	( ro, isa => ArrayRef, required, );
-
-	has min_files		=>	( ro, isa => Int, required, );
-	has max_files		=>	( ro, isa => Int, required, );
-	# actual _files attribute will be added to the cmd instance
-
-	has action			=>	( ro, isa => Str, required, );
+	has action			=>	( ro, isa => Str, writer => '_set_action' );
 
 	# validations
 	my %VALIDATIONS =
@@ -44,23 +39,31 @@ class App::VC::CustomCommand is mutable
 	);
 	while (my ($att, $type) = each %VALIDATIONS)
 	{
-		has "should_verify_$att" => ( ro, isa => $type, predicate => "wants_to_verify_$att", );
+		has "should_verify_$att" => ( ro, isa => $type, writer => "_set_verify_$att", );
 	}
 
 
-	# BUILDERS
+	# CONSTRUCTOR
 
-	around BUILDARGS ($class: App::VC $app, Str $command, HashRef $spec, @args)
+	# Call this instead of prepare (it calls prepare for you).
+	# Basically, this constructs an App::Cmd::Command object for you like normal (i.e., by calling
+	# prepare()), then adds a bunch of stuff to the object before passing it back.  This includes
+	# adding some attributes on-the-fly, which is a _bit_ odd, but not too terrbily meddlesome.  (At
+	# least, all the other ways I tried to do this were _way_ worse.)  Since most of the extra
+	# attributes (defined above) have to be set after the object is initially constructed, they're
+	# all read-only with private mutators.  The alternative would have been to somehow hook into
+	# App::Cmd::ArgProcessor::_process_args, but I felt that would rapidly get too messy.  *Plus* it
+	# would have put me back into the position of having to report fatal errors without having an
+	# object to call fatal() on yet.  So, it's not a *super* clean design, but it's clear and
+	# workable.  Well, clear enough once you understand the guts of how App::Cmd works, which is
+	# admittedly a daunting proposition.
+	method prepare_custom ($class: App::VC $app, Str $command, HashRef $spec, @args)
 	{
-		my $args = {};
-
-		# go ahead and build the command object first so we can use its fatal method if we hit a snag
-		my ($cmd, $cmdline_opts, @cmdline_args) = App::VC::Command->prepare($app, @args);
-		debuggit(3 => "cmd", DUMP => [ $cmd ]);
-		@$args{qw< cmd cmd_opts cmd_args >} = ($cmd, $cmdline_opts, \@cmdline_args);
+		# go ahead and build the object first so we can use its fatal method if we hit a snag
+		my ($self, $opt, @cmd_args) = $class->prepare($app, @args);
 
 		# command names
-		$args->{'_command_names'} = [ $command ];						# maybe allow aliases in spec?
+		#$self->{'_command_names'} = [ $command ];						# maybe allow aliases in spec?
 
 		# validations
 		if (exists $spec->{'Verify'})
@@ -72,7 +75,7 @@ class App::VC::CustomCommand is mutable
 			}
 			elsif (ref $validate ne 'ARRAY')							# then it's something bogus
 			{
-				$cmd->fatal("Config file error: Verify spec for CustomCommand $command");
+				$self->fatal("Config file error: Verify spec for CustomCommand $command");
 			}
 
 			# at this point, we're sure it's an arrayref, so loop through it
@@ -80,73 +83,70 @@ class App::VC::CustomCommand is mutable
 			{
 				if (exists $VALIDATIONS{$_})
 				{
-					$args->{"should_verify_$_"} = 1;
+					my $verify_method = "_set_verify_$_";
+					$self->$verify_method(1);
 				}
 				else
 				{
-					$cmd->fatal("Config file error: Verify spec for CustomCommand $command (`$_' unknown)");
+					$self->fatal("Config file error: Verify spec for CustomCommand $command (`$_' unknown)");
 				}
 			}
 		}
 
 		# arguments
+		my $arguments;
 		if (not exists $spec->{'Argument'})
 		{
-			$args->{'arguments'} = [];
+			$arguments = [];
 		}
 		elsif (!ref $spec->{'Argument'})								# it's a scalar: only one argument
 		{
-			$args->{'arguments'} = [ $spec->{'Argument'} ];
+			$arguments = [ $spec->{'Argument'} ];
 		}
 		elsif (ref $spec->{'Argument'} eq 'ARRAY')						# multiple arguments in an arrayref
 		{
-			$args->{'arguments'} = $spec->{'Argument'};
+			$arguments = $spec->{'Argument'};
 		}
 		else															# don't know WTF it is ...
 		{
-			$cmd->fatal("Config file error: Argument spec for CustomCommand $command");
+			$self->fatal("Config file error: Argument spec for CustomCommand $command");
 		}
+		$self->_set_arguments($arguments);
 		# add any arguments as new on-the-fly attributes
-		# unfortunately, since we gave up on inheriting from App::VC::Command, we'll have to add
-		# those attributes to our $cmd, which is weirder, but still works
-		$cmd->meta->make_mutable;
-		$cmd->meta->add_attribute($_ => (ro, writer => "_set_$_")) foreach @{ $args->{'arguments'} };
-		# don't make it immutable again yet; we've got to add the files attribute (below)
+		$self->meta->add_attribute($_ => (ro, writer => "_set_$_")) foreach @$arguments;
+		# not going to make this immutable, surprisingly
+		# the primary benefit of immutable is to inline the ctor
+		# but we've already constructed the only instance we're ever going to build
+		# so make_immutable just takes time and gains no real benefit
 
 		# files
+		my ($min_files, $max_files);
 		if (not exists $spec->{'Files'})								# command takes no files at all
 		{
-			$args->{'min_files'} = $args->{'max_files'} = 0;
+			$min_files = $max_files = 0;
 		}
 		else
 		{
 			unless ( $spec->{'Files'} =~ /^ (\d+) ( \.\. (\d+)? )? $/x )
 			{
-				$cmd->fatal("Config file error: Files spec for CustomCommand $command");
+				$self->fatal("Config file error: Files spec for CustomCommand $command");
 			}
-			$args->{'min_files'} = $1;
-			# if .. max is either the number provided, or -1 (meaning Inf); if no .. max is same as min
-			$args->{'max_files'} = $2 ? $3 // -1 : $1;
+			$min_files = $1;
+			# with .. -> max is either the number provided, or -1 (meaning Inf); without .. -> max is same as min
+			$max_files = $2 ? $3 // -1 : $1;
 		}
-		# already made mutable (above)
-		$cmd->meta->add_attribute(_files => ( ro, isa => ArrayRef[Str], writer => '_set_files',
-				traits => [qw< Array >], handles => { files => 'elements' }, ));
-		$cmd->meta->make_immutable;
+		$self->_set_min_files($min_files);
+		$self->_set_max_files($max_files);
 
 		# action
-		$args->{'action'} = $spec->{'action'} or $cmd->fatal("Config file error: action spec for CustomCommand $command");
+		$self->_set_action($spec->{'action'}) or $self->fatal("Config file error: action spec for CustomCommand $command");
 
-		return $args;
+		debuggit(2 => "custom command", $command, DUMP => $self);
+		return ($self, $opt, @cmd_args);
 	}
 
 
 	# METHODS
-
-	method prepare
-	{
-		return ($self, $self->cmd_opts, @{ $self->cmd_args });
-	}
-
 
 	method description
 	{
@@ -166,7 +166,7 @@ class App::VC::CustomCommand is mutable
 			$self->fatal("Did not receive $_ argument.") unless @$args;
 
 			my $writer = "_set_$_";
-			$self->cmd->$writer(shift @$args);
+			$self->$writer(shift @$args);
 		}
 
 		if (@$args < $self->min_files or $self->max_files != -1 && @$args > $self->max_files)
@@ -176,9 +176,9 @@ class App::VC::CustomCommand is mutable
 					: join(' ', "between", $self->min_files, "and", $self->max_files);
 			$self->fatal("Wrong number of files: must be $proper_number");
 		}
-		$self->cmd->_set_files($args);
+		$self->_set_files($args);
 
-		debuggit(4 => "after validations", DUMP => $self->cmd);
+		debuggit(4 => "after validations", DUMP => $self);
 	}
 
 	method execute (...)
