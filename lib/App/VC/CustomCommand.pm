@@ -19,6 +19,10 @@ class App::VC::CustomCommand extends App::VC::Command is mutable		# see BUILDARG
 	use App::VC::CustomCommandSpec;
 
 
+	# PACKAGE VAR FOR CHEAP HACK (see usage_desc method below)
+	my $USAGE_DESC;
+
+
 	# ATTRIBUTES
 
 	# want our app to handle any requests for a spec
@@ -46,9 +50,25 @@ class App::VC::CustomCommand extends App::VC::Command is mutable		# see BUILDARG
 		}
 	}
 
-	override usage_desc ($class: ...)
+	# For some super-bizarre reason, this is being called once with the $app argument, and then
+	# later without.  When called without, we have no way to figure out what the usage string should
+	# be (because we need the custom spec in the app to tell us).  I _think_ this is a bug in
+	# MooseX::App::Cmd::Command, because the overridden _process_args() doesn't take all the args
+	# that the underlying App::Cmd::Command::_process_args() does.  But I can't prove it, and no one
+	# else has ever seemed to have a problem, so perhaps it's something bad I'm doing.  But I'm
+	# tired of tracing all the calls through all the layers, and I gotta get something working.  So
+	# this is a cheap hack: first time through, we'll save the proper value in a class variable.
+	# Then, just return that forever after.
+	override usage_desc ($invocant: App::VC $app?)
 	{
-		return super();
+		$app //= $invocant->app if ref $invocant;
+		$USAGE_DESC = $app->custom_spec->usage_desc if $app;
+		return $USAGE_DESC // super();
+	}
+
+	method description
+	{
+		return	$self->spec->description;
 	}
 
 
@@ -86,15 +106,6 @@ class App::VC::CustomCommand extends App::VC::Command is mutable		# see BUILDARG
 
 
 	# METHODS
-
-	method description
-	{
-		return	"\n"
-			.	"FILL ME IN.\n"
-			.	"\n"
-			;
-	}
-
 
 	method validate_args ($opt, ArrayRef $args)
 	{

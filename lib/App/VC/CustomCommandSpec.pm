@@ -33,6 +33,7 @@ class App::VC::CustomCommandSpec
 	has min_files		=>	( ro, isa => Int, required, );
 	has max_files		=>	( ro, isa => Int, required, );
 
+	has description		=>	( ro, isa => Str, lazy, default => "\n", );
 	has action			=>	( ro, isa => Str, required, );
 
 	has fatal_error		=>	( ro, isa => Str, init_arg => 'fatal', predicate => 'has_fatal_error' );
@@ -57,7 +58,20 @@ class App::VC::CustomCommandSpec
 
 	method usage_desc
 	{
-		return join(' ', '%c', $self->command, '%o');
+		my @files;
+		if ($self->max_files != 0)
+		{
+			@files = ('file') x ($self->max_files == -1 ? $self->min_files : $self->max_files);
+			unshift @files, 'file' if $self->min_files == 0 and $self->max_files == -1;
+			push @files, '...' if $self->max_files == -1;
+			if ($self->max_files > $self->min_files or $self->max_files == -1)
+			{
+				$files[$self->min_files] = '[' . $files[$self->min_files];
+				$files[-1] .= ']'
+			}
+		}
+		my @args = map { "<$_>" } $self->arguments;
+		return join(' ', '%c', $self->command, '%o', @args, @files);
 	}
 
 
@@ -132,6 +146,9 @@ class App::VC::CustomCommandSpec
 			$args->{'max_files'} = $2 ? $3 // -1 : $1;
 		}
 
+		# description
+		$args->{'description'} = "\n" . $spec->{'Description'} . "\n\n" if exists $spec->{'Description'};
+
 		# action
 		$args->{'action'} = $spec->{'action'} or $fatal_error //= "action spec for CustomCommand $command";
 
@@ -143,15 +160,6 @@ class App::VC::CustomCommandSpec
 
 
 	# METHODS
-
-	method description
-	{
-		return	"\n"
-			.	"FILL ME IN.\n"
-			.	"\n"
-			;
-	}
-
 
 	method validate_args (App::VC::CustomCommand $cmd, ArrayRef $args)
 	{
