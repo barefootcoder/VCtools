@@ -19,10 +19,13 @@ class App::VC extends MooseX::App::Cmd
 	use MooseX::Has::Sugar;
 	use MooseX::Types::Moose qw< :all >;
 
+	use App::VC::CustomCommandSpec;
+
 
 	# ATTRIBUTES
 
 	has config		=>	( ro, isa => HashRef, lazy, builder => '_read_config', );
+	has custom_spec	=>	( ro, isa => 'App::VC::CustomCommandSpec', writer => '_set_spec' );
 
 
 	# BUILDERS
@@ -82,7 +85,9 @@ class App::VC extends MooseX::App::Cmd
 			# I'd love to hear about it.  Right now everyone is paying a price for custom commands,
 			# even if they never use any.  (Although I suspect the price is pretty small.)
 			use App::VC::CustomCommand;
-			return App::VC::CustomCommand->prepare_custom( $self, $command, $custom, @args );
+			my $spec = App::VC::CustomCommandSpec->new( $command, $custom );
+			$self->_set_spec($spec);
+			return App::VC::CustomCommand->prepare( $self, @args );
 		}
 	}
 }
