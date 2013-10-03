@@ -45,7 +45,7 @@ class App::VC::CustomCommandSpec
 	);
 	while (my ($att, $type) = each %VALIDATIONS)
 	{
-		has "should_verify_$att" => ( ro, isa => $type, required, );
+		has "should_verify_$att" => ( ro, isa => $type, );
 	}
 
 
