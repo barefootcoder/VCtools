@@ -21,8 +21,10 @@ class App::VC::CustomCommand extends App::VC::Command is mutable		# see BUILDARG
 
 	# ATTRIBUTES
 
-	has spec			=>	( ro, isa => 'App::VC::CustomCommandSpec', writer => '_set_spec' );
+	# want our app to handle any requests for a spec
+	has '+app'			=>	( handles => { spec => 'custom_spec' } );
 
+	# we know we'll need files, if only to make %files work
 	has _files			=>	(
 								traits => [qw< Array >],
 									handles => { files => 'elements' },
@@ -77,9 +79,6 @@ class App::VC::CustomCommand extends App::VC::Command is mutable		# see BUILDARG
 		# the primary benefit of immutable is to inline the ctor
 		# but we've already constructed the only instance we're ever going to build
 		# so make_immutable just takes time and gains no real benefit
-
-		# save the spec
-		$self->_set_spec($spec);
 
 		debuggit(2 => "custom command", $spec->command, DUMP => $self);
 		return ($self, $opt, @cmd_args);
