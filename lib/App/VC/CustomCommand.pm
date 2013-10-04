@@ -42,7 +42,7 @@ class App::VC::CustomCommand extends App::VC::Command is mutable		# see BUILDARG
 	{
 		if (ref $invocant)												# we have an actual object
 		{
-			return @{ $invocant->_command_names };
+			return @{ $invocant->spec->_command_names };
 		}
 		else															# classname: nothing useful to return here
 		{
