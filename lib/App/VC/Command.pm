@@ -213,6 +213,15 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 					return $self->$cmd			when 'capture';
 				}
 			}
+			elsif ($cmd =~ s/^>\s*//)
+			{
+				say $self->custom_message($cmd);
+				return 1;
+			}
+			elsif ($cmd =~ s/^!\s*//)
+			{
+				$self->fatal($cmd);
+			}
 			else
 			{
 				$cmd =~ s/%(\w+)/join(' ', $self->$1)/eg;
@@ -395,6 +404,24 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			say $self->color_msg(cyan => "now running: "), $msg		when 'actual';
 			die("illegal mode: $_");								# otherwise
 		}
+	}
+
+	method custom_message ($msg)
+	{
+		state $COLOR_CODES = { '!' => 'red', '~' => 'yellow', '+' => 'green', '-' => 'cyan' };
+		state $COLOR_CODE_METACHAR = '[' . join('', keys %$COLOR_CODES) . ']';
+		state $COLOR_SPLITTER = qr/^ (.*?) (?: \*($COLOR_CODE_METACHAR) (.*?) \2\* (.*) )? $/x;
+
+		my ($pre, $color, $text, $post) = $msg =~ /$COLOR_SPLITTER/;
+		my $output = $pre;
+		while ($color)
+		{
+			$output .= $self->color_msg( $COLOR_CODES->{$color} => $text );
+			($pre, $color, $text, $post) = $post =~ /$COLOR_SPLITTER/;
+			$output .= $pre;
+		}
+
+		return $output;
 	}
 
 }
