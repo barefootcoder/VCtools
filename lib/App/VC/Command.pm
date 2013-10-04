@@ -15,20 +15,15 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 	use CLASS;
 	use Path::Class;
-	use Const::Fast;
 	use MooseX::Has::Sugar;
 	use MooseX::Types::Moose qw< :all >;
 
 
 	# EXTENSION OF INHERITED ATTRIBUTES
-	has '+app' => ( handles => [qw< config >], );						# pass on config() to our app (App::VC)
+	has '+app' => ( handles => [qw< config project proj_root vc >], );	# pass on config methods to our app (App::VC)
 
 	# CONFIGURATION ATTRIBUTES
 	# (figured out by reading config file or from command line invocation)
-	has _wcdir_info	=>	(
-							traits => [qw< NoGetopt >],
-							ro, isa => HashRef, lazy, builder => '_discover_project',
-						);
 	has me			=>	(
 							traits => [qw< NoGetopt >],
 							ro, isa => Str, lazy, default => method { $self->app->arg0 },
@@ -36,21 +31,6 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	has command		=>	(
 							traits => [qw< NoGetopt >],
 							ro, isa => Maybe[Str], lazy, default => method { ($self->command_names)[0] },
-						);
-	has project		=>	(
-							traits => [qw< NoGetopt >],
-							ro, isa => Maybe[Str], lazy, predicate => 'has_project',
-								default => method { $self->_wcdir_info->{'project'} },
-						);
-	has proj_root	=>	(
-							traits => [qw< NoGetopt >],
-							ro, isa => Maybe[Str], lazy, default => method { $self->_wcdir_info->{'project_root'} },
-						);
-	has vc			=>	(
-							traits => [qw< NoGetopt >],
-							ro, isa => Str, lazy, predicate => 'has_vc',
-								# disallow recursion by specifically setting vc param to undef
-								default => method { $self->directive('VC', vc => undef) },
 						);
 
 	# INFO ATTRIBUTES
@@ -95,78 +75,28 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 	# BUILDERS
 
-	# This builder method figures out a project and a project root from nothing (based on `pwd`).
-	# If you already know the specific project you want and just want the root, try root_for_project().
-	method _discover_project
-	{
-		# we can't let any calls to directive() here try to look up project
-		# since project is what we're trying to determine (chicken and egg issue)
-		# so we always specify it explicitly, even if only as undef
-
-		my $info =
-		{
-			project_root	=>	undef,
-			project			=>	undef,
-		};
-
-		my $pwd = dir()->resolve;
-
-		foreach my $proj (keys %{ $self->config->{'Project'} })
-		{
-			my $projdir = $self->directive('ProjectDir', project => $proj);
-			debuggit(4 => "checking project", $proj, "got dir", $projdir);
-			next unless $projdir;
-
-			debuggit(4 => "checking", $pwd, "against", $projdir);
-			my $realpath = dir($projdir)->resolve;						# make a copy so resolve() won't change the path
-			if ($realpath->contains($pwd))
-			{
-				$info->{'project'} = $proj;
-				$info->{'project_root'} = "$projdir";
-				return $info;
-			}
-		}
-
-		foreach my $wdir (map { dir($_) } $self->directive('WorkingDir', project => undef))
-		{
-			foreach my $projdir (grep { -d } $wdir->children)
-			{
-				debuggit(4 => "checking", $pwd, "against", $projdir);
-				my $realpath = dir($projdir)->resolve;					# make a copy so resolve() won't change the path
-				if ($realpath->contains($pwd))
-				{
-					$info->{'project'} = $projdir->basename;
-					$info->{'project_root'} = "$projdir";
-					return $info;
-				}
-			}
-		}
-
-		return $info;
-	}
-
 	method _fetch_info ($att, $type)
 	{
 		use List::Util qw< reduce >;
 
-		my @lines = $self->command_lines(info => $att);
+		my @lines = $self->config->action_lines(info => $att);
 		given ($type)
 		{
 			when ('Str')
 			{
-				my $string = join('', map { $self->_process_cmdline(capture => $_) } @lines);
+				my $string = join('', map { $self->process_action_line(capture => $_) } @lines);
 				my $num_lines =()= $string =~ /\n/g;
 				chomp $string if $num_lines == 1;						# if it's only one line, don't want the trailing \n
 				return $string;
 			}
 			when ('Bool')
 			{
-				my $result = reduce { $a && $b } map { $self->_process_cmdline(capture => $_) } @lines;
+				my $result = reduce { $a && $b } map { $self->process_action_line(capture => $_) } @lines;
 				return $result ? 1 : 0;
 			}
 			when ('ArrayRef')
 			{
-				return [ split("\n", join('', map { $self->_process_cmdline(capture => $_) } @lines)) ];
+				return [ split("\n", join('', map { $self->process_action_line(capture => $_) } @lines)) ];
 			}
 			default
 			{
@@ -176,9 +106,61 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	}
 
 
-	# PRIVATE METHODS
+	# SUPPORT METHODS
 
-	method _process_cmdline ($type, $line)
+	# small wrapper around directive (from our config object) which allows us to do substitutions on
+	# certain directives (note that we have to go to some trouble to maintain our context)
+	method directive ($key, ...)
+	{
+		if (wantarray)
+		{
+			return $self->config->directive(@_);
+		}
+		else
+		{
+			# just pass through params to config object
+			my $value = $self->config->directive(@_);
+
+			# for now, I'm going to just hardcode those directives that are allowed to have %info expansions
+			# if we do it for everything, I'm worried we'll replace too aggressively
+			state $ALLOWED_INFO_EXPANSION = { map { $_ => 1 } qw< SourcePath > };
+			# the line below stolen from process_action_line; maybe this should be refactored into a method?
+			$value =~ s/%(\w+)/join(' ', $self->$1)/eg if $ALLOWED_INFO_EXPANSION->{$key};
+
+			return $value;
+		}
+	}
+
+	# Normally, the project root is "discovered" (based on `pwd`) at the same time as the project
+	# (see _discover_project()).  However, if you want a project root for a given project, it's much
+	# easier to determine, so here's how you can do that.
+	method root_for_project ($project)
+	{
+		my $root = $self->directive('ProjectDir', project => $project);
+		return $root if $root;
+
+		# no such luck; start trying children of the working dir
+		foreach my $wdir (map { dir($_) } $self->directive('WorkingDir', project => undef))
+		{
+			debuggit(4 => ":root_for_project => trying", $wdir, "subdir", $project);
+			$root = $wdir->subdir($project);
+			return $root if -d $root;
+		}
+
+		# no luck at *all*
+		return undef;
+	}
+
+	# If, OTOH, you just want to know all the possible projects, this is the one you want.
+	method list_all_projects
+	{
+		my @explicit_projects = $self->config->top_level_entities('Project');
+		my @implicit_projects = map { $_->basename } grep { -d } map { dir($_)->children }
+				$self->directive('WorkingDir', project => undef);
+		return sort { lc $a cmp lc $b } keys { map { $_ => 1 } @explicit_projects, @implicit_projects };
+	}
+
+	method process_action_line ($type, $line)
 	{
 		local $@;
 
@@ -252,93 +234,6 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	}
 
 
-	# SUPPORT METHODS
-
-	method deref ($ref)
-	{
-		given (ref $ref)
-		{
-			return @$ref							when 'ARRAY';
-			return %$ref							when 'HASH';
-			return $ref								when '';
-			return "$ref"							when qw< Path::Class::Dir >;
-			die("don't know how to deref a $_");	# otherwise
-		}
-	}
-
-
-	method directive ($key, :$project = $self->project, :$vc = $self->has_project && $self->vc)
-	{
-		debuggit(4 => ":directive => key", $key, "project", $project, "has project", $self->has_project, "vc", $vc);
-
-		const my $POLICY_KEY => 'ProjectPolicy';
-		my $policy;
-		unless ($key eq $POLICY_KEY)
-		{
-			$policy = $self->directive($POLICY_KEY, project => $project, vc => $vc);
-			debuggit(4 => ":directive => got policy of", $policy);
-		}
-
-		my $value;
-		$value //= $self->config->{'Project'}->{$project}->{$key}						if $project;
-		$value //= $self->config->{'Policy'}->{$policy}->{$self->vc}->{"Default$key"}	if $policy and $vc;
-		$value //= $self->config->{'Policy'}->{$policy}->{"Default$key"}				if $policy;
-		$value //= $self->config->{$self->vc}->{"Default$key"}							if $vc;
-		$value //= $self->config->{$key};
-		$value //= $self->config->{"Default$key"};
-
-		# for now, I'm going to just hardcode those directives that are allowed to have %info expansions
-		# if we do it for everything, I'm worried we'll replace too aggressively
-		state $ALLOWED_INFO_EXPANSION = { map { $_ => 1 } qw< SourcePath > };
-		# the line below stolen from _process_cmdline; maybe this should be refactored into a method?
-		$value =~ s/%(\w+)/join(' ', $self->$1)/eg if $ALLOWED_INFO_EXPANSION->{$key};
-
-		debuggit(6 => "in", wantarray, "context, sending", $value, "to deref, which is really", DUMP => [ $value ]);
-		return $self->deref($value);
-	}
-
-
-	# Normally, the project root is "discovered" (based on `pwd`) at the same time as the project
-	# (see _discover_project()).  However, if you want a project root for a given project, it's much
-	# easier to determine, so here's how you can do that.
-	method root_for_project ($project)
-	{
-		my $root = $self->directive('ProjectDir', project => $project);
-		return $root if $root;
-
-		# no such luck; start trying children of the working dir
-		foreach my $wdir (map { dir($_) } $self->directive('WorkingDir', project => undef))
-		{
-			$root = $wdir->subdir($project);
-			return $root if -d $root;
-		}
-
-		# no luck at *all*
-		return undef;
-	}
-
-	# If, OTOH, you just want to know all the possible projects, this is the one you want.
-	method list_all_projects
-	{
-		my @explicit_projects = keys $self->config->{'Project'};
-		my @implicit_projects = map { $_->basename } grep { -d } map { dir($_)->children }
-				$self->directive('WorkingDir', project => undef);
-		return sort { lc $a cmp lc $b } keys { map { $_ => 1 } @explicit_projects, @implicit_projects };
-	}
-
-
-	method command_lines ($type, $cmd)
-	{
-		debuggit(3 => "running command_lines: command //", $cmd, "// for", $self->vc);
-
-		my $lines = $type eq 'custom' ? $cmd : $self->config->{$self->vc}->{$type}->{$cmd};
-		return () unless $lines;
-		debuggit(4 => "lines is //$lines//");
-
-		return map { s/^\s+//; $_ } split("\n", $lines);
-	}
-
-
 	# VALIDATION METHODS
 	# (call these from validate_args)
 
@@ -355,8 +250,8 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	{
 		inner();
 
-		my @commands = $self->command_lines(commands => $self->command);
-		$self->_process_cmdline(output => $_) or exit foreach @commands;
+		my @commands = $self->config->action_lines(commands => $self->command);
+		$self->process_action_line(output => $_) or exit foreach @commands;
 	}
 
 

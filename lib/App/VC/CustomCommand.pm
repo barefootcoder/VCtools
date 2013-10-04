@@ -115,8 +115,8 @@ class App::VC::CustomCommand extends App::VC::Command is mutable		# see BUILDARG
 
 	method execute (...)
 	{
-		my @commands = $self->command_lines(custom => $self->spec->action);
-		$self->_process_cmdline(output => $_) or exit foreach @commands;
+		my @commands = $self->config->action_lines(custom => $self->spec->action);
+		$self->process_action_line(output => $_) or exit foreach @commands;
 	}
 }
 
