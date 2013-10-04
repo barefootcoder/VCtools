@@ -78,6 +78,12 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 								env_prefix => 'VCTOOLS',
 							is => 'ro', isa => 'Bool',
 						);
+	has color		=>	(
+							traits => [qw< Getopt ENV >],
+								documentation => "Use color output (even when not printing to a term).",
+								env_prefix => 'VCTOOLS',
+							is => 'ro', isa => 'Bool',
+						);
 	has pretend		=>	(
 							traits => [qw< Getopt ENV >],
 								documentation => "Don't actually run any destructive commands; just print them.",
@@ -352,8 +358,12 @@ class App::VC::Command extends MooseX::App::Cmd::Command
     {
 		debuggit(4 => "color_msg args:", $color, join(' // ', @msgs));
 
+		my $use_color = -t STDOUT;										# default is color only if printing to a term
+		$use_color = 0 if $self->no_color;								# but you can override with command line switches
+		$use_color = 1 if $self->color;									# if you use both, --color wins
+
         my $msg = join('', @msgs);
-        if ( -t STDOUT and !$self->no_color and eval { require Term::ANSIColor } )
+        if ( $use_color and eval { require Term::ANSIColor } )			# of course, if we can't load color module ...
         {
             return Term::ANSIColor::colored($msg, bold => $color);
         }
