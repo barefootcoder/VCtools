@@ -169,8 +169,7 @@ class App::VC::CustomCommandSpec
 		{
 			$cmd->fatal("Did not receive $_ argument.") unless @$args;
 
-			my $writer = "_set_$_";
-			$cmd->$writer(shift @$args);
+			$cmd->set_info($_ => shift @$args);
 		}
 
 		if (@$args < $self->min_files or $self->max_files != -1 && @$args > $self->max_files)
@@ -180,7 +179,7 @@ class App::VC::CustomCommandSpec
 					: join(' ', "between", $self->min_files, "and", $self->max_files);
 			$cmd->fatal("Wrong number of files: must be $proper_number");
 		}
-		$cmd->_set_files($args);
+		$cmd->set_info(files => $args);
 	}
 }
 

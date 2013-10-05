@@ -18,6 +18,8 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	use MooseX::Has::Sugar;
 	use MooseX::Types::Moose qw< :all >;
 
+	use App::VC::InfoCache;
+
 
 	# EXTENSION OF INHERITED ATTRIBUTES
 	has '+app' => ( handles => [qw< config project proj_root vc >], );	# pass on config methods to our app (App::VC)
@@ -32,22 +34,12 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 							traits => [qw< NoGetopt >],
 							ro, isa => Maybe[Str], lazy, default => method { ($self->command_names)[0] },
 						);
-
-	# INFO ATTRIBUTES
-	# (user-defined by VC-specific sections in config file)
-	my %INFO_ATTRIBUTES =
-	(
-		user		=>	'Str',
-		status		=>	'Str',
-		is_dirty	=>	'Bool',
-		has_staged	=>	'Bool',
-		mod_files	=>	'ArrayRef'
-	);
-	while (my ($att, $type) = each %INFO_ATTRIBUTES)
-	{
-		has $att => ( traits => ['NoGetopt'], ro, isa => $type, lazy,
-							default => method { $self->_fetch_info($att, $type) }, );
-	}
+	has _info		=>	(
+							traits => [qw< NoGetopt >],
+							ro, isa => 'App::VC::InfoCache',
+								handles => { get_info => 'get', set_info => 'set', },
+								default => method { App::VC::InfoCache->new( $self ) },
+						);
 
 	# GLOBAL OPTIONS
 	# (apply to all commands)
@@ -73,37 +65,11 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 						);
 
 
-	# BUILDERS
+	# PSEUDO-ATTRIBUTES
 
-	method _fetch_info ($att, $type)
-	{
-		use List::Util qw< reduce >;
-
-		my @lines = $self->config->action_lines(info => $att);
-		given ($type)
-		{
-			when ('Str')
-			{
-				my $string = join('', map { $self->process_action_line(capture => $_) } @lines);
-				my $num_lines =()= $string =~ /\n/g;
-				chomp $string if $num_lines == 1;						# if it's only one line, don't want the trailing \n
-				return $string;
-			}
-			when ('Bool')
-			{
-				my $result = reduce { $a && $b } map { $self->process_action_line(capture => $_) } @lines;
-				return $result ? 1 : 0;
-			}
-			when ('ArrayRef')
-			{
-				return [ split("\n", join('', map { $self->process_action_line(capture => $_) } @lines)) ];
-			}
-			default
-			{
-				die("dunno how to deal with info type: $_");
-			}
-		}
-	}
+	# just pass these on to our info object
+	method is_dirty		{ $self->get_info('is_dirty') }
+	method mod_files	{ $self->get_info('mod_files') }
 
 
 	# SUPPORT METHODS
@@ -121,7 +87,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			# if we do it for everything, I'm worried we'll replace too aggressively
 			state $ALLOWED_INFO_EXPANSION = { map { $_ => 1 } qw< SourcePath > };
 			# the line below stolen from process_action_line; maybe this should be refactored into a method?
-			$value =~ s/%(\w+)/join(' ', $self->$1)/eg if $ALLOWED_INFO_EXPANSION->{$key};
+			$value = $self->info_expand($value) if $ALLOWED_INFO_EXPANSION->{$key};
 
 			return $value;
 		}
@@ -130,6 +96,14 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 # line 90
 			return @values;
 		}
+	}
+
+
+	method info_expand ($string)
+	{
+		debuggit(4 => "going to expand string", $string);
+		$string =~ s/%(\w+)/join(' ', $self->get_info($1))/eg;
+		return $string;
 	}
 
 
@@ -168,7 +142,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 		my ($condition, $cmd) = $line =~ /^(.*?)\s+->\s+(.*)$/ ? ($1, $2) : ('1', $line);
 		$condition =~ s{\$(\w+)}{ $ENV{$1} // '' }eg;
-		$condition =~ s/%(\w+)/'$self->' . $1/eg;
+		$condition = $self->info_expand($condition);
 		debuggit(4 => "...initial condition is", $condition, "will evaluate to", eval $condition) if DEBUG;
 		$condition = eval $condition;
 		die "bad condition: $@" if $@;
@@ -189,7 +163,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			}
 			elsif ($cmd =~ s/^\@//)
 			{
-				$cmd =~ s/%(\w+)/'$self->' . $1/eg;
+				$cmd = $self->info_expand($cmd);
 				my $e = eval $cmd;
 				die if $@;
 				return $e;
@@ -198,8 +172,8 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			{
 				given ($type)
 				{
-					return say $self->$cmd		when 'output';
-					return $self->$cmd			when 'capture';
+					return say $self->get_info($cmd)		when 'output';
+					return $self->get_info($cmd)			when 'capture';
 				}
 			}
 			elsif ($cmd =~ s/^>\s*//)
@@ -213,7 +187,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			}
 			else
 			{
-				$cmd =~ s/%(\w+)/join(' ', $self->$1)/eg;
+				$cmd = $self->info_expand($cmd);
 				debuggit(4 => "sending to system: $cmd");
 				given ($type)
 				{

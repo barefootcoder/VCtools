@@ -6,7 +6,7 @@ use MooseX::Declare;
 use Method::Signatures::Modifiers;
 
 
-class App::VC::CustomCommand extends App::VC::Command is mutable		# see BUILDARGS for why it's mutable
+class App::VC::CustomCommand extends App::VC::Command
 {
 	use Debuggit;
 	use autodie qw< :all >;
@@ -27,13 +27,6 @@ class App::VC::CustomCommand extends App::VC::Command is mutable		# see BUILDARG
 
 	# want our app to handle any requests for a spec
 	has '+app'			=>	( handles => { spec => 'custom_spec' } );
-
-	# we know we'll need files, if only to make %files work
-	has _files			=>	(
-								traits => [qw< Array >],
-									handles => { files => 'elements' },
-								ro, isa => ArrayRef[Str], writer => '_set_files',
-							);
 
 
 	# PSEUDO-ATTRIBUTES
@@ -92,13 +85,6 @@ class App::VC::CustomCommand extends App::VC::Command is mutable		# see BUILDARG
 
 		my ($self, $opt, @cmd_args) = super();
 		$self->fatal($spec->fatal_error) if $spec->has_fatal_error;
-
-		# add any arguments as new on-the-fly attributes
-		$self->meta->add_attribute($_ => (ro, writer => "_set_$_")) foreach $spec->arguments;
-		# not going to make the class immutable afterwards, surprisingly
-		# the primary benefit of immutable is to inline the ctor
-		# but we've already constructed the only instance we're ever going to build
-		# so make_immutable just takes time and gains no real benefit
 
 		debuggit(2 => "custom command", $spec->command, DUMP => $self);
 		return ($self, $opt, @cmd_args);

@@ -16,13 +16,6 @@ class App::VC::Command::unget extends App::VC::Command
 	use MooseX::Types::Moose qw< :all >;
 
 
-	has _files		=>	(
-							traits => [qw< NoGetopt Array >],
-								handles => { files => 'elements' },
-							ro, isa => ArrayRef[Str], writer => '_set_files',
-						);
-
-
 	method description
 	{
 		return	"\n"
@@ -35,7 +28,7 @@ class App::VC::Command::unget extends App::VC::Command
 	method validate_args ($opt, ArrayRef $args)
 	{
 		$self->usage_error("file(s) arg is required") unless $args->[0];
-		$self->_set_files($args);
+		$self->set_info(files => $args);
 	}
 
 	augment execute (...)

@@ -65,7 +65,7 @@ class App::VC::Command::info extends App::VC::Command
 			when (/^%(\w+)/)
 			{
 				debuggit(3 => "going to run method", $1);
-				say join(', ', $self->config->deref($self->$1));
+				say join(', ', $self->config->deref($self->get_info($1)));
 			}
 			default
 			{
