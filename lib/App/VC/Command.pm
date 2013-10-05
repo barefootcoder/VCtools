@@ -176,8 +176,10 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		{
 			if ($cmd =~ /^(\w+)=(.*)$/)
 			{
-				$ENV{$1} = $2;
-				debuggit("set env var", $1, "to", $ENV{$1});
+				my ($var, $val) = ($1, eval $2);
+				$ENV{$var} = $val;
+				debuggit(3 => "set env var", $var, "to", $ENV{$var});
+				$self->pretend_msg(actual => "$var=$val") if $self->pretend;
 				return 1;
 			}
 			elsif ($cmd =~ s/^\@//)
