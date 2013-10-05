@@ -177,8 +177,11 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			if ($cmd =~ /^(\w+)=(.*)$/)
 			{
 				my ($var, $val) = ($1, eval $2);
+				$self->fatal("code fails compilation: $@") if $@;
+
 				$ENV{$var} = $val;
 				debuggit(3 => "set env var", $var, "to", $ENV{$var});
+
 				$self->pretend_msg(actual => "$var=$val") if $self->pretend;
 				return 1;
 			}
