@@ -20,6 +20,9 @@ class App::VC::Config
 	use MooseX::Types::Moose qw< :all >;
 
 
+	const my $POLICY_KEY => 'ProjectPolicy';
+
+
 	# ATTRIBUTES
 
 	has _wcdir_info	=>	( ro, isa => HashRef, lazy, builder => '_discover_project', );
@@ -151,7 +154,6 @@ class App::VC::Config
 	{
 		debuggit(4 => ":directive => key", $key, "project", $project, "has project", $self->has_project, "vc", $vc);
 
-		const my $POLICY_KEY => 'ProjectPolicy';
 		my $policy;
 		unless ($key eq $POLICY_KEY)
 		{
@@ -186,7 +188,12 @@ class App::VC::Config
 
 	method custom_command ($cmd)
 	{
-		my $custom;
+		my ($custom, $policy);
+		if (my $policy = $self->directive($POLICY_KEY))
+		{
+			$custom //= $self->_config->{'Policy'}->{$policy}->{'CustomCommand'}->{$cmd}
+					if $self->_config->{'Policy'}->{$policy}->{'CustomCommand'};
+		}
 		$custom //= $self->_config->{'CustomCommand'}->{$cmd} if $self->_config->{'CustomCommand'};
 
 		return $custom;
