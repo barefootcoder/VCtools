@@ -112,14 +112,10 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	# certain directives (note that we have to go to some trouble to maintain our context)
 	method directive ($key, ...)
 	{
-		if (wantarray)
+		my @values = $self->config->directive(@_);
+		if (@values == 1)
 		{
-			return $self->config->directive(@_);
-		}
-		else
-		{
-			# just pass through params to config object
-			my $value = $self->config->directive(@_);
+			my ($value) = @values;
 
 			# for now, I'm going to just hardcode those directives that are allowed to have %info expansions
 			# if we do it for everything, I'm worried we'll replace too aggressively
@@ -129,7 +125,13 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 			return $value;
 		}
+		else
+		{
+# line 90
+			return @values;
+		}
 	}
+
 
 	# Normally, the project root is "discovered" (based on `pwd`) at the same time as the project
 	# (see _discover_project()).  However, if you want a project root for a given project, it's much
