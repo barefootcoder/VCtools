@@ -318,6 +318,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			$output .= $pre;
 		}
 
+		$output =~ s/\$(\w+)/$ENV{$1}/g;
 		return $output;
 	}
 

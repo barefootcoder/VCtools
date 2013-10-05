@@ -23,6 +23,10 @@ $squozen =~ s/ //g;
 is $cmd->custom_message("no*!yes!**+yes+*"), $squozen, 'consecutive colors';
 is $cmd->custom_message("*!yes *+huh+* yes!*"), make_expected(red => 'yes *+huh+* yes'), 'nested colors (do not work)';
 
+$ENV{bmoogle} = 'test';
+is $cmd->custom_message('this is a $bmoogle'), 'this is a test', 'env var substitution';
+is $cmd->custom_message('$bmoogle is a $bmoogle'), 'test is a test', 'multiple env var substitutions';
+
 
 done_testing;
 
