@@ -61,7 +61,7 @@ class App::VC::CustomCommand extends App::VC::Command
 
 	method description
 	{
-		return	$self->spec->description;
+		return	$self->info_expand($self->spec->description);
 	}
 
 
