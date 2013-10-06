@@ -13,6 +13,7 @@ is $cmd->custom_message("no *!yes!* no"), make_expected('no', red => 'yes', 'no'
 is $cmd->custom_message("no *~yes~* no"), make_expected('no', yellow => 'yes', 'no'), 'basic yellow msg';
 is $cmd->custom_message("no *+yes+* no"), make_expected('no', green => 'yes', 'no'), 'basic green msg';
 is $cmd->custom_message("no *-yes-* no"), make_expected('no', cyan => 'yes', 'no'), 'basic cyan msg';
+is $cmd->custom_message("no *=yes=* no"), make_expected('no', white => 'yes', 'no'), 'basic white msg';
 
 is $cmd->custom_message("*!yes!* no"), make_expected(red => 'yes', 'no'), 'at the start';
 is $cmd->custom_message("no *!yes!*"), make_expected('no', red => 'yes'), 'at the end';
@@ -33,7 +34,7 @@ done_testing;
 
 sub make_expected
 {
-	my %colors = map { $_ => 1 } qw< red yellow green cyan >;
+	my %colors = map { $_ => 1 } qw< red yellow green cyan white >;
 
 	my @parts;
 	while (@_)
