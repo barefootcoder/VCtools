@@ -71,7 +71,7 @@ class App::VC::Command::info extends App::VC::Command
 			{
 				my %args = $self->alt_project ? (project => $self->alt_project) : ();
 				my @vals = $self->directive($_, %args);
-				say @vals && $vals[0] ? join(' ', @vals) : "DO NOT RECOGNIZE DIRECTIVE";
+				say @vals ? join(' ', @vals) : "DO NOT RECOGNIZE DIRECTIVE";
 			}
 		}
 	}

@@ -134,8 +134,9 @@ class App::VC::Config
 	{
 		given (ref $ref)
 		{
-			return @$ref							when 'ARRAY';
-			return %$ref							when 'HASH';
+			return wantarray ? () : undef			when !defined $ref;
+			return wantarray ? @$ref : $ref			when 'ARRAY';
+			return wantarray ? %$ref : $ref			when 'HASH';
 			return $ref								when '';
 			return "$ref"							when qw< Path::Class::Dir >;
 			die("don't know how to deref a $_");	# otherwise
