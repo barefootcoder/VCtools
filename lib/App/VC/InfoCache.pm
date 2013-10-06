@@ -93,7 +93,16 @@ class App::VC::InfoCache
 			}
 			else
 			{
-				$self->cmd->fatal("Don't know how to expand %$key");
+				# perhaps it's a directive
+				my $val = $self->cmd->directive($key);
+				if (defined $val)
+				{
+					$self->_info->{$key} = $val;
+				}
+				else
+				{
+					$self->cmd->fatal("Don't know how to expand %$key");
+				}
 			}
 		}
 
