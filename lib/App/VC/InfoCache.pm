@@ -31,7 +31,8 @@ class App::VC::InfoCache
 		status		=>	'Str',
 		is_dirty	=>	'Bool',
 		has_staged	=>	'Bool',
-		mod_files	=>	'ArrayRef'
+		mod_files	=>	'ArrayRef',
+		cur_branch	=>	'Str',
 	);
 
 
