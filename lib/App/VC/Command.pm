@@ -93,7 +93,6 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		}
 		else
 		{
-# line 90
 			return @values;
 		}
 	}
@@ -104,6 +103,22 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		debuggit(4 => "going to expand string", $string);
 		$string =~ s/%(\w+)/join(' ', $self->get_info($1))/eg;
 		return $string;
+	}
+
+	method code_expand ($code)
+	{
+		$code = $self->info_expand($code);
+
+		local $@;
+		my $retval = eval $code;
+		if ($@)
+		{
+			my $error = $@;
+			say "original code: ", $self->color_msg( white => $code );
+			$self->fatal("code fails compilation: $error");
+		}
+
+		return $retval;
 	}
 
 
@@ -142,18 +157,14 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 		my ($condition, $cmd) = $line =~ /^(.*?)\s+->\s+(.*)$/ ? ($1, $2) : ('1', $line);
 		$condition =~ s{\$(\w+)}{ $ENV{$1} // '' }eg;
-		$condition = $self->info_expand($condition);
-		debuggit(4 => "...initial condition is", $condition, "will evaluate to", eval $condition) if DEBUG;
-		$condition = eval $condition;
-		die "bad condition: $@" if $@;
+		$condition = $self->code_expand($condition);
 
 		debuggit(3 => "// line:", $line, "// condition:", $condition, "// cmd:", $cmd);
 		if ($condition)
 		{
 			if ($cmd =~ /^(\w+)=(.*)$/)
 			{
-				my ($var, $val) = ($1, eval $2);
-				$self->fatal("code fails compilation: $@") if $@;
+				my ($var, $val) = ($1, $self->code_expand($2));
 
 				$ENV{$var} = $val;
 				debuggit(3 => "set env var", $var, "to", $ENV{$var});
@@ -163,10 +174,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			}
 			elsif ($cmd =~ s/^\@//)
 			{
-				$cmd = $self->info_expand($cmd);
-				my $e = eval $cmd;
-				die if $@;
-				return $e;
+				return $self->code_expand($cmd);
 			}
 			elsif ($cmd =~ s/^%//)
 			{
