@@ -292,6 +292,8 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 	method custom_message ($msg)
 	{
+		$msg = $self->info_expand($msg);
+
 		state $COLOR_CODES = { '!' => 'red', '~' => 'yellow', '+' => 'green', '-' => 'cyan', '=' => 'white' };
 		state $COLOR_CODE_METACHAR = '[' . join('', keys %$COLOR_CODES) . ']';
 		state $COLOR_SPLITTER = qr/^ (.*?) (?: \*($COLOR_CODE_METACHAR) (.*?) \2\* (.*) )? $/x;
