@@ -86,7 +86,7 @@ class App::VC::CustomCommand extends App::VC::Command
 		my ($self, $opt, @cmd_args) = super();
 		$self->fatal($spec->fatal_error) if $spec->has_fatal_error;
 
-		debuggit(2 => "custom command", $spec->command, DUMP => $self);
+		debuggit(2 => "custom command", $spec->command, DUMP => $self, "with", DUMP => $self->_info);
 		return ($self, $opt, @cmd_args);
 	}
 
