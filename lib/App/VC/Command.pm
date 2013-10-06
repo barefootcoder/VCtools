@@ -98,16 +98,23 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	}
 
 
-	method info_expand ($string)
+	method info_expand ($string, :$code = 0)
 	{
 		debuggit(4 => "going to expand string", $string);
-		$string =~ s/%(\w+)/join(' ', $self->get_info($1))/eg;
+		if ($code)
+		{
+			$string =~ s/%(\w+)/'q{' . join(' ', $self->get_info($1)) . '}'/eg;
+		}
+		else
+		{
+			$string =~ s/%(\w+)/join(' ', $self->get_info($1))/eg;
+		}
 		return $string;
 	}
 
 	method code_expand ($code)
 	{
-		$code = $self->info_expand($code);
+		$code = $self->info_expand($code, code => 1);
 
 		local $@;
 		my $retval = eval $code;
