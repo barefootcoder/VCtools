@@ -24,8 +24,9 @@ class App::VC extends MooseX::App::Cmd
 	# ATTRIBUTES
 
 	has config		=>	(
-							ro, isa => 'App::VC::Config', lazy, default => sub { App::VC::Config->new },
+							ro, isa => 'App::VC::Config', lazy,
 								handles => [qw< directive project proj_root vc >],
+								default => method { App::VC::Config->new( app => $self ) },
 						);
 	has custom_spec	=>	( ro, isa => 'App::VC::CustomCommandSpec', writer => '_set_spec' );
 

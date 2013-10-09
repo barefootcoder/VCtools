@@ -28,6 +28,8 @@ class App::VC::Config
 	has _wcdir_info	=>	( ro, isa => HashRef, lazy, builder => '_discover_project', );
 	has _config		=>	( ro, isa => HashRef, lazy, builder => '_read_config', );
 
+	has app			=>	( ro, isa => 'App::VC', required, weak_ref, );
+
 	has project		=>	(
 							ro, isa => Maybe[Str], lazy, predicate => 'has_project',
 								default => method { $self->_wcdir_info->{'project'} },
@@ -67,9 +69,9 @@ class App::VC::Config
 		}
 		catch ($e where {/Can't open '$config_file'/})
 		{
-			$self->warning("config file not found; trying to create");
+			$self->app->warning("config file not found; trying to create");
 			system(file($0)->dir->file('vctools-create-config'));
-			$self->fatal("If config file was successfully created, try your command again.");
+			$self->app->fatal("If config file was successfully created, try your command again.");
 		}
 
 		my $config = { Config::General::ParseConfig( -String => $raw_config ) };
