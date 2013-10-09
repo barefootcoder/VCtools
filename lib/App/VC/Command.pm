@@ -193,7 +193,8 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			}
 			elsif ($cmd =~ s/^>\s*//)
 			{
-				say $self->custom_message($cmd);
+				my $msg = $self->custom_message($cmd);
+				$self->pretend ? $self->pretend_msg(message => $msg) : say $msg;
 				return 1;
 			}
 			elsif ($cmd =~ s/^!\s*//)
@@ -293,6 +294,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		{
 			say $self->color_msg(cyan => "would run:   "), $msg		when 'pretend';
 			say $self->color_msg(cyan => "now running: "), $msg		when 'actual';
+			say $self->color_msg(cyan => "would say:   "), $msg		when 'message';
 			die("illegal mode: $_");								# otherwise
 		}
 	}
