@@ -22,10 +22,14 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 
 	# EXTENSION OF INHERITED ATTRIBUTES
-	has '+app' => ( handles => [qw< config project proj_root vc >], );	# pass on config methods to our app (App::VC)
+	has '+app' => ( handles => [qw< project proj_root vc >], );			# pass on config methods to our app (App::VC)
 
 	# CONFIGURATION ATTRIBUTES
 	# (figured out by reading config file or from command line invocation)
+	has config		=>	(
+							traits => [qw< NoGetopt >],
+							ro, isa => 'App::VC::Config', lazy, default => method { $self->app->config },
+						);
 	has me			=>	(
 							traits => [qw< NoGetopt >],
 							ro, isa => Str, lazy, default => method { $self->app->arg0 },
