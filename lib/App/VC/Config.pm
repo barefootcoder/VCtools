@@ -29,6 +29,7 @@ class App::VC::Config
 	has _config		=>	( ro, isa => HashRef, lazy, builder => '_read_config', );
 
 	has app			=>	( ro, isa => 'App::VC', required, weak_ref, );
+	has inline_conf	=>	( ro, isa => Str, predicate => 'is_inline', );
 
 	has project		=>	(
 							ro, isa => Maybe[Str], lazy, predicate => 'has_project',
@@ -58,21 +59,28 @@ class App::VC::Config
 		my $config_file = file($home, '.vctools.conf');
 
 		my $raw_config;
-		try
+		if ($self->is_inline)
 		{
-			$raw_config = slurp "$config_file";							# quotes to remove Path::Class magic
+			$raw_config = $self->inline_conf;
+		}
+		else
+		{
+			try
+			{
+				$raw_config = slurp "$config_file";							# quotes to remove Path::Class magic
+			}
+			catch ($e where {/Can't open '$config_file'/})
+			{
+				$self->app->warning("config file not found; trying to create");
+				system(file($0)->dir->file('vctools-create-config'));
+				$self->app->fatal("If config file was successfully created, try your command again.");
+			}
+		}
 
-			# a small bit of pre-processing to allow ~ to refer to the user's home directory
-			# but only for *Dir directives, or in <<include>> statements
-			$raw_config =~ s{ ^ (\s* \w+Dir \s* = \s*) ~/ }{ $1 . $home . '/' }gmex;
-			$raw_config =~ s{ ^ (\s* << \s* include \s+) ~/ }{ $1 . $home . '/' }gmex;
-		}
-		catch ($e where {/Can't open '$config_file'/})
-		{
-			$self->app->warning("config file not found; trying to create");
-			system(file($0)->dir->file('vctools-create-config'));
-			$self->app->fatal("If config file was successfully created, try your command again.");
-		}
+		# a small bit of pre-processing to allow ~ to refer to the user's home directory
+		# but only for *Dir directives, or in <<include>> statements
+		$raw_config =~ s{ ^ (\s* \w+Dir \s* = \s*) ~/ }{ $1 . $home . '/' }gmex;
+		$raw_config =~ s{ ^ (\s* << \s* include \s+) ~/ }{ $1 . $home . '/' }gmex;
 
 		my $config = { Config::General::ParseConfig( -String => $raw_config ) };
 		debuggit(3 => "read config:", DUMP => $config);

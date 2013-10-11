@@ -28,7 +28,13 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	# (figured out by reading config file or from command line invocation)
 	has config		=>	(
 							traits => [qw< NoGetopt >],
-							ro, isa => 'App::VC::Config', lazy, default => method { $self->app->config },
+							ro, isa => 'App::VC::Config', lazy,
+								default => method
+								{
+									$self->has_inline_config
+										? App::VC::Config->new( app => $self->app, inline_conf => $self->inline_conf )
+										: $self->app->config
+								},
 						);
 	has me			=>	(
 							traits => [qw< NoGetopt >],
@@ -47,6 +53,12 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 	# GLOBAL OPTIONS
 	# (apply to all commands)
+	has inline_conf	=>	(
+							traits => [qw< Getopt >],
+								documentation => "hidden",
+									cmd_aliases => 'inline-config',
+							ro, isa => Str, predicate => 'has_inline_config',
+						);
 	has no_color	=>	(
 							traits => [qw< Getopt ENV >],
 								documentation => "Don't use color output (default: use color when printing to a term).",
