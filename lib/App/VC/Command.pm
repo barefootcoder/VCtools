@@ -18,6 +18,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	use MooseX::Has::Sugar;
 	use MooseX::Types::Moose qw< :all >;
 
+	use App::VC::Config;
 	use App::VC::InfoCache;
 
 
@@ -102,7 +103,6 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			# for now, I'm going to just hardcode those directives that are allowed to have %info expansions
 			# if we do it for everything, I'm worried we'll replace too aggressively
 			state $ALLOWED_INFO_EXPANSION = { map { $_ => 1 } qw< SourcePath > };
-			# the line below stolen from process_action_line; maybe this should be refactored into a method?
 			$value = $self->info_expand($value) if $ALLOWED_INFO_EXPANSION->{$key};
 
 			return $value;
