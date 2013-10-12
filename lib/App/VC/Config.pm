@@ -185,15 +185,20 @@ class App::VC::Config
 	}
 
 
+	method process_command_string ($string)
+	{
+		return map { s/^\s+//; $_ } split("\n", $string);
+	}
+
 	method action_lines ($type, $cmd)
 	{
-		debuggit(3 => "running command_lines: command //", $cmd, "// for", $self->vc);
-
-		my $lines = $type eq 'custom' ? $cmd : $self->_config->{$self->vc}->{$type}->{$cmd};
+		# need a fatal here
+		die("unknown type in action_lines") unless exists $self->_config->{$self->vc}->{$type};
+		my $lines = $self->_config->{$self->vc}->{$type}->{$cmd};
 		return () unless $lines;
 		debuggit(4 => "lines is //$lines//");
 
-		return map { s/^\s+//; $_ } split("\n", $lines);
+		return $self->process_command_string($lines);
 	}
 
 

@@ -174,6 +174,30 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		return sort { lc $a cmp lc $b } keys { map { $_ => 1 } @explicit_projects, @implicit_projects };
 	}
 
+
+	# methods for actually running the commands
+
+	method run_command ($type)
+	{
+		# if $type eq 'internal', we get the command lines from our config based on our name
+		# if $type eq 'custom', we get the lines from the custom_spec in our app
+		my @commands;
+		given ($type)
+		{
+			when ('internal') { @commands = $self->config->action_lines(commands => $self->command); }
+			when ('custom')
+			{
+				my $spec = $self->app->custom_spec;
+				die("can't run custom command with no custom command spec") unless $spec;
+				@commands = $self->config->process_command_string( $spec->action );
+			}
+
+			default { die("don't know what to do with command type $type") }
+		}
+
+		$self->process_action_line(output => $_) or exit foreach @commands;
+	}
+
 	method process_action_line ($type, $line)
 	{
 		local $@;
@@ -263,8 +287,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	{
 		inner();
 
-		my @commands = $self->config->action_lines(commands => $self->command);
-		$self->process_action_line(output => $_) or exit foreach @commands;
+		$self->run_command( 'internal' );
 	}
 
 

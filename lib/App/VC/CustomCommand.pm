@@ -101,8 +101,7 @@ class App::VC::CustomCommand extends App::VC::Command
 
 	method execute (...)
 	{
-		my @commands = $self->config->action_lines(custom => $self->spec->action);
-		$self->process_action_line(output => $_) or exit foreach @commands;
+		$self->run_command( 'custom' );
 	}
 }
 
