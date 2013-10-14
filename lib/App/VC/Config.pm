@@ -30,6 +30,8 @@ class App::VC::Config
 
 	has app			=>	( ro, isa => 'App::VC', required, weak_ref, );
 	has inline_conf	=>	( ro, isa => Str, predicate => 'is_inline', );
+	has command		=>	( ro, isa => 'App::VC::Command', weak_ref,
+								writer => 'register_command', predicate => 'command_registered', );
 
 	has project		=>	(
 							ro, isa => Maybe[Str], lazy, predicate => 'has_project',
@@ -42,7 +44,8 @@ class App::VC::Config
 	has vc			=>	(
 							ro, isa => Str, lazy, predicate => 'has_vc',
 								# disallow recursion by specifically setting vc param to undef
-								default => method { $self->directive('VC', vc => undef) },
+								default => method { $self->directive('VC', vc => undef)
+										// $self->fatal("can't determine VC") },
 						);
 
 
@@ -71,9 +74,9 @@ class App::VC::Config
 			}
 			catch ($e where {/Can't open '$config_file'/})
 			{
-				$self->app->warning("config file not found; trying to create");
+				$self->warning("config file not found; trying to create");
 				system(file($0)->dir->file('vctools-create-config'));
-				$self->app->fatal("If config file was successfully created, try your command again.");
+				$self->fatal("If config file was successfully created, try your command again.");
 			}
 		}
 
@@ -192,8 +195,8 @@ class App::VC::Config
 
 	method action_lines ($type, $cmd)
 	{
-		# need a fatal here
-		die("unknown type in action_lines") unless exists $self->_config->{$self->vc}->{$type};
+		$self->fatal("unknown type in action_lines") unless exists $self->_config->{$self->vc}->{$type};
+
 		my $lines = $self->_config->{$self->vc}->{$type}->{$cmd};
 		return () unless $lines;
 		debuggit(4 => "lines is //$lines//");
@@ -213,6 +216,20 @@ class App::VC::Config
 		$custom //= $self->_config->{'CustomCommand'}->{$cmd} if $self->_config->{'CustomCommand'};
 
 		return $custom;
+	}
+
+
+	# USER MESSAGING METHODS
+	# we pass these off to our command, if we have one (if not, we handle them fairly crudely)
+
+	method warning ($msg)
+	{
+		$self->command_registered ? $self->command->warning($msg) : warn($msg);
+	}
+
+	method fatal ($msg)
+	{
+		$self->command_registered ? $self->command->fatal($msg) : die($msg);
 	}
 
 }

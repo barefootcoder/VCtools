@@ -22,20 +22,12 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	use App::VC::InfoCache;
 
 
-	# EXTENSION OF INHERITED ATTRIBUTES
-	has '+app' => ( handles => [qw< project proj_root vc >], );			# pass on config methods to our app (App::VC)
-
 	# CONFIGURATION ATTRIBUTES
 	# (figured out by reading config file or from command line invocation)
 	has config		=>	(
 							traits => [qw< NoGetopt >],
-							ro, isa => 'App::VC::Config', lazy,
-								default => method
-								{
-									$self->has_inline_config
-										? App::VC::Config->new( app => $self->app, inline_conf => $self->inline_conf )
-										: $self->app->config
-								},
+							ro, isa => 'App::VC::Config', lazy, builder => '_connect_config',
+								handles => [qw< project proj_root vc >],
 						);
 	has me			=>	(
 							traits => [qw< NoGetopt >],
@@ -87,6 +79,18 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	# just pass these on to our info object
 	method is_dirty		{ $self->get_info('is_dirty') }
 	method mod_files	{ $self->get_info('mod_files') }
+
+
+	# BUILDERS
+
+	method _connect_config
+	{
+		my $conf = $self->has_inline_config
+			? App::VC::Config->new( app => $self->app, inline_conf => $self->inline_conf )
+			: $self->app->config;
+		$conf->register_command($self);
+		return $conf;
+	}
 
 
 	# SUPPORT METHODS
@@ -233,7 +237,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			}
 			elsif ($cmd =~ s/^>\s*//)
 			{
-				my $msg = $self->custom_message($cmd);
+				my $msg = $self->custom_message( $self->info_expand($cmd) );
 				$self->pretend ? $self->pretend_msg(message => $msg) : say $msg;
 				return 1;
 			}
@@ -340,8 +344,6 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 	method custom_message ($msg)
 	{
-		$msg = $self->info_expand($msg);
-
 		state $COLOR_CODES = { '!' => 'red', '~' => 'yellow', '+' => 'green', '-' => 'cyan', '=' => 'white' };
 		state $COLOR_CODE_METACHAR = '[' . join('', keys %$COLOR_CODES) . ']';
 		state $COLOR_SPLITTER = qr/^ (.*?) (?: \*($COLOR_CODE_METACHAR) (.*?) \2\* (.*) )? $/x;
