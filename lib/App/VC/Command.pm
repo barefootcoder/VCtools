@@ -132,22 +132,6 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		return $string;
 	}
 
-	method code_expand ($code)
-	{
-		$code = $self->info_expand($code, code => 1);
-
-		local $@;
-		my $retval = eval $code;
-		if ($@)
-		{
-			my $error = $@;
-			say "original code: ", $self->color_msg( white => $code );
-			$self->fatal("code fails compilation: $error");
-		}
-
-		return $retval;
-	}
-
 
 	# Normally, the project root is "discovered" (based on `pwd`) at the same time as the project
 	# (see _discover_project()).  However, if you want a project root for a given project, it's much
@@ -179,7 +163,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	}
 
 
-	# methods for actually running the commands
+	# COMMAND EXECUTION METHODS
 
 	method run_command ($type)
 	{
@@ -207,15 +191,15 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		local $@;
 
 		my ($condition, $cmd) = $line =~ /^(.*?)\s+->\s+(.*)$/ ? ($1, $2) : ('1', $line);
-		$condition =~ s{\$(\w+)}{ $ENV{$1} // '' }eg;
-		$condition = $self->code_expand($condition);
+		$condition = $self->evaluate_expression($condition);
 
 		debuggit(3 => "// line:", $line, "// condition:", $condition, "// cmd:", $cmd);
 		if ($condition)
 		{
 			if ($cmd =~ /^(\w+)=(.*)$/)
 			{
-				my ($var, $val) = ($1, $self->code_expand($2));
+				my ($var, $expr) = ($1, $2);
+				my $val = $self->evaluate_expression($expr);
 
 				$ENV{$var} = $val;
 				debuggit(3 => "set env var", $var, "to", $ENV{$var});
@@ -225,7 +209,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			}
 			elsif ($cmd =~ s/^\@//)
 			{
-				return $self->code_expand($cmd);
+				return $self->evaluate_code($cmd);
 			}
 			elsif ($cmd =~ s/^%//)
 			{
@@ -272,6 +256,28 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			# and that's not how we want our conditions to work
 			return 1;
 		}
+	}
+
+	method evaluate_expression ($expr)
+	{
+		$expr =~ s{\$(\w+)}{ $ENV{$1} // '' }eg;						# we do evironment expansion on expressions
+		return $self->evaluate_code($expr);								# this will handle info expansions
+	}
+
+	method evaluate_code ($code)
+	{
+		$code = $self->info_expand($code, code => 1);					# do info expansion for all code (incl expressions)
+
+		local $@;
+		my $retval = eval $code;
+		if ($@)
+		{
+			my $error = $@;
+			say "original code: ", $self->color_msg( white => $code );
+			$self->fatal("code fails compilation: $error");
+		}
+
+		return $retval;
 	}
 
 

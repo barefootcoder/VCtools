@@ -6,7 +6,7 @@ our @EXPORT = qw< fake_cmd >;
 
 
 use Test::Most;
-use Test::Output;
+use Test::Trap;
 
 use Cwd;
 use Method::Signatures;
@@ -44,7 +44,7 @@ func fake_cmd (%args)
 	my $fake_usage = bless {}, 'Doesnt::Matter';
 	my $cmd = $class->new(
 			app => $fake_app, usage => $fake_usage,
-			color => 1,
+			me => '%VC-TEST%', color => 1,
 			inline_conf => $config, command => 'testit',
 			%args
 	);
@@ -74,7 +74,10 @@ method App::VC::Command::make_testmsg (...)
 method App::VC::Command::test_execute_output (...)
 {
 	my $testname = pop;
-	combined_is sub { $self->execute }, $self->make_testmsg(@_), $testname;
+	trap { $self->execute };
+	is $trap->stderr, '', "no error: $testname";
+	is $trap->exit, undef, "no exit: $testname" or diag("output was:\n", $trap->stdout);
+	is $trap->stdout, $self->make_testmsg(@_), $testname;
 }
 
 

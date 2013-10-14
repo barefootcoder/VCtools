@@ -14,15 +14,40 @@ my $action = q{
 	$TEST -> @ say "true"
 	!$TEST -> @ say "false"
 	echo >/dev/null
-	> testing
+	> testing *=white=*
 };
 
-my $cmd = fake_cmd( action => $action );#pretend => 1 );
-$cmd->test_execute_output("true\ntesting\n", 'simple command (all directive types except fatal)');
+my $cmd = fake_cmd( action => $action );
+my @output = (
+	'',																	# line 1
+	"true\n",															# line 2
+	'',																	# line 3
+	'',																	# line 4
+	"testing ", white => 'white', "\n",									# line 5
+);
+$cmd->test_execute_output(@output, 'simple command (all directive types except fatal)');
 
 $cmd = fake_cmd( action => $action, pretend => 1 );
-$cmd->test_execute_output(@NOW_RUNNING, "TEST=1\n", "true\n", @WOULD_RUN, "echo >/dev/null\n", @WOULD_SAY, "testing\n",
-		'command with --pretend');
+@output = (
+	@NOW_RUNNING, "TEST=1\n",											# line 1
+	"true\n",															# line 2
+	'',																	# line 3
+	@WOULD_RUN, "echo >/dev/null\n",									# line 4
+	@WOULD_SAY, "testing ", white => 'white', "\n"						# line 5
+);
+$cmd->test_execute_output(@output, 'command with --pretend');
+
+
+# better testing of expressions
+
+$action = q{
+	TEST=1
+	TEST2=$TEST+1
+	@ say $ENV{TEST2}
+};
+
+$cmd = fake_cmd( action => $action );
+$cmd->test_execute_output("2\n", 'command with env expansion in env assignment');
 
 
 done_testing;
