@@ -328,7 +328,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			}
 
 			my $maxlen = 1 + max map { length } values %$labels;
-			debuggit("# max echo lable length is", $maxlen);
+			debuggit(4 => "max echo label length is", $maxlen);
 			$labels->{$_} .= ':' . ' ' x ($maxlen - length $labels->{$_}) foreach keys %$labels;
 
 			return $labels;
