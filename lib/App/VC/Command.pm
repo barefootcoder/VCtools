@@ -212,7 +212,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		}
 		elsif ($line =~ s/^>\s*//)
 		{
-			return $self->execute_directive($disposition, output => $line);
+			return $self->execute_directive($disposition, message => $line);
 		}
 		elsif ($line =~ s/^!\s*//)
 		{
@@ -241,13 +241,11 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 				{
 					when ('output')
 					{
-						$self->pretend_msg($directive) and return 1 if $self->pretend;
-						$pass = !system($directive);
+						$pass = $self->handle_output($disposition, command => $directive, sub { !system($directive) });
 					}
 					when ('capture')
 					{
-						$self->pretend_msg(actual => $directive) if $self->pretend;
-						$pass = `$directive`;
+						$pass = $self->handle_output($disposition, command => $directive, sub { `$directive` });
 					}
 				}
 			}
@@ -257,11 +255,11 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 				$pass = $self->evaluate_code($directive);
 			}
 
-			when ('output')
+			when ('message')
 			{
 				my $msg = $self->custom_message( $self->info_expand($directive) );
-				$self->pretend ? $self->pretend_msg(message => $msg) : say $msg;
-				$pass = 1;												# output directives never fail
+				# output directives never fail
+				$pass = $self->handle_output($disposition, message => $msg, sub { say $msg; 1; });
 			}
 
 			when ('fatal')
@@ -274,11 +272,9 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			{
 				my $val = $self->evaluate_expression($directive);
 
-				$ENV{$lhs} = $val;
+				# env assignments are always done and never fail
+				$pass = $self->handle_output(capture => command => "$lhs=$val", sub { $ENV{$lhs} = $val; 1; });
 				debuggit(3 => "set env var", $lhs, "to", $ENV{$lhs});
-
-				$self->pretend_msg(actual => "$lhs=$val") if $self->pretend;
-				$pass = 1;												# env assignments never fail
 			}
 
 			when ('conditional')
@@ -299,6 +295,48 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		}
 
 		return $pass;
+	}
+
+	# methd handle_output
+	{
+		# have to use `our` here or else we'll get a 'variable not available' error
+		# however, the scope is restricted to the scope of these two subs, so it's not so bad
+		our $ECHO_TYPES = { command => 'run', message => 'say' };
+		sub _build_echo_labels
+		{
+			use List::Util qw< max >;
+
+			state $VERB = { run => 'running', say => 'saying', };
+
+			my $labels = {};
+			while (my ($t, $v) = each %$ECHO_TYPES)
+			{
+				die("don't know how to conjugate $v") unless exists $VERB->{$v};
+
+				# the 0 and 1 at the beginning of the key will correspond to the value of $doit
+				# so labels that start with 0 are for lines which won't be executed
+				# and those that start with 1 are for lines which _will_ be executed
+				$labels->{"0$t"} = "would $v";
+				$labels->{"1$t"} = "now $VERB->{$v}";
+			}
+
+			my $maxlen = 1 + max map { length } values %$labels;
+			debuggit("# max echo lable length is", $maxlen);
+			$labels->{$_} .= ':' . ' ' x ($maxlen - length $labels->{$_}) foreach keys %$labels;
+
+			return $labels;
+		}
+
+		method handle_output ($disposition, $type where $ECHO_TYPES, $line, CodeRef $action)
+		{
+			state $LABELS = _build_echo_labels();
+
+			my $echo = $self->pretend;
+			my $doit = $disposition eq 'capture' || !$self->pretend ? 1 : 0;
+
+			say $self->color_msg( cyan => $LABELS->{"$doit$type"} ), $line if $echo;
+			return $doit ? $action->() : 1;
+		}
 	}
 
 	method evaluate_expression ($expr)
@@ -377,20 +415,6 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		exit 1;
 	}
 
-	method pretend_msg ($msg, ...)
-	{
-		my $mode = 'pretend';
-		($mode, $msg) = @_ if @_ > 1;
-
-		given ($mode)
-		{
-			say $self->color_msg(cyan => "would run:   "), $msg		when 'pretend';
-			say $self->color_msg(cyan => "now running: "), $msg		when 'actual';
-			say $self->color_msg(cyan => "would say:   "), $msg		when 'message';
-			die("illegal mode: $_");								# otherwise
-		}
-	}
-
 	method custom_message ($msg)
 	{
 		state $COLOR_CODES = { '!' => 'red', '~' => 'yellow', '+' => 'green', '-' => 'cyan', '=' => 'white' };
@@ -398,16 +422,16 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		state $COLOR_SPLITTER = qr/^ (.*?) (?: \*($COLOR_CODE_METACHAR) (.*?) \2\* (.*) )? $/x;
 
 		my ($pre, $color, $text, $post) = $msg =~ /$COLOR_SPLITTER/;
-		my $output = $pre;
+		my $message = $pre;
 		while ($color)
 		{
-			$output .= $self->color_msg( $COLOR_CODES->{$color} => $text );
+			$message .= $self->color_msg( $COLOR_CODES->{$color} => $text );
 			($pre, $color, $text, $post) = $post =~ /$COLOR_SPLITTER/;
-			$output .= $pre;
+			$message .= $pre;
 		}
 
-		$output =~ s/\$(\w+)/$ENV{$1}/g;
-		return $output;
+		$message =~ s/\$(\w+)/$ENV{$1}/g;
+		return $message;
 	}
 
 }

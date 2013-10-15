@@ -75,7 +75,7 @@ method App::VC::Command::test_execute_output (...)
 {
 	my $testname = pop;
 	trap { $self->execute };
-	is $trap->stderr, '', "no error: $testname";
+	is $trap->die, undef, "no error: $testname";
 	is $trap->exit, undef, "no exit: $testname" or diag("output was:\n", $trap->stdout);
 	is $trap->stdout, $self->make_testmsg(@_), $testname;
 }
