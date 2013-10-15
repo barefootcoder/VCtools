@@ -20,7 +20,7 @@ class App::VC::Command::info extends App::VC::Command
 	has alt_project	=>	(
 							traits => [qw< Getopt >],
 								documentation => "Use this project (instead of whatever project we're in).",
-									cmd_aliases => [ 'P', 'alt-project' ],
+									cmd_flag => 'alt-project', cmd_aliases => [qw< P >],
 							ro, isa => Str,
 						);
 	has key			=>	(

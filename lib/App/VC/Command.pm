@@ -55,7 +55,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	has no_color	=>	(
 							traits => [qw< Getopt ENV >],
 								documentation => "Don't use color output (default: use color when printing to a term).",
-									cmd_aliases => 'no-color',
+									cmd_flag => 'no-color',
 								env_prefix => 'VCTOOLS',
 							is => 'ro', isa => 'Bool',
 						);
