@@ -30,7 +30,10 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 								handles => [qw< project proj_root vc >],
 						);
 	has me			=>	(
-							traits => [qw< NoGetopt >],
+							traits => [qw< Getopt ENV >],
+								documentation => "hidden",
+									cmd_flag => 'run-as',
+								env_key => 'VCTOOLS_RUNAS',
 							ro, isa => Str, lazy, default => method { $self->app->arg0 },
 						);
 	has command		=>	(
@@ -49,7 +52,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	has inline_conf	=>	(
 							traits => [qw< Getopt >],
 								documentation => "hidden",
-									cmd_aliases => 'inline-config',
+									cmd_flag => 'inline-config',
 							ro, isa => Str, predicate => 'has_inline_config',
 						);
 	has no_color	=>	(
