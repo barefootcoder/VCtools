@@ -72,6 +72,13 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 								env_prefix => 'VCTOOLS',
 							is => 'ro', isa => 'Bool',
 						);
+	has echo		=>	(
+							traits => [qw< Getopt ENV >],
+								documentation => "Print each command before performing it (like bash -x).",
+									cmd_aliases => 'x',
+								env_prefix => 'VCTOOLS',
+							is => 'ro', isa => 'Bool',
+						);
 
 
 	# PSEUDO-ATTRIBUTES
@@ -257,9 +264,9 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 			when ('message')
 			{
-				my $msg = $self->custom_message( $self->info_expand($directive) );
-				# output directives never fail
-				$pass = $self->handle_output($disposition, message => $msg, sub { say $msg; 1; });
+				my $msg = $self->info_expand($directive);
+				# message directives never fail
+				$pass = $self->handle_output($disposition, message => $msg, sub { say $self->custom_message($msg); 1; });
 			}
 
 			when ('fatal')
@@ -331,8 +338,11 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		{
 			state $LABELS = _build_echo_labels();
 
-			my $echo = $self->pretend;
+			my $echo = $self->pretend || $self->echo;
 			my $doit = $disposition eq 'capture' || !$self->pretend ? 1 : 0;
+
+			# special hack for messages in pretend mode
+			$line = $self->custom_message($line) if $type eq 'message' and not $doit;
 
 			say $self->color_msg( cyan => $LABELS->{"$doit$type"} ), $line if $echo;
 			return $doit ? $action->() : 1;

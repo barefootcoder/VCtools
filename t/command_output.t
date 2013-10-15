@@ -6,6 +6,7 @@ use Test::App::VC;
 
 
 my @NOW_RUNNING = (cyan => "now running: ");
+my @NOW_SAYING	= (cyan => "now saying:  ");
 my @WOULD_RUN   = (cyan => "would run:   ");
 my @WOULD_SAY   = (cyan => "would say:   ");
 
@@ -36,6 +37,17 @@ $cmd = fake_cmd( action => $action, pretend => 1 );
 	@WOULD_SAY, "testing ", white => 'white', "\n"						# line 5
 );
 $cmd->test_execute_output(@output, 'command with --pretend');
+
+$cmd = fake_cmd( action => $action, echo => 1 );
+@output = (
+	@NOW_RUNNING, "TEST=1\n",											# line 1
+	"true\n",															# line 2
+	'',																	# line 3
+	@NOW_RUNNING, "echo >/dev/null\n",									# line 4
+	@NOW_SAYING, "testing *=white=*\n",									# line 5
+	"testing ", white => 'white', "\n",									# line 5 (also)
+);
+$cmd->test_execute_output(@output, 'command with --echo');
 
 
 # better testing of expressions
