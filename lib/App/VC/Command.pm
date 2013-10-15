@@ -186,76 +186,119 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		$self->process_action_line(output => $_) or exit foreach @commands;
 	}
 
-	method process_action_line ($type, $line)
+	method process_action_line ($disposition, $line)
 	{
 		local $@;
 
-		my ($condition, $cmd) = $line =~ /^(.*?)\s+->\s+(.*)$/ ? ($1, $2) : ('1', $line);
-		$condition = $self->evaluate_expression($condition);
-
-		debuggit(3 => "// line:", $line, "// condition:", $condition, "// cmd:", $cmd);
-		if ($condition)
+		if ($line =~ /^(.*?)\s+->\s+(.*)$/)
 		{
-			if ($cmd =~ /^(\w+)=(.*)$/)
+			return $self->execute_directive($disposition, conditional => $1, $2);
+		}
+		if ($line =~ /^(\w+)=(.*)$/)
+		{
+			return $self->execute_directive($disposition, env_assign => $1, $2);
+		}
+		elsif ($line =~ s/^\@\s+//)
+		{
+			return $self->execute_directive($disposition, code => $line);
+		}
+		elsif ($line =~ s/^%//)
+		{
+			given ($disposition)
 			{
-				my ($var, $expr) = ($1, $2);
-				my $val = $self->evaluate_expression($expr);
-
-				$ENV{$var} = $val;
-				debuggit(3 => "set env var", $var, "to", $ENV{$var});
-
-				$self->pretend_msg(actual => "$var=$val") if $self->pretend;
-				return 1;
+				return say $self->get_info($line)		when 'output';
+				return $self->get_info($line)			when 'capture';
 			}
-			elsif ($cmd =~ s/^\@//)
-			{
-				return $self->evaluate_code($cmd);
-			}
-			elsif ($cmd =~ s/^%//)
-			{
-				given ($type)
-				{
-					return say $self->get_info($cmd)		when 'output';
-					return $self->get_info($cmd)			when 'capture';
-				}
-			}
-			elsif ($cmd =~ s/^>\s*//)
-			{
-				my $msg = $self->custom_message( $self->info_expand($cmd) );
-				$self->pretend ? $self->pretend_msg(message => $msg) : say $msg;
-				return 1;
-			}
-			elsif ($cmd =~ s/^!\s*//)
-			{
-				$self->fatal($cmd);
-			}
-			else
-			{
-				$cmd = $self->info_expand($cmd);
-				debuggit(4 => "sending to system: $cmd");
-				given ($type)
-				{
-					when ('output')
-					{
-						$self->pretend_msg($cmd) and return 1 if $self->pretend;
-						return !system($cmd);
-					}
-					when ('capture')
-					{
-						$self->pretend_msg(actual => $cmd) if $self->pretend;
-						return `$cmd`;
-					}
-				}
-			}
-			die("dunno how to process cmd as $type: $_");
+		}
+		elsif ($line =~ s/^>\s*//)
+		{
+			return $self->execute_directive($disposition, output => $line);
+		}
+		elsif ($line =~ s/^!\s*//)
+		{
+			# this won't ever return, really, but, for consistency with the rest ...
+			return $self->execute_directive($disposition, fatal => $line);
 		}
 		else
 		{
-			# might seem a bit weird to return true here, since our condition was false
-			# but, if we don't, then we won't continue on to the next command
-			# and that's not how we want our conditions to work
-			return 1;
+			return $self->execute_directive($disposition, shell => $line);
 		}
+		die("dunno how to process directive as $disposition: $_");
+	}
+
+	method execute_directive ($disposition, $type, @directive)
+	{
+		my ($lhs, $directive) = @directive == 1 ? (undef, @directive) : @directive;
+
+		my $pass;
+		given ($type)
+		{
+			when ('shell')
+			{
+				$directive = $self->info_expand($directive);
+				debuggit(4 => "sending to system: $directive");
+				given ($disposition)
+				{
+					when ('output')
+					{
+						$self->pretend_msg($directive) and return 1 if $self->pretend;
+						$pass = !system($directive);
+					}
+					when ('capture')
+					{
+						$self->pretend_msg(actual => $directive) if $self->pretend;
+						$pass = `$directive`;
+					}
+				}
+			}
+
+			when ('code')
+			{
+				$pass = $self->evaluate_code($directive);
+			}
+
+			when ('output')
+			{
+				my $msg = $self->custom_message( $self->info_expand($directive) );
+				$self->pretend ? $self->pretend_msg(message => $msg) : say $msg;
+				$pass = 1;												# output directives never fail
+			}
+
+			when ('fatal')
+			{
+				# don't bother with $pass; this will never return
+				$self->fatal($directive);
+			}
+
+			when ('env_assign')
+			{
+				my $val = $self->evaluate_expression($directive);
+
+				$ENV{$lhs} = $val;
+				debuggit(3 => "set env var", $lhs, "to", $ENV{$lhs});
+
+				$self->pretend_msg(actual => "$lhs=$val") if $self->pretend;
+				$pass = 1;												# env assignments never fail
+			}
+
+			when ('conditional')
+			{
+				my $condition = $self->evaluate_expression($lhs);
+				debuggit(3 => "// condition:", $lhs, "// evaluates to:", $condition, "// directive:", $directive);
+				if ($condition)
+				{
+					$pass = $self->process_action_line($disposition, $directive);
+				}
+				else
+				{
+					$pass = 1;											# if conditional is not executed, don't fail
+				}
+			}
+
+			default { die("unknown directive type: $_"); }
+		}
+
+		return $pass;
 	}
 
 	method evaluate_expression ($expr)
