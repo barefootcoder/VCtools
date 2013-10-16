@@ -74,9 +74,11 @@ method App::VC::Command::make_testmsg (...)
 method App::VC::Command::test_execute_output (...)
 {
 	my $testname = pop;
+	my $opts = ref $_[-1] ? pop : {};
 	trap { $self->execute };
+
 	is $trap->die, undef, "no error: $testname";
-	is $trap->exit, undef, "no exit: $testname" or diag("output was:\n", $trap->stdout);
+	is $trap->exit, undef, "no exit: $testname" or diag("output was:\n", $trap->stdout) unless $opts->{'exit_okay'};
 	is $trap->stdout, $self->make_testmsg(@_), $testname;
 }
 

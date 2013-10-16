@@ -3,12 +3,16 @@ use Test::Most;
 use File::Basename;
 use lib dirname($0);
 use Test::App::VC;
+use Test::PromptInput;
 
 
-my @NOW_RUNNING = (cyan => "now running: ");
-my @NOW_SAYING	= (cyan => "now saying:  ");
-my @WOULD_RUN   = (cyan => "would run:   ");
-my @WOULD_SAY   = (cyan => "would say:   ");
+my @NOW_RUNNING		= (cyan => "now running:  ");
+my @NOW_SAYING		= (cyan => "now saying:   ");
+my @WOULD_RUN		= (cyan => "would run:    ");
+my @WOULD_SAY		= (cyan => "would say:    ");
+my @ABOUT_TO_RUN	= (cyan => "about to run: ");
+my @ABOUT_TO_SAY	= (cyan => "about to say: ");
+my @PROCEED			= (white => "Proceed?", " [y/N]");
 
 my $action = q{
 	TEST=1
@@ -48,6 +52,42 @@ $cmd = fake_cmd( action => $action, echo => 1 );
 	"testing ", white => 'white', "\n",									# line 5 (also)
 );
 $cmd->test_execute_output(@output, 'command with --echo');
+
+# test with all yeses
+$cmd = fake_cmd( action => $action, interactive => 1 );
+set_prompt_input( ('y') x 2 );
+@output = (
+	@NOW_RUNNING, "TEST=1\n",											# line 1
+	"true\n",															# line 2
+	'',																	# line 3
+	@ABOUT_TO_RUN, "echo >/dev/null ", @PROCEED,						# line 4
+	@ABOUT_TO_SAY, "testing *=white=* ", @PROCEED,						# line 5
+	"testing ", white => 'white', "\n",									# line 5 (also)
+);
+$cmd->test_execute_output(@output, 'command with --interactive (all y)');
+
+# test with a no (that should stop the output prematurely)
+$cmd = fake_cmd( action => $action, interactive => 1 );
+set_prompt_input( 'y', 'n' );
+@output = (
+	@NOW_RUNNING, "TEST=1\n",											# line 1
+	"true\n",															# line 2
+	'',																	# line 3
+	@ABOUT_TO_RUN, "echo >/dev/null ", @PROCEED,						# line 4
+	@ABOUT_TO_SAY, "testing *=white=* ", @PROCEED,						# line 5
+);
+$cmd->test_execute_output(@output, {exit_okay => 1}, 'command with --interactive (1 y, 1 n)');
+
+# test with all no (stop output immediately)
+$cmd = fake_cmd( action => $action, interactive => 1 );
+set_prompt_input( 'n' );
+@output = (
+	@NOW_RUNNING, "TEST=1\n",											# line 1
+	"true\n",															# line 2
+	'',																	# line 3
+	@ABOUT_TO_RUN, "echo >/dev/null ", @PROCEED,						# line 4
+);
+$cmd->test_execute_output(@output, {exit_okay => 1}, 'command with --interactive (all n)');
 
 
 # better testing of expressions

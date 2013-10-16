@@ -60,27 +60,34 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 								documentation => "Don't use color output (default: use color when printing to a term).",
 									cmd_flag => 'no-color',
 								env_prefix => 'VCTOOLS',
-							is => 'ro', isa => 'Bool',
+							ro, isa => Bool,
 						);
 	has color		=>	(
 							traits => [qw< Getopt ENV >],
 								documentation => "Use color output (even when not printing to a term).",
 								env_prefix => 'VCTOOLS',
-							is => 'ro', isa => 'Bool',
+							ro, isa => Bool,
 						);
 	has pretend		=>	(
 							traits => [qw< Getopt ENV >],
 								documentation => "Don't actually run any destructive commands; just print them.",
 									cmd_aliases => 'p',
 								env_prefix => 'VCTOOLS',
-							is => 'ro', isa => 'Bool',
+							ro, isa => Bool,
 						);
 	has echo		=>	(
 							traits => [qw< Getopt ENV >],
 								documentation => "Print each command before performing it (like bash -x).",
 									cmd_aliases => 'x',
 								env_prefix => 'VCTOOLS',
-							is => 'ro', isa => 'Bool',
+							ro, isa => Bool,
+						);
+	has interactive	=>	(
+							traits => [qw< Getopt ENV >],
+								documentation => "Ask to confirm each command before performing it (like find -ok).",
+									cmd_aliases => 'i',
+								env_prefix => 'VCTOOLS',
+							ro, isa => Bool,
 						);
 
 
@@ -326,8 +333,10 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 				# the 0 and 1 at the beginning of the key will correspond to the value of $doit
 				# so labels that start with 0 are for lines which won't be executed
 				# and those that start with 1 are for lines which _will_ be executed
+				# and those that start with ? are for lines will will be executed only after confirmation
 				$labels->{"0$t"} = "would $v";
 				$labels->{"1$t"} = "now $VERB->{$v}";
+				$labels->{"?$t"} = "about to $v";
 			}
 
 			my $maxlen = 1 + max map { length } values %$labels;
@@ -341,13 +350,27 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		{
 			state $LABELS = _build_echo_labels();
 
-			my $echo = $self->pretend || $self->echo;
-			my $doit = $disposition eq 'capture' || !$self->pretend ? 1 : 0;
+			my $echo = $self->pretend || $self->echo || $self->interactive;
+			my $doit = $self->interactive ? '?' : $self->pretend ? 0 : 1;
+			$doit = 1 if $disposition eq 'capture';						# 'capture' overrides everything else
 
 			# special hack for messages in pretend mode
 			$line = $self->custom_message($line) if $type eq 'message' and not $doit;
 
-			say $self->color_msg( cyan => $LABELS->{"$doit$type"} ), $line if $echo;
+			if ($echo)
+			{
+				my $msg = $self->color_msg( cyan => $LABELS->{"$doit$type"} ) . $line;
+				if ($doit eq '?')
+				{
+					# if user doesn't confirm, that doesn't mean move on to the next command
+					# that means stop right there
+					return 0 unless $self->confirm($msg);
+				}
+				else
+				{
+					say $msg;
+				}
+			}
 			return $doit ? $action->() : 1;
 		}
 	}
@@ -389,6 +412,11 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 	method execute (...)
 	{
+		# all our args have been processed, but @ARGV still has them
+		# this causes problems if anyone tries to read from the ARGV filehandle
+		# and, since IO::Prompter will try to do just that, we better clear this out
+		undef @ARGV;
+
 		inner();
 
 		$self->run_command( 'internal' );
@@ -445,6 +473,16 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 		$message =~ s/\$(\w+)/$ENV{$1}/g;
 		return $message;
+	}
+
+	method confirm ($msg)
+	{
+		use IO::Prompter;
+
+		# for some reason, passing color output to prompt messes it up
+		# so we'll just print that part out first
+		print join(' ', $msg, $self->color_msg(white => 'Proceed?'), '[y/N]');
+		return prompt -y1, ' ';
 	}
 
 }
