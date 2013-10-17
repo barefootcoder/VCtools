@@ -47,6 +47,10 @@ class App::VC::Config
 								default => method { $self->directive('VC', vc => undef)
 										// $self->fatal("can't determine VC") },
 						);
+	has policy		=>	(
+							ro, isa => Maybe[Str], lazy, 
+								default => method { $self->directive($POLICY_KEY) },
+						);
 
 
 	# PSEUDO-ATTRIBUTES
@@ -56,6 +60,7 @@ class App::VC::Config
 
 	method _read_config
 	{
+		use File::HomeDir;
 		use Config::General;
 
 		my $home = File::HomeDir->my_home;
@@ -85,7 +90,11 @@ class App::VC::Config
 		$raw_config =~ s{ ^ (\s* \w+Dir \s* = \s*) ~/ }{ $1 . $home . '/' }gmex;
 		$raw_config =~ s{ ^ (\s* << \s* include \s+) ~/ }{ $1 . $home . '/' }gmex;
 
-		my $config = { Config::General::ParseConfig( -String => $raw_config ) };
+		my $config = { Config::General::ParseConfig(
+				-String						=>	$raw_config,
+				-MergeDuplicateBlocks		=>	1,
+				-MergeDuplicateOptions		=>	1,
+		) };
 		debuggit(3 => "read config:", DUMP => $config);
 		return $config;
 	}
@@ -171,6 +180,7 @@ class App::VC::Config
 		my $policy;
 		unless ($key eq $POLICY_KEY)
 		{
+			# don't want to use policy attribute here because we want to pass our $project and $vc through
 			$policy = $self->directive($POLICY_KEY, project => $project, vc => $vc);
 			debuggit(4 => ":directive => got policy of", $policy);
 		}
@@ -195,9 +205,12 @@ class App::VC::Config
 
 	method action_lines ($type, $cmd)
 	{
+		$self->fatal("multiple sections for " . $self->vc) unless ref $self->_config->{$self->vc} eq 'HASH';
 		$self->fatal("unknown type in action_lines") unless exists $self->_config->{$self->vc}->{$type};
 
-		my $lines = $self->_config->{$self->vc}->{$type}->{$cmd};
+		my $lines;
+		$lines //= $self->_config->{'Policy'}->{$self->policy}->{$self->vc}->{$type}->{$cmd} if $self->policy;
+		$lines //= $self->_config->{$self->vc}->{$type}->{$cmd};
 		return () unless $lines;
 		debuggit(4 => "lines is //$lines//");
 
@@ -208,7 +221,7 @@ class App::VC::Config
 	method custom_command ($cmd)
 	{
 		my ($custom, $policy);
-		if (my $policy = $self->directive($POLICY_KEY))
+		if (my $policy = $self->policy)
 		{
 			$custom //= $self->_config->{'Policy'}->{$policy}->{'CustomCommand'}->{$cmd}
 					if $self->_config->{'Policy'}->{$policy}->{'CustomCommand'};

@@ -7,6 +7,7 @@ our @EXPORT = qw< fake_cmd >;
 
 use Test::Most;
 use Test::Trap;
+use Test::App::Config;
 
 use Cwd;
 use Method::Signatures;
@@ -15,11 +16,7 @@ use App::VC;
 use App::VC::Command;
 
 
-my $config_tmpl = <<END;
-	<Project test>
-		ProjectDir = @{[ getcwd ]}
-		VC = fake
-	</Project>
+my $config_tmpl = fake_confstring(<<END);
 	<fake>
 		<commands>
 			testit <<---
