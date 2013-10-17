@@ -231,7 +231,13 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		{
 			return $self->execute_directive($disposition, message => $line);
 		}
-		elsif ($line =~ s/^!\s*//)
+		elsif ($line =~ s/^\?\s+//)
+		{
+			# in interactive mode, confirm directives become message directives
+			# (if you're already confirming every line, no need to confirm this one twice)
+			return $self->execute_directive($disposition, ($self->interactive ? 'message' : 'confirm') => $line);
+		}
+		elsif ($line =~ s/^!\s+//)
 		{
 			# this won't ever return, really, but, for consistency with the rest ...
 			return $self->execute_directive($disposition, fatal => $line);
@@ -277,6 +283,13 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 				my $msg = $self->info_expand($directive);
 				# message directives never fail
 				$pass = $self->handle_output($disposition, message => $msg, sub { say $self->custom_message($msg); 1; });
+			}
+
+			when ('confirm')
+			{
+				my $msg = $self->info_expand($directive);
+				$pass = $self->handle_output($disposition, message => $msg,
+						sub { $self->confirm($self->custom_message($msg)); 1; });
 			}
 
 			when ('fatal')
