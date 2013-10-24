@@ -93,7 +93,6 @@ class App::VC::Config
 		my $config = { Config::General::ParseConfig(
 				-String						=>	$raw_config,
 				-MergeDuplicateBlocks		=>	1,
-				-MergeDuplicateOptions		=>	1,
 		) };
 		debuggit(3 => "read config:", DUMP => $config);
 		return $config;
@@ -200,6 +199,10 @@ class App::VC::Config
 
 	method process_command_string ($string)
 	{
+		# if "$string" is really an arrayref, that means there were multiple values given for it
+		# so we should take the last one, as that will be the highest override
+		$string = $string->[-1] if ref $string eq 'ARRAY';
+
 		return map { s/^\s+//; $_ } split("\n", $string);
 	}
 
