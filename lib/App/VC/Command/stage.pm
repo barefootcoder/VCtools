@@ -25,6 +25,11 @@ class App::VC::Command::stage extends App::VC::Command
 	}
 
 
+	method validate_args ($opt, ArrayRef $args)
+	{
+		$self->set_info(files => $args);
+	}
+
 	augment execute (...)
 	{
 	}
