@@ -209,6 +209,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			try
 			{
 				$success = $self->process_action_line(output => $_);
+				$error = "`$_' returned false" unless $success;
 			}
 			catch ($e)
 			{
@@ -217,11 +218,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 				$error = $e;
 			}
 
-			unless ($success)
-			{
-				$self->fatal($error) if $error;
-				exit;
-			}
+			$self->fatal($error) unless $success;
 		}
 	}
 
