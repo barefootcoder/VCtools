@@ -201,8 +201,16 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			default { die("don't know what to do with command type $type") }
 		}
 
+		my $bail = 0;
 		foreach (@commands)
 		{
+			if ($bail)													# something keeled over previously;
+			{															# just print the command and move on
+				say STDERR $self->color_msg(white => "  $_");
+				$bail = 1;												# indicates we got some more output after bailing
+				next;
+			}
+
 			my $success = 0;
 			my $error;
 
@@ -218,7 +226,17 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 				$error = $e;
 			}
 
-			$self->fatal($error) unless $success;
+			unless ($success)
+			{
+				say STDERR $self->color_msg(red => $error);
+				say STDERR $self->color_msg(cyan => "remaining commands that would have been run:");
+				$bail = -1;												# indicates we need more output
+			}
+		}
+		if ($bail)												# if something keeled over, stop right here
+		{
+			say STDERR "  <none>" if $bail == -1;
+			exit 1;
 		}
 	}
 
