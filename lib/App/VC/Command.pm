@@ -14,6 +14,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	use experimental 'smartmatch';
 
 	use CLASS;
+	use TryCatch;
 	use Path::Class;
 	use MooseX::Has::Sugar;
 	use MooseX::Types::Moose qw< :all >;
@@ -200,7 +201,28 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			default { die("don't know what to do with command type $type") }
 		}
 
-		$self->process_action_line(output => $_) or exit foreach @commands;
+		foreach (@commands)
+		{
+			my $success = 0;
+			my $error;
+
+			try
+			{
+				$success = $self->process_action_line(output => $_);
+			}
+			catch ($e)
+			{
+				$e =~ s/ at .*? line \d+.*$//s;							# file number/line number not really helpful to user
+				$success = 0;
+				$error = $e;
+			}
+
+			unless ($success)
+			{
+				$self->fatal($error) if $error;
+				exit;
+			}
+		}
 	}
 
 	method process_action_line ($disposition, $line)
@@ -465,7 +487,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 	method fatal ($msg)
 	{
-		say $self->me . ' ' . $self->command . ': ' . $self->color_msg(red => $msg);
+		say STDERR $self->me . ' ' . $self->command . ': ' . $self->color_msg(red => $msg);
 		exit 1;
 	}
 

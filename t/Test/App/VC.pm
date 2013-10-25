@@ -16,10 +16,13 @@ use App::VC;
 use App::VC::Command;
 
 
+my $ME = '%VC-TEST%';
+my $cmd = 'testit';
+
 my $config_tmpl = fake_confstring(<<END);
 	<fake>
 		<commands>
-			testit <<---
+			$cmd <<---
 				##here##
 			---
 		</commands>
@@ -41,8 +44,8 @@ func fake_cmd (%args)
 	my $fake_usage = bless {}, 'Doesnt::Matter';
 	my $cmd = $class->new(
 			app => $fake_app, usage => $fake_usage,
-			me => '%VC-TEST%', color => 1,
-			inline_conf => $config, command => 'testit',
+			me => $ME, color => 1,
+			inline_conf => $config, command => $cmd,
 			%args
 	);
 
@@ -74,8 +77,17 @@ method App::VC::Command::test_execute_output (...)
 	my $opts = ref $_[-1] ? pop : {};
 	trap { $self->execute };
 
+	# a fatal counts as an exit_okay plus a stderr
+	# make sure we get the formatting right too
+	if (exists $opts->{'fatal'})
+	{
+		$opts->{'exit_okay'} = 1;
+		$opts->{'stderr'} = [ "$ME $cmd: ", red => $opts->{'fatal'}, "\n" ];
+	}
+
 	is $trap->die, undef, "no error: $testname";
 	is $trap->exit, undef, "no exit: $testname" or diag("output was:\n", $trap->stdout) unless $opts->{'exit_okay'};
+	is $trap->stderr, $self->make_testmsg(@{$opts->{'stderr'}}), "stderr: $testname" if exists $opts->{'stderr'};
 	is $trap->stdout, $self->make_testmsg(@_), $testname;
 }
 
