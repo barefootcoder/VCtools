@@ -296,6 +296,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			when ('shell')
 			{
 				$directive = $self->info_expand($directive);
+				$directive =~ s/\$\$/$$/g;								# PID expansion
 				debuggit(4 => "sending to system: $directive");
 				given ($disposition)
 				{
