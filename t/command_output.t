@@ -101,16 +101,4 @@ set_prompt_input( 'n' );
 $cmd->test_execute_output(@output, {exit_okay => 1}, 'command with --interactive (all n)');
 
 
-# better testing of expressions
-
-$action = q{
-	TEST=1
-	TEST2=$TEST+1
-	@ say $ENV{TEST2}
-};
-
-$cmd = fake_cmd( action => $action );
-$cmd->test_execute_output("2\n", 'command with env expansion in env assignment');
-
-
 done_testing;
