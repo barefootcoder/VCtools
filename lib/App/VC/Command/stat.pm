@@ -25,7 +25,7 @@ class App::VC::Command::stat extends App::VC::Command
 	}
 
 
-	method validate_args ($opt, ArrayRef $args)
+	augment validate_args ($opt, ArrayRef $args)
 	{
 		$self->verify_project;
 	}

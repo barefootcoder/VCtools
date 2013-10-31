@@ -25,7 +25,7 @@ class App::VC::Command::commit extends App::VC::Command
 	}
 
 
-	method validate_args ($opt, ArrayRef $args)
+	augment validate_args ($opt, ArrayRef $args)
 	{
 		$self->set_info(files => $args);
 	}

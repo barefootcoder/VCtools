@@ -38,7 +38,7 @@ class App::VC::Command::info extends App::VC::Command
 	}
 
 
-	method validate_args ($opt, ArrayRef $args)
+	augment validate_args ($opt, ArrayRef $args)
 	{
 		$self->usage_error("must supply directive to lookup") unless $args->[0];
 		$self->key($args->[0]);

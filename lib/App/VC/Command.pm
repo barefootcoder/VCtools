@@ -492,13 +492,18 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	# ACTION METHODS
 	# (augment these)
 
-	method execute (...)
+	method validate_args ($opt, ArrayRef $args)
 	{
 		# all our args have been processed, but @ARGV still has them
 		# this causes problems if anyone tries to read from the ARGV filehandle
 		# and, since IO::Prompter will try to do just that, we better clear this out
 		undef @ARGV;
 
+		inner();
+	}
+
+	method execute (...)
+	{
 		inner();
 
 		$self->run_command( 'internal' );

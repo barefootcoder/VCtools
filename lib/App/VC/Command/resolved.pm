@@ -25,7 +25,7 @@ class App::VC::Command::resolved extends App::VC::Command
 	}
 
 
-	method validate_args ($opt, ArrayRef $args)
+	augment validate_args ($opt, ArrayRef $args)
 	{
 		$self->verify_project;
 		$self->usage_error("file(s) arg is required") unless $args->[0];

@@ -93,7 +93,7 @@ class App::VC::CustomCommand extends App::VC::Command
 
 	# METHODS
 
-	method validate_args ($opt, ArrayRef $args)
+	augment validate_args ($opt, ArrayRef $args)
 	{
 		$self->spec->validate_args($self, $args);
 		debuggit(4 => "after validations", DUMP => $self);

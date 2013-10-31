@@ -25,7 +25,7 @@ class App::VC::Command::unget extends App::VC::Command
 	}
 
 
-	method validate_args ($opt, ArrayRef $args)
+	augment validate_args ($opt, ArrayRef $args)
 	{
 		$self->usage_error("file(s) arg is required") unless $args->[0];
 		$self->set_info(files => $args);

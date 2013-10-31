@@ -30,7 +30,7 @@ class App::VC::Command::show_branches extends App::VC::Command
 	}
 
 
-	method validate_args ($opt, ArrayRef $args)
+	augment validate_args ($opt, ArrayRef $args)
 	{
 		$self->verify_project;
 	}
