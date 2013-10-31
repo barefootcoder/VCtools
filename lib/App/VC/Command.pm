@@ -56,6 +56,12 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 									cmd_flag => 'inline-config',
 							ro, isa => Str, predicate => 'has_inline_config',
 						);
+	has debug		=>	(
+							traits => [qw< Getopt ENV >],
+								documentation => "hidden",
+								env_prefix => 'VCTOOLS',
+							ro, isa => Bool,
+						);
 	has no_color	=>	(
 							traits => [qw< Getopt ENV >],
 								documentation => "Don't use color output (default: use color when printing to a term).",
@@ -240,7 +246,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			}
 			catch ($e)
 			{
-				$e =~ s/ at .*? line \d+.*$//s;							# file number/line number not really helpful to user
+				$e =~ s/ at .*? line \d+.*$//s unless $self->debug;		# file number/line number not really helpful to user
 				$success = 0;
 				$error = $e;
 			}
