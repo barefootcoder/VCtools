@@ -46,8 +46,14 @@ Then add this to your particular shell's startup script (typically `.bashrc` or 
 	alias vc=~/wherever/you/like/VCtools/bin/vc			# for bash-style shells
 	alias vc ~/wherever/you/like/VCtools/bin/vc			# for csh-style shells
 
-And then all you need is a config file.  Which is non-trivial, but hopefully I'll have some examples
-uploaded here soon.
+And then all you need is a config file.  To get a very basic one, run any vc command:
+
+	vc help												# always an easy one
+
+and it should not only generate a config which should be enough to get you going, but also check for
+and help you install any Perl module prerequisites it needs.  You may need to run it a few times
+before it takes care of everything; just keep doing it over and over until it tells you what the
+available commands are.
 
 Contributing
 ------------
