@@ -27,6 +27,14 @@ my $config_tmpl = fake_confstring(<<END);
 			---
 		</commands>
 	</fake>
+	<CustomCommand othercmd>
+		Argument = arg1
+		Argument = arg2
+		action <<---
+			echo %arg1 >/dev/null
+			@ say %arg2
+		---
+	</CustomCommand>
 END
 
 
@@ -40,7 +48,7 @@ func fake_cmd (%args)
 	}
 
 	my $class = 'App::VC::Command';
-	my $fake_app = bless {}, 'App::VC';
+	my $fake_app = bless {}, 'App::VC';									# temporary, to solve chicken-and-egg issue
 	my $fake_usage = bless {}, 'Doesnt::Matter';
 	my $cmd = $class->new(
 			app => $fake_app, usage => $fake_usage,
@@ -48,6 +56,11 @@ func fake_cmd (%args)
 			inline_conf => $config, command => $cmd,
 			%args
 	);
+
+	# now fixup with a real app
+	$fake_app = App::VC->new( config => $cmd->config );
+	$cmd->{'app'} = $fake_app;											# totally cheating here, because these accessors
+	$cmd->config->{'app'} = $fake_app;									# are (rightfully) read-only
 
 	isa_ok $cmd, $class, 'test command';
 	is $cmd->project, 'test', 'test command returns proper project';
@@ -86,7 +99,8 @@ method App::VC::Command::test_execute_output (...)
 	}
 
 	is $trap->die, undef, "no error: $testname";
-	is $trap->exit, undef, "no exit: $testname" or diag("output was:\n", $trap->stdout) unless $opts->{'exit_okay'};
+	is $trap->exit, undef, "no exit: $testname" or diag("error was:\n", $trap->stderr, "\noutput was:\n", $trap->stdout)
+			unless $opts->{'exit_okay'};
 	is $trap->stderr, $self->make_testmsg(@{$opts->{'stderr'}}), "stderr: $testname" if exists $opts->{'stderr'};
 	is $trap->stdout, $self->make_testmsg(@_), $testname;
 }

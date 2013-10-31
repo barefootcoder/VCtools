@@ -18,6 +18,7 @@ class App::VC extends MooseX::App::Cmd
 	use MooseX::Types::Moose qw< :all >;
 
 	use App::VC::Config;
+	use App::VC::Command;
 	use App::VC::CustomCommandSpec;
 
 
@@ -29,6 +30,10 @@ class App::VC extends MooseX::App::Cmd
 								default => method { App::VC::Config->new( app => $self ) },
 						);
 	has custom_spec	=>	( ro, isa => 'App::VC::CustomCommandSpec', writer => '_set_spec' );
+	has nested_args	=>	(
+							ro, isa => HashRef, writer => '_setup_for_nested',
+							predicate => 'running_nested', clearer => '_clear_nested',
+						);
 
 
 	# PRIVATE METHODS
@@ -39,8 +44,11 @@ class App::VC extends MooseX::App::Cmd
 	# I've done this a few times now and it seems to work well.
 	override _bad_command ($command, $opt, @args)
 	{
+		debuggit(4 => "overridden bad command handler:", $command, DUMP => $opt, DUMP => \@args);
+
 		# first see if we can find a custom command with this name
 		my $custom = $self->config->custom_command($command);
+		debuggit(3 => "found custom command:", $custom);
 
 		# if we couldn't find one, just forward on to the real _bad_command
 		# but if we could, run the custom command
@@ -60,6 +68,20 @@ class App::VC extends MooseX::App::Cmd
 			$self->_set_spec($spec);
 			return App::VC::CustomCommand->prepare( $self, @args );
 		}
+	}
+
+
+	# PUBLIC METHODS
+
+	method nested_cmd (App::VC::Command $outer, $cmdline)
+	{
+		local @ARGV = split(/\s+/, $cmdline);							# might need a more sophisticated split eventually
+		my $passthrough = { map { $_ => $outer->$_ } qw< me config color no_color pretend echo interactive > };
+		$self->_setup_for_nested($passthrough);
+
+		my $success = $self->run;
+		$self->_clear_nested;
+		return $success;
 	}
 
 }

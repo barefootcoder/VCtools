@@ -64,6 +64,33 @@ $cmd->test_execute_output("line 1\n",
 );
 
 
+# now try a nested command that bails out
+# (the first arg to "othercmd" gets passed on to an "echo" shell directive,
+# so trying to read in from a file that isn't there will cause a failure)
+
+$action = q{
+	@ say "line 1"
+	= othercmd <bmoogle two
+	@ say "line 3"
+};
+
+$cmd = fake_cmd( action => $action );
+# I think what we probably want is this:
+#		my $params = command_fail( q{"echo <bmoogle >/dev/null" unexpectedly returned exit value 2},
+#				'@ say %arg2', '@ say "line 3"');
+# But what we're going to get is this:
+my $params1 = command_fail( q{"echo <bmoogle >/dev/null" unexpectedly returned exit value 2}, '@ say %arg2');
+my $params2 = command_fail( q{`= othercmd <bmoogle two' returned false}, '@ say "line 3"');
+my $params = { exit_okay => 1, stderr => [ @{$params1->{'stderr'}}, @{$params2->{'stderr'}} ] };
+# This is good enough for now.  It's a bit of a stutter-step, but it's functional, and I don't want
+# to spend too much time on it.
+diag("ignore the following error from sh:");
+$cmd->test_execute_output("line 1\n",
+		$params,
+		'handles death of nested command',
+);
+
+
 done_testing;
 
 

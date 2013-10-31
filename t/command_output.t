@@ -21,6 +21,7 @@ my $action = q{
 	? check the *!bmoogle!*
 	echo >/dev/null
 	> testing *=white=*
+	= othercmd one two
 };
 
 set_prompt_input( 'y' );
@@ -32,6 +33,7 @@ my @output = (
 	"check the ", red => 'bmoogle', @PROCEED,							# line 4
 	'',																	# line 5
 	"testing ", white => 'white', "\n",									# line 6
+	"two\n",															# line 7
 );
 $cmd->test_execute_output(@output, 'simple command (all directive types except fatal)');
 
@@ -44,6 +46,8 @@ $cmd = fake_cmd( action => $action, pretend => 1 );
 	@WOULD_SAY, "check the ", red => 'bmoogle', "\n",					# line 4
 	@WOULD_RUN, "echo >/dev/null\n",									# line 5
 	@WOULD_SAY, "testing ", white => 'white', "\n",						# line 6
+	@WOULD_RUN, "echo one >/dev/null\n",								# line 7
+	"two\n",															# line 7 (also)
 );
 $cmd->test_execute_output(@output, 'command with --pretend');
 
@@ -58,12 +62,14 @@ $cmd = fake_cmd( action => $action, echo => 1 );
 	@NOW_RUNNING, "echo >/dev/null\n",									# line 5
 	@NOW_SAYING, "testing *=white=*\n",									# line 6
 	"testing ", white => 'white', "\n",									# line 6 (also)
+	@NOW_RUNNING, "echo one >/dev/null\n",								# line 7
+	"two\n",															# line 7 (also)
 );
 $cmd->test_execute_output(@output, 'command with --echo');
 
 # test with all yeses
 $cmd = fake_cmd( action => $action, interactive => 1 );
-set_prompt_input( ('y') x 3 );
+set_prompt_input( ('y') x 4 );
 @output = (
 	@NOW_RUNNING, "TEST=1\n",											# line 1
 	"true\n",															# line 2
@@ -73,6 +79,8 @@ set_prompt_input( ('y') x 3 );
 	@ABOUT_TO_RUN, "echo >/dev/null", @PROCEED,							# line 5
 	@ABOUT_TO_SAY, "testing *=white=*", @PROCEED,						# line 6
 	"testing ", white => 'white', "\n",									# line 6 (also)
+	@ABOUT_TO_RUN, "echo one >/dev/null", @PROCEED,						# line 7
+	"two\n",															# line 7 (also)
 );
 $cmd->test_execute_output(@output, 'command with --interactive (all y)');
 

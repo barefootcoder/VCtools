@@ -111,6 +111,25 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	}
 
 
+	around BUILDARGS ($class: ...)
+	{
+		my %args = ref $_[0] ? %{$_[0]} : @_;
+
+		# the only thing we care about here is making sure we handle nested commands
+		# we can tell that by consulting our app parameter
+		my $app = $args{'app'} or die("must supply an app parameter to App::VC::Command");
+		$app->isa('App::VC') or die("app parameter to App::VC::Command must be an App::VC");
+
+		if ($app->running_nested)
+		{
+			my $nested = $app->nested_args;
+			$args{$_} //= $nested->{$_} foreach keys %$nested;
+		}
+
+		return $class->$orig(%args);
+	}
+
+
 	# SUPPORT METHODS
 
 	# small wrapper around directive (from our config object) which allows us to do substitutions on
@@ -233,11 +252,14 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 				$bail = -1;												# indicates we need more output
 			}
 		}
-		if ($bail)												# if something keeled over, stop right here
+		if ($bail)														# if something keeled over, stop right here
 		{
 			say STDERR "  <none>" if $bail == -1;
-			exit 1;
+			return 0 if $self->app->running_nested;						# if inside a nested command, just return false
+			exit 1;														# else bomb out completely
 		}
+
+		return 1;														# success!
 	}
 
 	method process_action_line ($disposition, $line)
@@ -248,13 +270,17 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		{
 			return $self->execute_directive($disposition, conditional => $1, $2);
 		}
-		if ($line =~ /^(\w+)=(.*)$/)
+		elsif ($line =~ /^(\w+)=(.*)$/)
 		{
 			return $self->execute_directive($disposition, env_assign => $1, $2);
 		}
 		elsif ($line =~ s/^\@\s+//)
 		{
 			return $self->execute_directive($disposition, code => $line);
+		}
+		elsif ($line =~ s/^=\s+//)
+		{
+			return $self->execute_directive($disposition, nested => $line);
 		}
 		elsif ($line =~ s/^%//)
 		{
@@ -314,6 +340,11 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			when ('code')
 			{
 				$pass = $self->evaluate_code($directive);
+			}
+
+			when ('nested')
+			{
+				$pass = $self->app->nested_cmd($self, $directive);
 			}
 
 			when ('message')
