@@ -161,6 +161,12 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	}
 
 
+	method env_expand ($string)
+	{
+		$string =~ s{\$(\w+)}{ $ENV{$1} // '' }eg;
+		return $string;
+	}
+
 	method info_expand ($string, :$code = 0)
 	{
 		debuggit(4 => "going to expand string", $string);
@@ -322,6 +328,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 				$directive = $self->info_expand($directive);
 				$directive =~ s/\$\$/$$/g;								# PID expansion
 				debuggit(4 => "sending to system: $directive");
+
 				given ($disposition)
 				{
 					when ('output')
@@ -337,37 +344,46 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 			when ('code')
 			{
-				$pass = $self->evaluate_code($directive);
+				$pass = $self->evaluate_code($directive);				# evaluate_code handles info expansion
 			}
 
 			when ('nested')
 			{
+				$directive = $self->info_expand($directive);
 				$pass = $self->app->nested_cmd($self, $directive);
 			}
 
 			when ('message')
 			{
-				my $msg = $self->info_expand($directive);
+				my $msg = $self->env_expand($directive);
+				$msg = $self->info_expand($msg);
+
 				# message directives never fail
 				$pass = $self->handle_output($disposition, message => $msg, sub { say $self->custom_message($msg); 1; });
 			}
 
 			when ('confirm')
 			{
-				my $msg = $self->info_expand($directive);
+				my $msg = $self->env_expand($directive);
+				$msg = $self->info_expand($msg);
+
+				# confirm directive never fail either, although they might exit
 				$pass = $self->handle_output($disposition, message => $msg,
 						sub { $self->confirm($self->custom_message($msg)); 1; });
 			}
 
 			when ('fatal')
 			{
+				my $msg = $self->env_expand($directive);
+				$msg = $self->info_expand($msg);
+
 				# don't bother with $pass; this will never return
-				$self->fatal($directive);
+				$self->fatal($msg);
 			}
 
 			when ('env_assign')
 			{
-				my $val = $self->evaluate_expression($directive);
+				my $val = $self->evaluate_expression($directive);		# evaluate_expression handles expansions
 
 				# env assignments are always done and never fail
 				$pass = $self->handle_output(capture => command => "$lhs=$val", sub { $ENV{$lhs} = $val; 1; });
@@ -376,8 +392,9 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 			when ('conditional')
 			{
-				my $condition = $self->evaluate_expression($lhs);
+				my $condition = $self->evaluate_expression($lhs);		# evaluate_expression handles expansions
 				debuggit(3 => "// condition:", $lhs, "// evaluates to:", $condition, "// directive:", $directive);
+
 				if ($condition)
 				{
 					$pass = $self->process_action_line($disposition, $directive);
@@ -459,7 +476,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 	method evaluate_expression ($expr)
 	{
-		$expr =~ s{\$(\w+)}{ $ENV{$1} // '' }eg;						# we do evironment expansion on expressions
+		$expr = $self->env_expand($expr);								# we do evironment expansion on expressions
 		return $self->evaluate_code($expr);								# this will handle info expansions
 	}
 
@@ -559,7 +576,6 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			$message .= $pre;
 		}
 
-		$message =~ s/\$(\w+)/$ENV{$1}/g;
 		return $message;
 	}
 
