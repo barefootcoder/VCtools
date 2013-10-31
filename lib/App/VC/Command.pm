@@ -288,14 +288,6 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		{
 			return $self->execute_directive($disposition, nested => $line);
 		}
-		elsif ($line =~ s/^%//)
-		{
-			given ($disposition)
-			{
-				return say $self->get_info($line)		when 'output';
-				return $self->get_info($line)			when 'capture';
-			}
-		}
 		elsif ($line =~ s/^>\s*//)
 		{
 			return $self->execute_directive($disposition, message => $line);
@@ -447,7 +439,9 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 			if ($echo)
 			{
-				my $msg = $self->color_msg( cyan => $LABELS->{"$doit$type"} ) . $line;
+				my $label = $LABELS->{"$doit$type"};
+				$line =~ s/\n(?!$)/"\n" . ' ' x length($label)/eg;		# don't add space after final newline, if any
+				my $msg = $self->color_msg( cyan => $label ) . $line;
 				if ($doit eq '?')
 				{
 					# if user doesn't confirm, that doesn't mean move on to the next command
@@ -553,8 +547,9 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	{
 		state $COLOR_CODES = { '!' => 'red', '~' => 'yellow', '+' => 'green', '-' => 'cyan', '=' => 'white' };
 		state $COLOR_CODE_METACHAR = '[' . join('', keys %$COLOR_CODES) . ']';
-		state $COLOR_SPLITTER = qr/^ (.*?) (?: \*($COLOR_CODE_METACHAR) (.*?) \2\* (.*) )? $/x;
+		state $COLOR_SPLITTER = qr/^ (.*?) (?: \*($COLOR_CODE_METACHAR) (.*?) \2\* (.*) )? $/sx;
 
+		debuggit(3 => "before doing anything, custom message is", $msg);
 		my ($pre, $color, $text, $post) = $msg =~ /$COLOR_SPLITTER/;
 		my $message = $pre;
 		while ($color)
