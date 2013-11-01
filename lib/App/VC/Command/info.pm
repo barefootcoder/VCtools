@@ -62,6 +62,10 @@ class App::VC::Command::info extends App::VC::Command
 			{
 				say foreach $self->list_all_projects;
 			}
+			when ('policy:all')
+			{
+				say foreach $self->list_all_policies;
+			}
 			when (/^%(\w+)/)
 			{
 				debuggit(3 => "going to run method", $1);

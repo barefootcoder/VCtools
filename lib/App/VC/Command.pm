@@ -211,6 +211,12 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		return sort { lc $a cmp lc $b } keys { map { $_ => 1 } @explicit_projects, @implicit_projects };
 	}
 
+	# and here's a way to list all policies that we know about
+	method list_all_policies
+	{
+		return sort { lc $a cmp lc $b } $self->config->top_level_entities('Policy');
+	}
+
 
 	# COMMAND EXECUTION METHODS
 
