@@ -225,12 +225,16 @@ func prettify_path ($path)
 
 func create_config (ArrayRef $working, ArrayRef $vc_list, HashRef $projs)
 {
+	# VCtoolsDir directive
+	my $my_dir = file($0)->dir->parent;
+	my $vctdir = "VCtoolsDir=" . prettify_path($my_dir);
+
 	# WorkingDir directives
 	my $wdir = join("\n", map { "WorkingDir=$_" } map { prettify_path($_) } @$working);
 
 	# include base configs for all relevant VC systems, plus set the default VC
 	my $def_vc = $vc_list->[0];
-	my $conf_dir = file($0)->dir->parent->subdir('share', 'conf');
+	my $conf_dir = $my_dir->subdir('share', 'conf');
 	my $vc = join("\n", "DefaultVC=$def_vc",
 			map { "<<include $_>>" } map { prettify_path($conf_dir->file("$_.conf")) } @$vc_list);
 
@@ -253,7 +257,7 @@ func create_config (ArrayRef $working, ArrayRef $vc_list, HashRef $projs)
 	);
 
 	# now mash it all together
-	return join("\n\n", $wdir, $vc, $projects);
+	return join("\n\n", $vctdir, $wdir, $vc, $projects);
 }
 
 
