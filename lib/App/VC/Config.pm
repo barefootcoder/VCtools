@@ -64,7 +64,7 @@ class App::VC::Config
 		use Config::General;
 
 		my $home = File::HomeDir->my_home;
-		my $config_file = file($home, '.vctools.conf');
+		my $config_file = file($home, '.vctools', 'vctools.conf');
 
 		my $raw_config;
 		if ($self->is_inline)
