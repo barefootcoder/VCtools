@@ -63,8 +63,7 @@ class App::VC::Config
 		use File::HomeDir;
 		use Config::General;
 
-		my $home = File::HomeDir->my_home;
-		my $config_file = file($home, '.vctools', 'vctools.conf');
+		my $config_file = $self->config_file('vctools.conf');
 
 		my $raw_config;
 		if ($self->is_inline)
@@ -87,6 +86,7 @@ class App::VC::Config
 
 		# a small bit of pre-processing to allow ~ to refer to the user's home directory
 		# but only for *Dir directives, or in <<include>> statements
+		my $home = File::HomeDir->my_home;
 		$raw_config =~ s{ ^ (\s* \w+Dir \s* = \s*) ~/ }{ $1 . $home . '/' }gmex;
 		$raw_config =~ s{ ^ (\s* << \s* include \s+) ~/ }{ $1 . $home . '/' }gmex;
 
@@ -146,6 +146,18 @@ class App::VC::Config
 		}
 
 		return $info;
+	}
+
+
+	# CLASS METHODS
+
+	# this can be either a class or object method
+	method config_file ($invocant: $filename)
+	{
+		use File::HomeDir;
+
+		state $home = File::HomeDir->my_home;
+		return file($home, '.vctools', $filename);
 	}
 
 

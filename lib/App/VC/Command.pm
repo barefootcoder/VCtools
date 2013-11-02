@@ -13,7 +13,6 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	use autodie qw< :all >;
 	use experimental 'smartmatch';
 
-	use CLASS;
 	use TryCatch;
 	use Path::Class;
 	use MooseX::Has::Sugar;
