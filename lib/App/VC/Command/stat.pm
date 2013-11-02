@@ -5,6 +5,8 @@ use warnings FATAL => 'all';
 use MooseX::Declare;
 use Method::Signatures::Modifiers;
 
+# ABSTRACT: print working copy status
+
 
 class App::VC::Command::stat extends App::VC::Command
 {
@@ -37,11 +39,3 @@ class App::VC::Command::stat extends App::VC::Command
 
 
 1;
-
-
-=head1 NAME
-
-App::VC::Command::stat - print working copy status
-
-
-=cut

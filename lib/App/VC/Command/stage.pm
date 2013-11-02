@@ -5,6 +5,8 @@ use warnings FATAL => 'all';
 use MooseX::Declare;
 use Method::Signatures::Modifiers;
 
+# ABSTRACT: prepare working copy for commit
+
 
 class App::VC::Command::stage extends App::VC::Command
 {
@@ -37,11 +39,3 @@ class App::VC::Command::stage extends App::VC::Command
 
 
 1;
-
-
-=head1 NAME
-
-App::VC::Command::stage - prepare working copy for commit
-
-
-=cut

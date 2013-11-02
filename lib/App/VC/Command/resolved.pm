@@ -5,6 +5,8 @@ use warnings FATAL => 'all';
 use MooseX::Declare;
 use Method::Signatures::Modifiers;
 
+# ABSTRACT: mark file(s) as resolved
+
 
 class App::VC::Command::resolved extends App::VC::Command
 {
@@ -39,11 +41,3 @@ class App::VC::Command::resolved extends App::VC::Command
 
 
 1;
-
-
-=head1 NAME
-
-App::VC::Command::resolved - mark file(s) as resolved
-
-
-=cut

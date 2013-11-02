@@ -5,6 +5,8 @@ use warnings FATAL => 'all';
 use MooseX::Declare;
 use Method::Signatures::Modifiers;
 
+# ABSTRACT: commit changes
+
 
 class App::VC::Command::commit extends App::VC::Command
 {
@@ -38,11 +40,3 @@ class App::VC::Command::commit extends App::VC::Command
 
 
 1;
-
-
-=head1 NAME
-
-App::VC::Command::commit - commit changes
-
-
-=cut

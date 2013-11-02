@@ -5,6 +5,8 @@ use warnings FATAL => 'all';
 use MooseX::Declare;
 use Method::Signatures::Modifiers;
 
+# ABSTRACT: revert changes to one or more files
+
 
 class App::VC::Command::unget extends App::VC::Command
 {
@@ -38,11 +40,3 @@ class App::VC::Command::unget extends App::VC::Command
 
 
 1;
-
-
-=head1 NAME
-
-App::VC::Command::unget - revert changes to one or more files
-
-
-=cut

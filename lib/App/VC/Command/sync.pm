@@ -5,6 +5,8 @@ use warnings FATAL => 'all';
 use MooseX::Declare;
 use Method::Signatures::Modifiers;
 
+# ABSTRACT: update working copy from server
+
 
 class App::VC::Command::sync extends App::VC::Command
 {
@@ -37,11 +39,3 @@ class App::VC::Command::sync extends App::VC::Command
 
 
 1;
-
-
-=head1 NAME
-
-App::VC::Command::sync - update working copy from server
-
-
-=cut

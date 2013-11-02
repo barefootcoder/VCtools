@@ -5,6 +5,8 @@ use warnings FATAL => 'all';
 use MooseX::Declare;
 use Method::Signatures::Modifiers;
 
+# ABSTRACT: print VCtools info
+
 
 class App::VC::Command::info extends App::VC::Command
 {
@@ -83,11 +85,3 @@ class App::VC::Command::info extends App::VC::Command
 
 
 1;
-
-
-=head1 NAME
-
-App::VC::Command::info - print VCtools info
-
-
-=cut

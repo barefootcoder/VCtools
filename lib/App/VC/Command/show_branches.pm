@@ -5,6 +5,8 @@ use warnings FATAL => 'all';
 use MooseX::Declare;
 use Method::Signatures::Modifiers;
 
+# ABSTRACT: list branches in working copy
+
 
 class App::VC::Command::show_branches extends App::VC::Command
 {
@@ -42,11 +44,3 @@ class App::VC::Command::show_branches extends App::VC::Command
 
 
 1;
-
-
-=head1 NAME
-
-App::VC::Command::show_branches - list branches in working copy
-
-
-=cut
