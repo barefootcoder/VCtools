@@ -15,6 +15,7 @@ my @ABOUT_TO_SAY	= (cyan => "about to say: ");
 my @PROCEED			= (' ', white => "Proceed?", " [y/N]");
 
 my $action = q{
+	# this should never produce any output
 	TEST=1
 	$TEST -> @ say "true"
 	!$TEST -> @ say "false"

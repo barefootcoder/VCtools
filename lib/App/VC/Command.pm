@@ -283,7 +283,11 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	{
 		local $@;
 
-		if ($line =~ /^(.*?)\s+->\s+(.*)$/)
+		if ($line =~ /^#/)												# comment
+		{
+			return 1;													# just ignore (by returning a 'pass')
+		}
+		elsif ($line =~ /^(.*?)\s+->\s+(.*)$/)
 		{
 			return $self->execute_directive($disposition, conditional => $1, $2);
 		}
