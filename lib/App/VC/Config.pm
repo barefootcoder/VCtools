@@ -79,7 +79,7 @@ class App::VC::Config
 			catch ($e where {/Can't open '$config_file'/})
 			{
 				$self->warning("config file not found; trying to create");
-				system(file($0)->dir->file('vctools-create-config'));
+				system(file($0)->resolve->dir->file('vctools-create-config'));
 				$self->fatal("If config file was successfully created, try your command again.");
 			}
 		}

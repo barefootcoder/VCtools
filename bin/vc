@@ -18,7 +18,7 @@ eval { require Debuggit } ? Debuggit->import( DataPrinter => 1, DEBUG => 1 ) : c
 
 
 # figure out where we came from
-my $me = file($0);
+my $me = file($0)->absolute->resolve;
 # here we're turning /something/something/bin/thisscript into /something/something/lib
 my $lib_dir = $me->dir->parent->subdir('lib');
 # now jam said lib into @INC
@@ -37,13 +37,14 @@ check_prereqs() unless eval { App::VC->run; 1; };
 
 sub check_prereqs
 {
+	use Cwd;								# in core forever
 	use File::Spec;							# this is in core since 5.004, so should be safe to use
 	use File::Basename;						# this has been core even longer than that (also safe)
 
 	# make sure this is something we can do something about
 	die unless $@ =~ /Can't locate .* in \@INC/ or $@ =~ /Perl .* required/;
 
-	my $prereq_checker = File::Spec->catfile( dirname($0), 'vctools-prereq-verify' );
+	my $prereq_checker = File::Spec->catfile( dirname(Cwd::realpath($0)), 'vctools-prereq-verify' );
 	unless ( -r $prereq_checker )
 	{
 		print STDERR "$0: cannot find the program to check that prerequisites are installed\n";

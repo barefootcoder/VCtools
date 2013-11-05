@@ -5,7 +5,8 @@ use autodie;								# not doing :all here so we don't die if missing IPC::System
 use warnings;
 
 
-use File::Basename;							# this has been core forever, so safe to include
+use Cwd;									# this has been core forever, so safe to include
+use File::Basename;							# ditto
 my $ME = basename $0;
 
 
@@ -27,7 +28,7 @@ my %standard = ( '5.012' => 1, autodie => 1, strict => 1, warnings => 1 );
 # which isn't in core, so we'll seed our list with it
 my $modules = { 'IPC::System::Simple' => 1 };
 
-my $base_dir = dirname dirname $0;
+my $base_dir = dirname dirname Cwd::realpath($0);
 
 # recursively go through dirs, reading modules out of all files
 cull_prereqs($modules, $_) foreach ("$base_dir/bin", "$base_dir/lib");

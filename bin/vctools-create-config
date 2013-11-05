@@ -226,7 +226,7 @@ func prettify_path ($path)
 func create_config (ArrayRef $working, ArrayRef $vc_list, HashRef $projs)
 {
 	# VCtoolsDir directive
-	my $my_dir = file($0)->dir->parent;
+	my $my_dir = file($0)->absolute->dir->parent;
 	my $vctdir = "VCtoolsDir=" . prettify_path($my_dir);
 
 	# WorkingDir directives
