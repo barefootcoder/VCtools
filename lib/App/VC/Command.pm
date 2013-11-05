@@ -522,6 +522,16 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	# VALIDATION METHODS
 	# (call these from validate_args)
 
+	# except you don't need to call this one; it's always called for you
+	method verify_vctoolsdir
+	{
+		my $theoretical_dir = $self->directive("VCtoolsDir");
+		my $actual_dir = file($0)->absolute->resolve->dir->parent;
+		debuggit(4 => "theoretical", DUMP => [$theoretical_dir], "actual", DUMP => [$actual_dir]);
+		$self->warning("VCtoolsDir directive in config is missing or wrong; wrapper scripts may not function properly.")
+			if not $theoretical_dir or dir($theoretical_dir)->resolve ne $actual_dir;
+	}
+
 	method verify_project
 	{
 		$self->fatal("Can't determine project") unless $self->project;
@@ -533,6 +543,9 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 	method validate_args ($opt, ArrayRef $args)
 	{
+		# make sure this directive is correct, or our wrapper scripts will be boned
+		$self->verify_vctoolsdir;
+
 		# all our args have been processed, but @ARGV still has them
 		# this causes problems if anyone tries to read from the ARGV filehandle
 		# and, since IO::Prompter will try to do just that, we better clear this out
