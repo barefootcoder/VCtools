@@ -96,7 +96,8 @@ sub handle_missing_prereqs
 		my @cmd = 'cpanm';
 		push @cmd, '-n' if $choice == 2;
 		push @cmd, '--sudo' if $choice == 3;
-		die("$ME: failure to install all necessary modules [$?]") unless system(@cmd, @mods) == 0;
+		local $@; eval { system(@cmd, @mods) };
+		die("$ME: failure to install all necessary modules [$@]") if $@;
 	}
 	else
 	{
