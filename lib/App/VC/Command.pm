@@ -162,7 +162,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 	method env_expand ($string)
 	{
-		$string =~ s{\$(\w+)}{ $ENV{$1} // '' }eg;
+		$string =~ s{\$([a-zA-Z]\w+)}{ $ENV{$1} // '' }eg;
 		return $string;
 	}
 

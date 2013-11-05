@@ -19,6 +19,17 @@ my $cmd = fake_cmd( action => $action );
 $cmd->test_execute_output("2\n", 'command with env expansion in env assignment');
 
 
+# test to make sure env expansion is sufficiently conservative
+
+$action = q{
+	TEST="fred" =~ /(.)red/ && $1
+	@ say $ENV{TEST}
+};
+
+$cmd = fake_cmd( action => $action );
+$cmd->test_execute_output("f\n", "env expansion doesn't mess with backreferences");
+
+
 # test PID expansion in shell directives
 
 my ($fh, $fname) = tempfile('tXXXX', TMPDIR => 1, UNLINK => 1);
