@@ -398,7 +398,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 				my $val = $self->evaluate_expression($directive);		# evaluate_expression handles expansions
 
 				# env assignments are always done and never fail
-				$pass = $self->handle_output(capture => command => "$lhs=$val", sub { $ENV{$lhs} = $val; 1; });
+				$pass = $self->handle_output(capture => command => "$lhs=" . ($val // ''), sub { $ENV{$lhs} = $val; 1; });
 				debuggit(3 => "set env var", $lhs, "to", $ENV{$lhs});
 			}
 

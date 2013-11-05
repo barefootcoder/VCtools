@@ -30,6 +30,17 @@ $cmd = fake_cmd( action => $action );
 $cmd->test_execute_output("f\n", "env expansion doesn't mess with backreferences");
 
 
+# make sure assigning undef to an env var doesn't blow up
+
+$action = q{
+	TEST=undef
+	@ say $ENV{TEST} // ''
+};
+
+$cmd = fake_cmd( action => $action );
+$cmd->test_execute_output("\n", "env expansion handles undef");
+
+
 # test PID expansion in shell directives
 
 my ($fh, $fname) = tempfile('tXXXX', TMPDIR => 1, UNLINK => 1);
