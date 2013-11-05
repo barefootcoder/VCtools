@@ -55,4 +55,15 @@ $cmd->test_execute_output("$$\n", 'pseudo-PID-expansion in code directive');
 is `cat $fname`, "$$\n", 'PID expansion in shell directive';
 
 
+# test env expansion in nested commands
+
+$action = q{
+	TEST=2
+	= othercmd one $TEST
+};
+
+$cmd = fake_cmd( action => $action );
+$cmd->test_execute_output("2\n", 'nested commands expand env vars');
+
+
 done_testing;

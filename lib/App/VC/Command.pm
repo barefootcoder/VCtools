@@ -361,6 +361,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 			when ('nested')
 			{
+				$directive = $self->env_expand($directive);
 				$directive = $self->info_expand($directive);
 				$pass = $self->app->nested_cmd($self, $directive);
 			}
