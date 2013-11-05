@@ -71,6 +71,20 @@ class App::VC extends MooseX::App::Cmd
 	}
 
 
+	# There doesn't seem to be any alternative to overriding this one ...
+	override _usage_text
+	{
+		my $text = super();
+		# this is a super-cheesy way to do this
+		# but we're at the app level, not the command level
+		# and this is probably called from the `commands` command
+		# which is not even an App::VC::Command subclass
+		# so we're pretty limited in what we can do here
+		$text =~ s/^(\w+)/$ENV{VCTOOLS_RUNAS}/ if $ENV{VCTOOLS_RUNAS};
+		return $text;
+	}
+
+
 	# PUBLIC METHODS
 
 	method nested_cmd (App::VC::Command $outer, $cmdline)
