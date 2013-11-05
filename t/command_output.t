@@ -10,6 +10,7 @@ my @NOW_RUNNING		= (cyan => "now running:  ");
 my @NOW_SAYING		= (cyan => "now saying:   ");
 my @WOULD_RUN		= (cyan => "would run:    ");
 my @WOULD_SAY		= (cyan => "would say:    ");
+my @WOULD_PAUSE		= (cyan => "would pause...", "\n");
 my @ABOUT_TO_RUN	= (cyan => "about to run: ");
 my @ABOUT_TO_SAY	= (cyan => "about to say: ");
 my @PROCEED			= (' ', white => "Proceed?", " [y/N]");
@@ -45,7 +46,7 @@ $cmd = fake_cmd( action => $action, pretend => 1 );
 	@NOW_RUNNING, "TEST=1\n",											# line 1
 	"true\n",															# line 2
 	'',																	# line 3
-	@WOULD_SAY, "check the ", red => 'bmoogle', "\n",					# line 4
+	@WOULD_SAY, "check the ", red => 'bmoogle', "\n", @WOULD_PAUSE,		# line 4
 	@WOULD_RUN, "echo >/dev/null\n",									# line 5
 	@WOULD_SAY, "testing ", white => 'white', "\n",						# line 6
 	@WOULD_RUN, "echo one >/dev/null\n",								# line 7

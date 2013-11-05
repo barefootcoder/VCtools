@@ -381,7 +381,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 				$msg = $self->info_expand($msg);
 
 				# confirm directive never fail either, although they might exit
-				$pass = $self->handle_output($disposition, message => $msg,
+				$pass = $self->handle_output($disposition, confirm => $msg,
 						sub { $self->confirm($self->custom_message($msg)); 1; });
 			}
 
@@ -428,7 +428,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	{
 		# have to use `our` here or else we'll get a 'variable not available' error
 		# however, the scope is restricted to the scope of these two subs, so it's not so bad
-		our $ECHO_TYPES = { command => 'run', message => 'say' };
+		our $ECHO_TYPES = { command => 'run', message => 'say', confirm => 'say' };
 		sub _build_echo_labels
 		{
 			use List::Util qw< max >;
@@ -464,6 +464,14 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			my $doit = $self->interactive ? '?' : $self->pretend ? 0 : 1;
 			$doit = 1 if $disposition eq 'capture';						# 'capture' overrides everything else
 
+			# a bit of a hack to make sure confirm directives are handled appropriately in pretend mode
+			my $add_pause = 0;
+			if ($type eq 'confirm')
+			{
+				$add_pause = 1 if $self->pretend;
+				$type = 'message';										# other than add_pause, treat just like message type
+			}
+
 			# special hack for messages in pretend mode
 			$line = $self->custom_message($line) if $type eq 'message' and not $doit;
 
@@ -481,6 +489,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 				else
 				{
 					say $msg;
+					say $self->color_msg( cyan => "would pause..." ) if $add_pause;
 				}
 			}
 			return $doit ? $action->() : 1;
