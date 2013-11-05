@@ -22,6 +22,9 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	use App::VC::InfoCache;
 
 
+	# EXTENSION OF INHERITED ATTRIBUTES
+	has '+app'		=>	( handles => [qw< running_nested >], );			# pass on a few methods to our app
+
 	# CONFIGURATION ATTRIBUTES
 	# (figured out by reading config file or from command line invocation)
 	has config		=>	(
@@ -272,7 +275,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		if ($bail)														# if something keeled over, stop right here
 		{
 			say STDERR "  <none>" if $bail == -1;
-			return 0 if $self->app->running_nested;						# if inside a nested command, just return false
+			return 0 if $self->running_nested;							# if inside a nested command, just return false
 			exit 1;														# else bomb out completely
 		}
 
@@ -524,6 +527,9 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		# this causes problems if anyone tries to read from the ARGV filehandle
 		# and, since IO::Prompter will try to do just that, we better clear this out
 		undef @ARGV;
+
+		# set up an info method so command can tell whether they're running nested or not
+		$self->set_info( running_nested => $self->running_nested ? 1 : 0 );
 
 		inner();
 	}

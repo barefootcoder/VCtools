@@ -23,7 +23,7 @@ my $config_tmpl = fake_confstring(<<END);
 	<fake>
 		<commands>
 			$cmd <<---
-				##here##
+				##action##
 			---
 		</commands>
 	</fake>
@@ -35,16 +35,20 @@ my $config_tmpl = fake_confstring(<<END);
 			@ say %arg2
 		---
 	</CustomCommand>
+	##extra##
 END
 
 
 func fake_cmd (%args)
 {
 	my $config = $config_tmpl;
-	if (exists $args{'action'})
+	foreach (qw< action extra >)
 	{
-		$config =~ s/##here##/$args{'action'}/;
-		delete $args{'action'};
+		if (exists $args{$_})
+		{
+			$config =~ s/##$_##/$args{$_}/;
+			delete $args{$_};
+		}
 	}
 
 	my $class = 'App::VC::Command';
