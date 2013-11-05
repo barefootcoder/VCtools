@@ -283,7 +283,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	{
 		local $@;
 
-		if ($line =~ /^#/)												# comment
+		if ($line =~ /^#/ or $line =~ /^$/)								# comments and blank lines
 		{
 			return 1;													# just ignore (by returning a 'pass')
 		}
