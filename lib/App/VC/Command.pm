@@ -98,6 +98,12 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 								env_prefix => 'VCTOOLS',
 							ro, isa => Bool,
 						);
+	has policy		=>	(
+							traits => [qw< Getopt ENV >],
+								documentation => "Only operate under the given policy.",
+								env_prefix => 'VCTOOLS',
+							ro, isa => Str,
+						);
 
 
 	# PSEUDO-ATTRIBUTES
@@ -545,6 +551,14 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	{
 		# make sure this directive is correct, or our wrapper scripts will be boned
 		$self->verify_vctoolsdir;
+
+		# if we're running under a policy, make sure this working copy implements that policy
+		if ($self->policy)
+		{
+			my $policy = $self->config->policy;
+			$self->fatal("This is not a working copy that uses the " . $self->policy . " policy.")
+					unless $policy and $policy eq $self->policy;
+		}
 
 		# all our args have been processed, but @ARGV still has them
 		# this causes problems if anyone tries to read from the ARGV filehandle
