@@ -42,6 +42,7 @@ class App::VC::CustomCommandSpec
 	my %VALIDATIONS =
 	(
 		project		=>	'Bool',
+		clean		=>	'Bool',
 	);
 	while (my ($att, $type) = each %VALIDATIONS)
 	{
@@ -163,7 +164,8 @@ class App::VC::CustomCommandSpec
 
 	method validate_args (App::VC::CustomCommand $cmd, ArrayRef $args)
 	{
-		$cmd->verify_project if $self->should_verify_project;
+		$cmd->verify_project	if $self->should_verify_project;
+		$cmd->verify_clean		if $self->should_verify_clean;
 
 		foreach ($self->arguments)
 		{

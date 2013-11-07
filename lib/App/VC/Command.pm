@@ -543,6 +543,12 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		$self->fatal("Can't determine project") unless $self->project;
 	}
 
+	method verify_clean
+	{
+		# could institute some sort of "auto-stash" here, optionally
+		$self->fatal("Working copy has changes; stash them first.") if $self->is_dirty;
+	}
+
 
 	# ACTION METHODS
 	# (augment these)
