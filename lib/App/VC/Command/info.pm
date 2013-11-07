@@ -5,7 +5,7 @@ use warnings FATAL => 'all';
 use MooseX::Declare;
 use Method::Signatures::Modifiers;
 
-# ABSTRACT: print VCtools info
+# ABSTRACT: print configuration info
 
 
 class App::VC::Command::info extends App::VC::Command

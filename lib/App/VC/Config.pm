@@ -18,6 +18,7 @@ class App::VC::Config
 	use Perl6::Slurp;
 	use MooseX::Has::Sugar;
 	use List::Util qw< first >;
+	use List::MoreUtils qw< uniq >;
 	use MooseX::Types::Moose qw< :all >;
 
 
@@ -234,6 +235,21 @@ class App::VC::Config
 
 		debuggit(6 => "in", wantarray, "context, sending", $value, "to deref, which is really", DUMP => [ $value ]);
 		return $self->deref($value);
+	}
+
+	# list all the commands we know about (don't forget: this is from the perspective of the config)
+	# default is to return both internal commands and custom commands
+	# but you can get either one or the other by passing appropriate args
+	method list_commands (:$internal, :$custom)
+	{
+		# passing no args is like passing all 1's
+		($internal, $custom) = (1,1) unless $internal or $custom;
+
+		my @sources;
+		push @sources, $self->_potential_command_sources('commands') if $internal;
+		push @sources, $self->_potential_command_sources('commands', custom => 1) if $custom;
+
+		return uniq map { keys %$_ } @sources;
 	}
 
 
