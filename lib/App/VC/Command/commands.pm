@@ -54,13 +54,16 @@ class App::VC::Command::commands extends App::VC::Command
 		say $out "Available commands:";
 		say $out '';
 
+		my @structural = qw< help commands info >;
+		push @structural, 'self-upgrade' unless $self->policy;
+
 		my %builtin	= map { ($_->command_names)[0] => $_->abstract } $self->app->command_plugins;
 		my %custom =
 			map { $_ => $self->config->custom_command($_)->{'Description'} // '<<no description specified>>' }
 			$self->config->list_commands( custom => 1 );
 		my %all = ( %builtin, %custom );
-		my %structural = map { $_ ~~ [qw< help commands info self-upgrade >] ? ($_ => $all{$_}) : () } keys %all;
-		my %config = map { exists $structural{$_} ? () : ($_ => $all{$_}) } keys %all;
+		my %structural = map { $_ ~~ @structural ? ($_ => $all{$_}) : () } keys %all;
+		my %config = $self->policy ? %custom : map { exists $structural{$_} ? () : ($_ => $all{$_}) } keys %all;
 
 		my $width = 2 + max map { length } keys %all;
 		printf $out "%${width}s: %s\n", $_, $structural{$_} foreach sort keys %structural;
