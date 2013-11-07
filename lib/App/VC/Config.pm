@@ -17,6 +17,7 @@ class App::VC::Config
 	use Path::Class;
 	use Perl6::Slurp;
 	use MooseX::Has::Sugar;
+	use List::Util qw< first >;
 	use MooseX::Types::Moose qw< :all >;
 
 
@@ -149,6 +150,33 @@ class App::VC::Config
 	}
 
 
+	# PRIVATE METHODS
+
+	# this is called by list_commands, action_lines, and custom_command
+	method _potential_command_sources ($type where [qw< info commands >], :$custom = 0)
+	{
+		my $vc = $self->vc;
+		my $policy = $self->policy;
+		$self->fatal("multiple sections for <$vc>.") unless ref $self->_config->{$vc} eq 'HASH';
+
+		my @sources;
+		if ($custom)
+		{
+			$type = { commands => 'CustomCommand', info => 'CustomInfo' }->{$type};
+			push @sources, $self->_config->{'Policy'}->{$policy}->{$type} if $policy;
+			push @sources, $self->_config->{$type};
+		}
+		else
+		{
+			push @sources, $self->_config->{'Policy'}->{$policy}->{$vc}->{$type} if $policy;
+			push @sources, $self->_config->{$vc}->{$type};
+		}
+
+		# filter out anything that doesn't exist in the config hash
+		return grep { defined $_ } @sources;
+	}
+
+
 	# CLASS METHODS
 
 	# this can be either a class or object method
@@ -220,14 +248,13 @@ class App::VC::Config
 
 	method action_lines ($type, $cmd)
 	{
-		$self->fatal("multiple sections for " . $self->vc) unless ref $self->_config->{$self->vc} eq 'HASH';
-		$self->fatal("unknown type in action_lines") unless exists $self->_config->{$self->vc}->{$type};
+		my @sources = $self->_potential_command_sources($type);
+		$self->fatal("Your config contains no <$type> sections.") unless @sources;
+		debuggit(6 => "potential command sources", DUMP => \@sources);
 
-		my $lines;
-		$lines //= $self->_config->{'Policy'}->{$self->policy}->{$self->vc}->{$type}->{$cmd} if $self->policy;
-		$lines //= $self->_config->{$self->vc}->{$type}->{$cmd};
+		my $lines = first { defined $_ } map { $_->{$cmd} } @sources;
 		return () unless $lines;
-		debuggit(4 => "lines is //$lines//");
+		debuggit(4 => "action lines for", $cmd, "is //$lines//");
 
 		return $self->process_command_string($lines);
 	}
@@ -235,14 +262,8 @@ class App::VC::Config
 
 	method custom_command ($cmd)
 	{
-		my ($custom, $policy);
-		if (my $policy = $self->policy)
-		{
-			$custom //= $self->_config->{'Policy'}->{$policy}->{'CustomCommand'}->{$cmd}
-					if $self->_config->{'Policy'}->{$policy}->{'CustomCommand'};
-		}
-		$custom //= $self->_config->{'CustomCommand'}->{$cmd} if $self->_config->{'CustomCommand'};
-
+		my @sources = $self->_potential_command_sources('commands', custom => 1);
+		my $custom = first { defined $_ } map { $_->{$cmd} } @sources;
 		return $custom;
 	}
 
