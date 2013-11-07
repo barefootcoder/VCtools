@@ -7,15 +7,16 @@ our @EXPORT = qw< fake_confstring fake_config >;
 
 use Test::Most;
 
-use Cwd;
+use Path::Class;
 use Method::Signatures;
 
 use App::VC::Config;
 
 
 my $config_base = <<END;
+	VCtoolsDir=@{[ file($0)->absolute->dir->parent ]}
 	<Project test>
-		ProjectDir = @{[ getcwd ]}
+		ProjectDir = @{[ dir() ]}
 		VC = fake
 		ProjectPolicy = FakePolicy
 	</Project>
