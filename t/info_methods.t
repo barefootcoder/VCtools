@@ -4,8 +4,6 @@ use File::Basename;
 use lib dirname($0);
 use Test::App::VC;
 
-use File::Temp qw< tempfile >;
-
 
 # test %running_nested
 

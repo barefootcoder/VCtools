@@ -109,5 +109,27 @@ method App::VC::Command::test_execute_output (...)
 	is $trap->stdout, $self->make_testmsg(@_), $testname;
 }
 
+sub _unexpected { fail "help text doesn't look right: " . shift; diag(@_) }
+method App::VC::Command::test_help_output ($cmd, $output)
+{
+	require App::Cmd::Command::help;
+	my ($help) = App::Cmd::Command::help->prepare( $self->app );
+	trap { $help->execute( {}, [$cmd] ) };
+
+	my $help_out = $trap->stdout;
+	# replace the leading command and any options with placeholders
+	# this makes it easier for our caller to match
+	$help_out =~ s/\A\S+/%c/ or _unexpected('command name', $help_out);
+	$help_out =~ s/\[-\?\w+\] \Q[long options...]/%o/ or _unexpected('options', $help_out);
+	# ditch help for switches
+	# it's always the same, and we don't want to have to change it here every time add a new one
+	# first switch is always -h, so look for that one
+	$help_out =~ s/^\s*-h\s+.*\z//ms or _unexpected('option help', $help_out);
+
+	is $trap->die, undef, "no die from: help $cmd";
+	is $trap->stderr, '', "no error for: help $cmd";
+	is $help_out, $self->make_testmsg($output), "proper output for help $cmd";
+}
+
 
 1;
