@@ -20,8 +20,20 @@ class CustomCommandSpec::Arg
 	method parse ($class: $spec)
 	{
 		return [] unless defined $spec;
-		my @specs = (ref $spec // '') eq 'ARRAY' ? @$spec : ($spec);
-		return [ map { $class->new( name => $_ ) } @specs ];
+		my @specs = ref $spec eq 'ARRAY' ? @$spec : ($spec);
+		foreach (@specs)
+		{
+			/^
+				(\w+)													# the name
+				(?: \s+ <(.*?)> )?										# optionally, a <description>
+				(?: \s+ @ \s+ (.*) )?									# optionally, a validation (@ code)
+			$/x
+				or die("Argument spec");								# our caller will make this prettier
+			$_ = { name => $1 };
+			$_->{description} = $2 if $2;
+			$_->{validation} = $3 if $3;
+		}
+		return [ map { $class->new($_) } @specs ];
 	}
 }
 

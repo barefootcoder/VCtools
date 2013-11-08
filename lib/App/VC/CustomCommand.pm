@@ -6,7 +6,7 @@ use MooseX::Declare;
 use Method::Signatures::Modifiers;
 
 
-class App::VC::CustomCommand extends App::VC::Command
+class App::VC::CustomCommand extends App::VC::Command with App::VC::BiColumnar
 {
 	use Debuggit;
 	use autodie qw< :all >;
@@ -61,7 +61,19 @@ class App::VC::CustomCommand extends App::VC::Command
 
 	method description
 	{
-		return	$self->info_expand($self->spec->description);
+		my $spec = $self->spec;
+		my $desc = $spec->description;
+		my @args = $spec->arguments;
+		if (@args = $spec->arguments and grep { $_->description } @args)
+		{
+			state $xform = sub { "<$_[0]> " };
+			$desc .= $self->format_bicol(
+				[ map { $xform->( $_->name ) } @args ],
+				{ map { $xform->( $_->name ) => $_->description // '<<no description specified>>' } @args }
+			);
+			$desc .= "\n";
+		}
+		return $self->info_expand($desc);
 	}
 
 

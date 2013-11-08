@@ -116,6 +116,9 @@ method App::VC::Command::test_help_output ($cmd, $output)
 	my ($help) = App::Cmd::Command::help->prepare( $self->app );
 	trap { $help->execute( {}, [$cmd] ) };
 
+	is $trap->die, undef, "no die from: help $cmd";
+	is $trap->stderr, '', "no error for: help $cmd";
+
 	my $help_out = $trap->stdout;
 	# replace the leading command and any options with placeholders
 	# this makes it easier for our caller to match
@@ -124,10 +127,7 @@ method App::VC::Command::test_help_output ($cmd, $output)
 	# ditch help for switches
 	# it's always the same, and we don't want to have to change it here every time add a new one
 	# first switch is always -h, so look for that one
-	$help_out =~ s/^\s*-h\s+.*\z//ms or _unexpected('option help', $help_out);
-
-	is $trap->die, undef, "no die from: help $cmd";
-	is $trap->stderr, '', "no error for: help $cmd";
+	$help_out =~ s/^[ \t]*-h\s+.*\z//ms or _unexpected('option help', $help_out);
 	is $help_out, $self->make_testmsg($output), "proper output for help $cmd";
 }
 

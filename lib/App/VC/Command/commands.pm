@@ -6,7 +6,7 @@ use MooseX::Declare;
 use Method::Signatures::Modifiers;
 
 
-class App::VC::Command::commands extends App::VC::Command
+class App::VC::Command::commands extends App::VC::Command with App::VC::BiColumnar
 {
 	use Debuggit;
 	use autodie qw< :all >;
@@ -61,14 +61,10 @@ class App::VC::Command::commands extends App::VC::Command
 		my %custom =
 			map { $_ => $self->config->custom_command($_)->{'Description'} // '<<no description specified>>' }
 			$self->config->list_commands( custom => 1 );
-		my %all = ( %builtin, %custom );
-		my %structural = map { $_ ~~ @structural ? ($_ => $all{$_}) : () } keys %all;
-		my %config = $self->policy ? %custom : map { exists $structural{$_} ? () : ($_ => $all{$_}) } keys %all;
+		my $all = { %builtin, %custom };
+		my @config = $self->policy ? keys %custom : grep { not $_ ~~ @structural } keys %$all;
 
-		my $width = 2 + max map { length } keys %all;
-		printf $out "%${width}s: %s\n", $_, $structural{$_} foreach sort keys %structural;
-		say $out '';
-		printf $out "%${width}s: %s\n", $_, $config{$_} foreach sort keys %config;
+		say $out $self->format_bicol( [ (sort @structural), undef, (sort @config) ], $all );
 	}
 }
 
