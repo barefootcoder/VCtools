@@ -6,6 +6,26 @@ use MooseX::Declare;
 use Method::Signatures::Modifiers;
 
 
+# a little class-let to hold custom args
+class CustomCommandSpec::Arg
+{
+	use autodie qw< :all >;
+	use MooseX::Has::Sugar;
+	use MooseX::Types::Moose qw< :all >;
+
+	has name			=>	( ro, isa => Str, required, );
+	has description		=>	( ro, isa => Str, );
+	has validation		=>	( ro, isa => Str, );
+
+	method parse ($class: $spec)
+	{
+		return [] unless defined $spec;
+		my @specs = (ref $spec // '') eq 'ARRAY' ? @$spec : ($spec);
+		return [ map { $class->new( name => $_ ) } @specs ];
+	}
+}
+
+
 class App::VC::CustomCommandSpec
 {
 	use Debuggit;
@@ -27,7 +47,7 @@ class App::VC::CustomCommandSpec
 	has _arguments		=>	(
 								traits => [qw< Array >],
 									handles => { arguments => 'elements' },
-								ro, isa => ArrayRef, required, init_arg => 'arguments',
+								ro, isa => 'ArrayRef[CustomCommandSpec::Arg]', required, init_arg => 'arguments',
 							);
 
 	has min_files		=>	( ro, isa => Int, required, );
@@ -71,7 +91,7 @@ class App::VC::CustomCommandSpec
 				$files[-1] .= ']'
 			}
 		}
-		my @args = map { "<$_>" } $self->arguments;
+		my @args = map { "<$_>" } map { $_->name } $self->arguments;
 		return join(' ', '%c', $self->command, '%o', @args, @files);
 	}
 
@@ -114,22 +134,8 @@ class App::VC::CustomCommandSpec
 		}
 
 		# arguments
-		if (not exists $spec->{'Argument'})
-		{
-			$args->{'arguments'} = [];
-		}
-		elsif (!ref $spec->{'Argument'})								# it's a scalar: only one argument
-		{
-			$args->{'arguments'} = [ $spec->{'Argument'} ];
-		}
-		elsif (ref $spec->{'Argument'} eq 'ARRAY')						# multiple arguments in an arrayref
-		{
-			$args->{'arguments'} = $spec->{'Argument'};
-		}
-		else															# don't know WTF it is ...
-		{
-			$fatal_error //= "Argument spec for CustomCommand $command";
-		}
+		# all the hard work now done by CustomCommandSpec::Arg
+		$args->{'arguments'} = CustomCommandSpec::Arg->parse( $spec->{'Argument'} );
 
 		# files
 		if (not exists $spec->{'Files'})								# command takes no files at all
@@ -171,7 +177,7 @@ class App::VC::CustomCommandSpec
 		{
 			$cmd->fatal("Did not receive $_ argument.") unless @$args;
 
-			$cmd->set_info($_ => shift @$args);
+			$cmd->set_info($_->name => shift @$args);
 		}
 
 		if (@$args < $self->min_files or $self->max_files != -1 && @$args > $self->max_files)
