@@ -38,11 +38,11 @@ class App::VC::InfoCache
 
 	# BUILDERS (sort of)
 
-	method _fetch_info ($att, $type)
+	method _fetch_info ($method, $type)
 	{
 		use List::Util qw< reduce >;
 
-		my @lines = $self->config->action_lines(info => $att);
+		my @lines = ref $method eq 'ARRAY' ? @$method : $self->config->action_lines(info => $method);
 		given ($type)
 		{
 			when ('Str')
@@ -94,15 +94,26 @@ class App::VC::InfoCache
 			}
 			else
 			{
-				# perhaps it's a directive
-				my $val = $self->cmd->directive($key);
-				if (defined $val)
+				# check to see if it's a custom info method
+				my $custom = $self->config->custom_info($key);
+				if (defined $custom)
 				{
-					$self->_info->{$key} = $val;
+					my $commands = [ $self->config->process_command_string( $custom->{'action'} ) ];
+					$self->_info->{$key} = $self->_fetch_info($commands, $custom->{'Type'} // 'Str');
 				}
 				else
 				{
-					$self->cmd->fatal("Don't know how to expand %$key");
+					# perhaps it's a directive
+					my $val = $self->cmd->directive($key);
+					if (defined $val)
+					{
+						$self->_info->{$key} = $val;
+					}
+					else
+					{
+						# oh well ... out of ideas ...
+						$self->cmd->fatal("Don't know how to expand %$key");
+					}
 				}
 			}
 		}

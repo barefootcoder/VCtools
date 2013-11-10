@@ -283,6 +283,13 @@ class App::VC::Config
 		return $custom;
 	}
 
+	method custom_info ($method)
+	{
+		my @sources = $self->_potential_command_sources('info', custom => 1);
+		my $custom = first { defined $_ } map { $_->{$method} } @sources;
+		return $custom;
+	}
+
 
 	# USER MESSAGING METHODS
 	# we pass these off to our command, if we have one (if not, we handle them fairly crudely)
