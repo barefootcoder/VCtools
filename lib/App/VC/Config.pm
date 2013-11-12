@@ -15,7 +15,6 @@ class App::VC::Config
 
 	use Const::Fast;
 	use Path::Class;
-	use Perl6::Slurp;
 	use MooseX::Has::Sugar;
 	use List::Util qw< first >;
 	use List::MoreUtils qw< uniq >;
@@ -76,7 +75,7 @@ class App::VC::Config
 		{
 			try
 			{
-				$raw_config = slurp "$config_file";							# quotes to remove Path::Class magic
+				$raw_config = $config_file->slurp;
 			}
 			catch ($e where {/Can't open '$config_file'/})
 			{

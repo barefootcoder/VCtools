@@ -1,45 +1,62 @@
 #! /usr/bin/env perl
 
-use strict;									# using this instead of 5.012 so we can do a better error message (below)
-use autodie;								# not doing :all here so we don't die if missing IPC::System::Simple
-use warnings;
-
-
-use Cwd;									# this has been core forever, so safe to include
-use File::Basename;							# ditto
-my $ME = basename $0;
-
-
 # ##################################################################################################
 # This program finds and installs all our prerequisites.  Because of chicken-and-egg issues, it has
 # to run without the help of any non-core modules itself, such as Path::Class, File::Next,
 # Perl6::Slurp, IO::Prompter, etc etc.  So this is a bit crude, but it should always work.
 # ##################################################################################################
 
+use strict;									# using this instead of 5.012 so we can do a better error message (below)
+use autodie;								# not doing :all here so we don't die if missing IPC::System::Simple
+use warnings;
+
+
+# this section is reproduced from bin/vc
+# for the same reasons it was copied to bin/vctools-create-config
+# two differences here:
+#	#	we omit the local::lib stuff, since our job is to set that up
+#		(possibly for the first time ever)
+#	#	we need to use $base_dir later in the script, so we declare it outside the BEGIN
+my $base_dir;
+BEGIN
+{
+	use Cwd;
+	use File::Spec;
+	use File::Basename;
+
+	$base_dir = dirname dirname Cwd::realpath($0);
+	my $lib_dir = File::Spec->catfile( $base_dir, 'lib' );
+
+	unshift @INC, $lib_dir;
+}
+
+my $ME = basename $0;
+
+use App::VC::ModuleList;
+
+
+######################
+# MAIN
+######################
 
 # first thing, make sure we're using a moderately modern perl
 verify_perl_version();
 
-# next thing, build our prereq list
+# now make sure we can find cpanm
+# (won't get far without that
+verify_cpanm();
 
-# we can ignore the standard prefix ones
-my %standard = ( '5.012' => 1, autodie => 1, strict => 1, warnings => 1 );
-# autodie is in core, but when you say `autodie qw< :all >`, it wants this IPC module,
-# which isn't in core, so we'll seed our list with it
-my $modules = { 'IPC::System::Simple' => 1 };
+# last check: make sure extlib/ is there
+verify_extlib_dir();
 
-my $base_dir = dirname dirname Cwd::realpath($0);
+# now just let cpanm go to town
+print "\nInstalling necessary CPAN modules LOCALLY (not messing with your system):\n\n";
+install_all_modules($base_dir);
 
-# recursively go through dirs, reading modules out of all files
-cull_prereqs($modules, $_) foreach ("$base_dir/bin", "$base_dir/lib");
 
-# next thing, try to load them all and see if any fail
-my @failed_mods = grep { !eval "require $_" } keys %$modules;
-
-# do something about the ones that failed
-# (if the problem is not corrected, this will never return)
-handle_missing_prereqs(@failed_mods) if @failed_mods;
-
+######################
+# SUBS
+######################
 
 sub verify_perl_version
 {
@@ -52,58 +69,23 @@ sub verify_perl_version
 }
 
 
-sub cull_prereqs
+sub verify_cpanm
 {
-	my ($modules, $file) = @_;
-
-	if (-d $file)
+	unless (`cpanm --version`)
 	{
-		cull_prereqs($modules, $_) foreach glob("$file/*");
-	}
-	else
-	{
-		# this is cribbed from Module::Runtime
-		my $module_name = qr/([A-Z_a-z][0-9A-Z_a-z]*(?:::[0-9A-Z_a-z]+)*)/o;
-
-		no warnings 'once';												# some bug that can't tell IN is used properly
-		open(IN, $file);
-		$modules->{$_} = 1 foreach
-				grep { ! /^App::VC\b/ }									# this is our own stuff
-				grep { !exists $standard{$_} }							# these will be installed already
-				map { /^\s*use\s+$module_name/ ? $1 : /^\s*class\s+$module_name\s+extends\s+$module_name/ ? $2 : () }
-				<IN>;
-		close(IN);
+		print STDERR "\n$ME: can't locate `cpan' in your path.  Please install it.\n";
+		exit 1;
 	}
 }
 
 
-sub handle_missing_prereqs
+sub verify_extlib_dir
 {
-	my @mods = @_;
-
-	print STDERR "\n$ME: You need to install some prerequisite Perl modules.\n";
-	print STDERR "We have three choices as to how to handle that:\n\n";
-	print STDERR "1. I can try to install them for you locally (using `cpanm`).\n";
-	print STDERR "2. I can try to install them for you quickly (using `cpanm -n`).\n";
-	print STDERR "3. I can try to install them to the sytem Perl (using `cpanm --sudo`).\n";
-	print STDERR "4. I can just give you the list and let you handle it yourself.\n\n";
-	print STDERR "How would you like to proceed?  (enter 1, 2, 3, or 4) ";
-	my $choice = <STDIN>; chomp $choice;
-	die("$ME: not a valid number; try again") unless $choice =~ /^\d$/ and $choice >= 1 and $choice <= 4;
-
-	if ($choice < 4)
+	unless (-d File::Spec->catfile($base_dir, 'extlib'))
 	{
-		my @cmd = 'cpanm';
-		push @cmd, '-n' if $choice == 2;
-		push @cmd, '--sudo' if $choice == 3;
-		local $@; eval { system(@cmd, @mods) };
-		die("$ME: failure to install all necessary modules [$@]") if $@;
-	}
-	else
-	{
-		print STDERR "Here's what you need to install:\n\n";
-		print STDERR "  $_\n" foreach sort @mods;
-		print STDERR "\nGood luck.\n\n";
+		print STDERR "\n$ME: can't locate my extlib/ directory.  Either you didn't get the full\n";
+		print STDERR "package, or perhaps you moved me to a different directory (don't do that).\n";
+		print STDERR "Either way, I can't continue.  Sorry.\n\n";
 		exit 1;
 	}
 }

@@ -5,6 +5,31 @@ use autodie;								# not doing :all here so we don't die if missing IPC::System
 use warnings;
 
 
+# determine proper @INC using only core modules
+# once we do that, we can proceed to load other modules
+BEGIN
+{
+	use Cwd;
+	use File::Spec;
+	use File::Basename;
+
+	# turn /something/something/bin/thisscript into /something/something
+	# (have to make sure we resolve symlinks and relative paths too)
+	my $base_dir = dirname dirname Cwd::realpath($0);
+	my $extlib_dir = File::Spec->catfile( $base_dir, 'extlib' );
+	my $lib_dir = File::Spec->catfile( $base_dir, 'lib' );
+
+	# set up local::lib for our prereqs
+	# can't use `use` here because we need to refer to the vars above
+	require local::lib;
+	local::lib->import($extlib_dir);
+
+	# now jam our lib/ into @INC
+	# (not using `use lib` for same reasons as above)
+	unshift @INC, $lib_dir;
+}
+
+
 # We're going to load modules very cautiously so that, if anything is missing, we can catch that and
 # possibly do something about it.  This is handled by the check_prereqs() function below, which is
 # mostly a moderately thin wrapper around bin/vctools-prereq-verify (which is just a separate
@@ -17,15 +42,6 @@ eval { require Path::Class } ? Path::Class->import : check_prereqs();
 eval { require Debuggit } ? Debuggit->import( DataPrinter => 1, DEBUG => 1 ) : check_prereqs();
 
 
-# figure out where we came from
-my $me = file($0)->absolute->resolve;
-# here we're turning /something/something/bin/thisscript into /something/something/lib
-my $lib_dir = $me->dir->parent->subdir('lib');
-# now jam said lib into @INC
-# (no, we can't use `use lib` here, unless we want to put all the above into a BEGIN block)
-# (and that would screw up all our prereq checking)
-unshift @INC, "$lib_dir";
-
 # now we can go get the app class
 check_prereqs() unless eval { require App::VC };
 
@@ -37,10 +53,6 @@ check_prereqs() unless eval { App::VC->run; 1; };
 
 sub check_prereqs
 {
-	use Cwd;								# in core forever
-	use File::Spec;							# this is in core since 5.004, so should be safe to use
-	use File::Basename;						# this has been core even longer than that (also safe)
-
 	# make sure this is something we can do something about
 	die unless $@ =~ /Can't locate .* in \@INC/ or $@ =~ /Perl .* required/;
 

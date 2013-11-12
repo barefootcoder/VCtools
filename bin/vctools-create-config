@@ -4,20 +4,46 @@ use 5.012;
 use autodie qw< :all >;
 use warnings FATAL => 'all';
 
+
+# this section is reproduced from bin/vc
+# due to chicken-and-egg issues, we can't really put this in a module
+# you know, on account of this is how we _find_ the modules
+BEGIN
+{
+	use Cwd;
+	use File::Spec;
+	use File::Basename;
+
+	my $base_dir = dirname dirname Cwd::realpath($0);
+	my $extlib_dir = File::Spec->catfile( $base_dir, 'extlib' );
+	my $lib_dir = File::Spec->catfile( $base_dir, 'lib' );
+
+	require local::lib;
+	local::lib->import($extlib_dir);
+
+	unshift @INC, $lib_dir;
+}
+
+
 use Debuggit DataPrinter => 1, DEBUG => 1;
 
 use Path::Class;
 use Tie::IxHash;
-use IO::Prompter;
 use File::HomeDir;
 use Method::Signatures;
 use List::Util qw< first >;
 
+use App::VC::Config;
 
-# this line is repeated from lib/App/VC/Config.pm
-# however, in order not to repeat this one line, I'd have to repeat the 3 lines from bin/vc that set
-# up lib/ in @INC, and then include a module, so I think this is better, overall
-my $config_file = file(File::HomeDir->my_home, '.vctools', 'vctools.conf');
+# for some reason, need to load this one last or it causes a deep recursion error
+use IO::Prompter;
+
+
+######################
+# MAIN
+######################
+
+my $config_file = App::VC::Config->config_file('vctools.conf');
 
 say '';
 
