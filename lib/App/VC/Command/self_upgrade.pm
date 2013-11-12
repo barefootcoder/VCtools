@@ -13,6 +13,7 @@ class App::VC::Command::self_upgrade extends App::VC::Command
 	use autodie qw< :all >;
 	use experimental 'smartmatch';
 
+	use TryCatch;
 	use Path::Class;
 	use MooseX::Has::Sugar;
 	use MooseX::Types::Moose qw< :all >;
@@ -36,14 +37,33 @@ class App::VC::Command::self_upgrade extends App::VC::Command
 	{
 	}
 
-	augment execute (...)
+	method execute (...)
 	{
-		print $self->color_msg(cyan => "Upgrading VCtools: ");
+		say STDERR $self->color_msg(cyan => "Upgrading VCtools:");
 		chdir $self->directive("VCtoolsDir");
-		system('git', 'pull');
+		try
+		{
+			system('git', 'pull');
+		}
+		catch ($e)
+		{
+			$self->fatal("Attempt to upgrade failed: $@");
+		}
 		# need something which is the opposite of slurp here ...
-		open(OUT, '>', App::VC::Config->config_file('last-updated')) and print OUT time() and close(OUT);
-		say $self->color_msg(green => "Complete.");
+		# (I'm tempted to create a func called "puke" ...)
+		open(OUT, '>', App::VC::Config->config_file('last-updated.vctools')) and print OUT time() and close(OUT);
+
+		my $extlib_updated = App::VC::Config->config_file('last-updated.extlib');
+		if ( file('extlib', 'update-request')->slurp > $extlib_updated->slurp )
+		{
+			say STDERR $self->color_msg(cyan => "Upgrading extlib:");
+			say STDERR "Installing necessary CPAN modules locally ",
+					"(", $self->color_msg(cyan => 'not'), " messing with your system) ...";
+			# here's our puke() again ...
+			open(OUT, '>', $extlib_updated) and print OUT time() and close(OUT);
+		}
+
+		say STDERR $self->color_msg(green => "Complete.");
 	}
 }
 
