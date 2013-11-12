@@ -67,7 +67,7 @@ sub check_prereqs
 		}
 		else
 		{
-			print STDERR "which is not there.  Looks like you either didn't get the full package,\n";
+			print STDERR "which is not there.  Looks like either you didn't get the full package,\n";
 			print STDERR "or perhaps you moved me to a different directory (don't do that).\n";
 		}
 		print STDERR "Either way, I can't continue.  Sorry.\n\n";
