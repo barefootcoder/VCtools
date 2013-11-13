@@ -54,7 +54,7 @@ class App::VC::Command::self_upgrade extends App::VC::Command
 		open(OUT, '>', App::VC::Config->config_file('last-updated.vctools')) and print OUT time() and close(OUT);
 
 		my $extlib_updated = App::VC::Config->config_file('last-updated.extlib');
-		if ( file('extlib', 'update-request')->slurp > $extlib_updated->slurp )
+		if ( file('extlib', 'update-request')->slurp > (eval { $extlib_updated->slurp } // 0) )
 		{
 			say STDERR $self->color_msg(cyan => "Upgrading extlib:");
 			say STDERR "Installing necessary CPAN modules locally ",
