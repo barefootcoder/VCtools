@@ -27,12 +27,14 @@ class App::VC::InfoCache
 	# (user-defined by VC-specific sections in config file)
 	my %INFO_ATTRIBUTES =
 	(
-		user		=>	'Str',
-		status		=>	'Str',
-		is_dirty	=>	'Bool',
-		has_staged	=>	'Bool',
-		mod_files	=>	'ArrayRef',
-		cur_branch	=>	'Str',
+		user			=>	'Str',
+		status			=>	'Str',
+		is_dirty		=>	'Bool',
+		has_staged		=>	'Bool',
+		mod_files		=>	'ArrayRef',
+		cur_branch		=>	'Str',
+		branches		=>	'ArrayRef',
+		remote_branches	=>	'ArrayRef',
 	);
 
 
