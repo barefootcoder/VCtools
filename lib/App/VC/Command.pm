@@ -175,12 +175,19 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		return $string;
 	}
 
+		# this is only called by info_expand
+		# (could make it an anonymous method in a state var, I suppose ...)
+		method _code_info_expand ($method)
+		{
+			my $val = $self->get_info($method);
+			return ref $val eq 'ARRAY' ? '(my @' . "$method=(" . join(',', map { "q{$_}" } @$val) . '))' : "q{$val}";
+		}
 	method info_expand ($string, :$code = 0)
 	{
 		debuggit(4 => "going to expand string", $string);
 		if ($code)
 		{
-			$string =~ s/%(\w+)/'q{' . join(' ', $self->get_info($1)) . '}'/eg;
+			$string =~ s/%(\w+)/ $self->_code_info_expand($1) /eg;
 		}
 		else
 		{
@@ -511,13 +518,14 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	method evaluate_code ($code)
 	{
 		$code = $self->info_expand($code, code => 1);					# do info expansion for all code (incl expressions)
+		say STDERR "# code after expansion: ", $self->color_msg(white => $code) if $self->debug;
 
 		local $@;
 		my $retval = eval $code;
 		if ($@)
 		{
 			my $error = $@;
-			say "original code: ", $self->color_msg( white => $code );
+			say STDERR "expanded code: ", $self->color_msg( white => $code );
 			$self->fatal("code fails compilation: $error");
 		}
 
