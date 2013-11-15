@@ -67,7 +67,9 @@ A definition of a custom command looks like this:
 		---
 	</CustomCommand>
 
-The `Argument` directive may be repeated multiple times.  The `Verify` directive may be repeated multiple times; it currently only knows two modes:
+The `Argument` directive may be repeated multiple times.  Arguments are available as info methods: `Argument branch_name` would create `%branch_name` available to all action directives in that command.
+
+The `Verify` directive may be repeated multiple times; it currently only knows two modes:
 
 * `verify project` : make sure the user is in a directory that VCtools recognizes
 * `verify clean` : make sure the working copy is in a clean state (no uncommited changes)
