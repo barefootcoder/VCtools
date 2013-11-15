@@ -35,6 +35,7 @@ class App::VC::InfoCache
 		cur_branch		=>	'Str',
 		branches		=>	'ArrayRef',
 		remote_branches	=>	'ArrayRef',
+		tags			=>	'ArrayRef',
 	);
 
 
