@@ -43,6 +43,11 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 							traits => [qw< NoGetopt >],
 							ro, isa => Maybe[Str], lazy, default => method { ($self->command_names)[0] },
 						);
+	# this one will be overridden in we're running nested
+	has running_command	=>	(
+							traits => [qw< NoGetopt >],
+							ro, lazy, default => method { $self->command },
+						);
 	has _info		=>	(
 							traits => [qw< NoGetopt >],
 							ro, isa => 'App::VC::InfoCache',
@@ -617,12 +622,12 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 	method warning ($msg)
 	{
-		say $self->me . ' ' . $self->command . ': ' . $self->color_msg(yellow => $msg);
+		say $self->me . ' ' . $self->running_command . ': ' . $self->color_msg(yellow => $msg);
 	}
 
 	method fatal ($msg)
 	{
-		say STDERR $self->me . ' ' . $self->command . ': ' . $self->color_msg(red => $msg);
+		say STDERR $self->me . ' ' . $self->running_command . ': ' . $self->color_msg(red => $msg);
 		exit 1;
 	}
 
