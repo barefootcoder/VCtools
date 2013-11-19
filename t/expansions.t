@@ -30,6 +30,16 @@ $cmd = fake_cmd( action => $action );
 $cmd->test_execute_output("f\n", "env expansion doesn't mess with backreferences");
 
 
+# test to make sure info expansion is sufficiently conservative
+
+$action = q{
+	@ printf('%s', "fred")
+};
+
+$cmd = fake_cmd( action => $action );
+$cmd->test_execute_output("fred", "info expansion doesn't mess with printf specs");
+
+
 # make sure assigning undef to an env var doesn't blow up
 
 $action = q{

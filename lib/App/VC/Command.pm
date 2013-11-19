@@ -187,7 +187,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		debuggit(4 => "going to expand string", $string);
 		if ($code)
 		{
-			$string =~ s/%(\w+)/ $self->_code_info_expand($1) /eg;
+			$string =~ s/%([a-zA-Z]\w+)/ $self->_code_info_expand($1) /eg;
 		}
 		else
 		{
