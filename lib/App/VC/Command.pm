@@ -190,14 +190,16 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	method info_expand ($string, :$code = 0)
 	{
 		debuggit(4 => "going to expand string", $string);
+		my $info_method = qr/(?<!\\)%([a-zA-Z]\w+)/;					# ie, not following a backslash
 		if ($code)
 		{
-			$string =~ s/%([a-zA-Z]\w+)/ $self->_code_info_expand($1) /eg;
+			$string =~ s/$info_method/ $self->_code_info_expand($1) /eg;
 		}
 		else
 		{
-			$string =~ s/%(\w+)/join(' ', $self->get_info($1))/eg;
+			$string =~ s/$info_method/join(' ', $self->get_info($1))/eg;
 		}
+		$string =~ s/\\%/%/g;											# get rid of any \'s in escaped %'s
 		return $string;
 	}
 
@@ -516,13 +518,15 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 	method evaluate_expression ($expr)
 	{
-		$expr = $self->env_expand($expr);								# we do evironment expansion on expressions
-		return $self->evaluate_code($expr);								# this will handle info expansions
+		# evaluate code will automatically handle info expansion
+		# but it will only do env expansion if we specifically request it
+		return $self->evaluate_code($expr, env_expand => 1);
 	}
 
-	method evaluate_code ($code)
+	method evaluate_code ($code, :$env_expand = 0)
 	{
 		$code = $self->info_expand($code, code => 1);					# do info expansion for all code (incl expressions)
+		$code = $self->env_expand($code) if $env_expand;				# evironment expansion only if requested
 		say STDERR "# code after expansion: ", $self->color_msg(white => $code) if $self->debug;
 
 		local $@;

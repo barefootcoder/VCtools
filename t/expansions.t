@@ -4,6 +4,7 @@ use File::Basename;
 use lib dirname($0);
 use Test::App::VC;
 
+use Path::Class;
 use File::Temp qw< tempfile >;
 
 
@@ -74,6 +75,27 @@ $action = q{
 
 $cmd = fake_cmd( action => $action );
 $cmd->test_execute_output("2\n", 'nested commands expand env vars');
+
+
+# make sure we can defeat info expansion with a backslash
+# testing in both shell and code directives
+# testing in a conditional, which also verifies proper order of expansion: info first, then env
+
+my $tmpfile = File::Temp->new;
+say $tmpfile '%one';
+close $tmpfile;
+
+$action = q{
+	OUT="\%one"
+	@ say "\%one"
+	bash -c '[[ $(cat {}) == $OUT ]]'
+	"$OUT" eq '\%one' -> @ say "yes"
+};
+$action =~ s/\{}/$tmpfile/;
+
+$cmd = fake_cmd( action => $action );
+$cmd->test_execute_output("%one\nyes\n", "info expansion doesn't happen after backslash")
+		or diag "file contains ", file($tmpfile)->slurp;
 
 
 done_testing;
