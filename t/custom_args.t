@@ -24,4 +24,14 @@ my $cmd = fake_cmd( action => $action, extra => $extra );
 $cmd->test_execute_output("1\n", 'simple 1 arg works');
 
 
+# verify error when you don't _get_ that arg
+
+$action = q{
+	= custtest
+};
+
+$cmd = fake_cmd( action => $action, extra => $extra );
+$cmd->test_execute_output("", { fatal => "Did not receive argument: one" }, 'missing arg reports correct error');
+
+
 done_testing;

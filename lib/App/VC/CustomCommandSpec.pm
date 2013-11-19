@@ -187,7 +187,7 @@ class App::VC::CustomCommandSpec
 
 		foreach ($self->arguments)
 		{
-			$cmd->fatal("Did not receive $_ argument.") unless @$args;
+			$cmd->fatal("Did not receive argument: " . $_->name) unless @$args;
 
 			$cmd->set_info($_->name => shift @$args);
 		}
