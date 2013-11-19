@@ -27,6 +27,9 @@ my $action = q{
 	= othercmd one two
 };
 
+
+# all directives (except fatal) in normal mode
+
 set_prompt_input( 'y' );
 my $cmd = fake_cmd( action => $action );
 my @output = (
@@ -39,6 +42,20 @@ my @output = (
 	"two\n",															# line 7
 );
 $cmd->test_execute_output(@output, 'simple command (all directive types except fatal)');
+
+# what if we say "no" to the confirmation?
+set_prompt_input( 'n' );
+$cmd = fake_cmd( action => $action );
+@output = (
+	'',																	# line 1
+	"true\n",															# line 2
+	'',																	# line 3
+	"check the ", red => 'bmoogle', @PROCEED,							# line 4
+);
+$cmd->test_execute_output(@output, {exit_okay => 1}, 'simple command (saying "no" to confirmation)');
+
+
+# all directives (except fatal) in pretend mode
 
 set_prompt_input( 'y' );
 $cmd = fake_cmd( action => $action, pretend => 1 );
@@ -53,6 +70,9 @@ $cmd = fake_cmd( action => $action, pretend => 1 );
 	"two\n",															# line 7 (also)
 );
 $cmd->test_execute_output(@output, 'command with --pretend');
+
+
+# all directives (except fatal) in echo mode
 
 set_prompt_input( 'y' );
 $cmd = fake_cmd( action => $action, echo => 1 );
@@ -69,6 +89,9 @@ $cmd = fake_cmd( action => $action, echo => 1 );
 	"two\n",															# line 7 (also)
 );
 $cmd->test_execute_output(@output, 'command with --echo');
+
+
+# all directives (except fatal) in interactive mode
 
 # test with all yeses
 $cmd = fake_cmd( action => $action, interactive => 1 );
