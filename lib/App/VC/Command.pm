@@ -85,7 +85,8 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	has pretend		=>	(
 							traits => [qw< Getopt ENV >],
 								documentation => "Don't actually run any destructive commands; just print them.",
-									cmd_aliases => 'p',
+									cmd_flag => 'noaction',
+									cmd_aliases => [qw< dry-run pretend n p >],
 								env_prefix => 'VCTOOLS',
 							ro, isa => Bool,
 						);
