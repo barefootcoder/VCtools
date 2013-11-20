@@ -91,7 +91,7 @@ class App::VC extends MooseX::App::Cmd
 	{
 		local @ARGV = split(/\s+/, $cmdline);							# might need a more sophisticated split eventually
 		my $passthrough = { map { $_ => $outer->$_ }
-				qw< me config color no_color pretend echo interactive running_command > };
+				qw< me config debug color no_color pretend echo interactive running_command > };
 		$self->_setup_for_nested($passthrough);
 
 		my $success = $self->run;
