@@ -50,6 +50,8 @@ sub install_all_modules
 	die("don't have a local::lib to install to") unless -d $extlib;
 
 	system( qw< cpanm -n -q -L >, $extlib, get_all_modules($base_dir) );
+	# we really have to fight for this not to be installed
+	system("echo y | cpanm -q -L $extlib -U Carp") if -e File::Spec->catfile($extlib, 'lib', 'perl5', 'Carp.pm');
 }
 
 

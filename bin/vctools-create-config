@@ -197,9 +197,9 @@ unless ($skip_questions)
 say "Here is the config file we're going to create:\n";
 my $config = create_config($wdirs, $vc_list, $projects);
 print $config;
-unless (prompt -y1, -default => 'y', "\nDoes this look okay?")
+unless (prompt -y1, -default => 'y', "\nDoes this look okay? [Y/n] ")
 {
-	say STDERR "$0: config NOT written; try again later.";
+	say STDERR "$0: config NOT written; create it manually or try again later.";
 	exit 1;
 }
 
