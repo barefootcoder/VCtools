@@ -403,7 +403,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 				# confirm directive never fail either, although they might exit
 				$pass = $self->handle_output($disposition, confirm => $msg,
-						sub { exit unless $self->confirm($self->custom_message($msg)); 1; });
+						sub { die("user chose not to proceed") unless $self->confirm($self->custom_message($msg)); 1; });
 			}
 
 			when ('fatal')
