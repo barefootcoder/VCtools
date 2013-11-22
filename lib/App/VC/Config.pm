@@ -157,7 +157,8 @@ class App::VC::Config
 	{
 		my $vc = $self->vc;
 		my $policy = $self->policy;
-		$self->fatal("multiple sections for <$vc>.") unless ref $self->_config->{$vc} eq 'HASH';
+		$self->fatal("you have no <$vc> section(s) defined!") unless defined $self->_config->{$vc};
+		$self->fatal("<$vc> section defined incorrectly.") unless ref $self->_config->{$vc} eq 'HASH';
 
 		my @sources;
 		if ($custom)
