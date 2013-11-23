@@ -1,9 +1,9 @@
 This is a super-brief guide to writing action directives for VCtools.  More complete documentation will be coming soon.
 
-Types of "Scriptlets"
-=====================
+Types of Jobs
+=============
 
-A VCtools config file can contain two different sections that will be executed.  Each line in such a section is called an "action directive."
+A VCtools config file can contain two different type of jobs (sections that will be executed).  Each line in a job is called an "action directive" or just an "action."
 
 Info Methods
 ------------
@@ -20,7 +20,7 @@ The actions of an info method are executed and its output is gathered.  That out
 * %remote_branches
 * %tags
 
-There are also some other things which act like info methods:
+There are also some other internal things which act like info methods:
 
 * %running_nested
 * %project
@@ -28,7 +28,9 @@ There are also some other things which act like info methods:
 * %vc
 * %Mainline
 
-A definition of an internal info method looks like this:
+Also arguments to commands act like info methods (e.g. `%files`).
+
+The definition of an internal info method looks like this:
 
 	<info>
 		status <<---
@@ -53,7 +55,7 @@ Commands
 
 The actions of a command are executed and its output goes to the user.  If any action fails, the command stops, the user is informed, and also given a list of any remaining commands so that they can do manual recovery.
 
-A definition of a custom command looks like this:
+The definition of a custom command looks like this:
 
 	<CustomCommand feature-start>
 		Description = This command creates a new feature branch
@@ -126,7 +128,7 @@ Confirmation Directives
 
 	? This could be dangerous.
 
-Starts with `?` followed by whitespace.  Prints a message to the user then asks if they wish to proceed.  If they do not answer yes, the command exits.
+Starts with `?` followed by whitespace.  Prints a message to the user then asks if they wish to proceed.  If they do not answer yes, the action fails and the command exits.
 
 Fatal Directives
 ----------------
