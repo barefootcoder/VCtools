@@ -17,6 +17,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	use Path::Class;
 	use MooseX::Has::Sugar;
 	use MooseX::Types::Moose qw< :all >;
+	use Moose::Util::TypeConstraints qw< enum >;
 
 	use App::VC::Config;
 	use App::VC::InfoCache;
@@ -103,6 +104,13 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 									cmd_aliases => 'i',
 								env_prefix => 'VCTOOLS',
 							ro, isa => Bool,
+						);
+	has default_yn	=>	(
+							traits => [qw< Getopt ENV >],
+								documentation => "Change default for yes/no prompts (one of: y, n, off; default: n).",
+									cmd_aliases => 'default-yn',
+								env_prefix => 'VCTOOLS',
+							ro, isa => enum([qw< y n off >]), default => 'n',
 						);
 	has policy		=>	(
 							traits => [qw< Getopt ENV >],
@@ -667,8 +675,15 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 		# for some reason, passing color output to prompt messes it up
 		# so we'll just print that part out first
-		print join(' ', $msg, $self->color_msg(white => 'Proceed?'), '[y/N]');
-		return prompt -y1, ' ';
+		my $def_prompt = { y => '[Y/n]', n => '[y/N]', off => '[y/n]' }->{$self->default_yn};
+		print join(' ', $msg, $self->color_msg(white => 'Proceed?'), $def_prompt);
+		my $reply;
+		given ($self->default_yn)
+		{
+			return prompt -yn1, -def => 'y'			when 'y';
+			return prompt -y1						when 'n';
+			return prompt -yn1						when 'off';
+		}
 	}
 
 }

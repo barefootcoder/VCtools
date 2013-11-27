@@ -104,11 +104,9 @@ method App::VC::Command::test_execute_output (...)
 
 	my $pass = 1;
 	$pass &= is $trap->die, undef, "no error: $testname";
-	$pass &= is $trap->exit, undef, "no exit: $testname"
-			or diag("error was:\n", $trap->stderr, "\noutput was:\n", $trap->stdout)
-			unless $opts->{'exit_okay'};
+	$pass &= is $trap->exit, undef, "no exit: $testname" or $trap->diag_all unless $opts->{'exit_okay'};
 	$pass &= is $trap->stderr, $self->make_testmsg(@{$opts->{'stderr'}}), "stderr: $testname" if exists $opts->{'stderr'};
-	$pass &= is $trap->stdout, $self->make_testmsg(@_), $testname;
+	$pass &= is $trap->stdout, $self->make_testmsg(@_), $testname or $trap->diag_all;
 	return $pass;
 }
 

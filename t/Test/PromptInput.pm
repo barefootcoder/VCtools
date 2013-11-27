@@ -7,5 +7,7 @@ our @EXPORT = qw< set_prompt_input >;
 
 sub set_prompt_input
 {
-	open *ARGV, '<', \join("\n", @_);
+	undef @ARGV;
+	my $input = join("\n", @_) . "\n";
+	open *ARGV, '<', \$input;
 }
