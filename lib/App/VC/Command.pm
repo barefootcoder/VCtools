@@ -631,7 +631,9 @@ class App::VC::Command extends MooseX::App::Cmd::Command
         my $msg = join('', @msgs);
         if ( $use_color and eval { require Term::ANSIColor } )			# of course, if we can't load color module ...
         {
-            return Term::ANSIColor::colored($msg, bold => $color);
+			# as a special case, "white" will mean "whatever the normal text color is"
+			my @color = $color eq 'white' ? ('bold') : (bold => $color);
+            return Term::ANSIColor::colored($msg, @color);
         }
         else
         {
