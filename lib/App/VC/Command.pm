@@ -247,26 +247,26 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	{
 		# if $type eq 'internal', we get the command lines from our config based on our name
 		# if $type eq 'custom', we get the lines from the custom_spec in our app
-		my @commands;
+		my @actions;
 		given ($type)
 		{
-			when ('internal') { @commands = $self->config->action_lines(commands => $self->command); }
+			when ('internal') { @actions = $self->config->action_lines(commands => $self->command); }
 			when ('custom')
 			{
 				my $spec = $self->app->custom_spec;
 				die("can't run custom command with no custom command spec") unless $spec;
-				@commands = $self->config->process_command_string( $spec->action );
+				@actions = $self->config->process_command_string( $spec->action );
 			}
 
 			default { die("don't know what to do with command type $type") }
 		}
 
 		my $bail = 0;
-		foreach (@commands)
+		foreach my $line (@actions)
 		{
 			if ($bail)													# something keeled over previously;
 			{															# just print the command and move on
-				say STDERR $self->color_msg(white => "  $_");
+				say STDERR $self->color_msg(white => "  $line");
 				$bail = 1;												# indicates we got some more output after bailing
 				next;
 			}
@@ -276,8 +276,8 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 			try
 			{
-				$success = $self->process_action_line(output => $_);
-				$error = "`$_' returned false" unless $success;
+				$success = $self->process_action_line(output => $line);
+				$error = "`$line' returned false" unless $success;
 			}
 			catch ($e)
 			{
@@ -346,7 +346,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		{
 			return $self->execute_directive($disposition, shell => $line);
 		}
-		die("dunno how to process directive as $disposition: $_");
+		die("dunno how to process directive as $disposition: $line");
 	}
 
 	method execute_directive ($disposition, $type, @directive)
