@@ -29,8 +29,8 @@ $extra = q{
 	<CustomInfo infotest>
 		Type = Bool
 		action <<---
-			@ 1
-			@ 1
+			{ 1 }
+			{ 1 }
 		---
 	</CustomInfo>
 };
@@ -45,8 +45,8 @@ $extra = q{
 	<CustomInfo infotest>
 		Type = Bool
 		action <<---
-			@ 1
-			@ 0
+			{ 1 }
+			{ 0 }
 		---
 	</CustomInfo>
 };

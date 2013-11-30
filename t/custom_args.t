@@ -15,7 +15,7 @@ my $extra = q{
 	<CustomCommand custtest>
 		Argument = one
 		action <<---
-			@ say %one
+			{ say %one }
 		---
 	</CustomCommand>
 };

@@ -15,7 +15,7 @@ my $extra = q{
 	<CustomCommand custtest>
 		Argument = one
 		action <<---
-			@ say %one
+			{ say %one }
 		---
 	</CustomCommand>
 };
@@ -31,7 +31,7 @@ $extra = q{
 		Description = test command
 		Argument = one
 		action <<---
-			@ say %one
+			{ say %one }
 		---
 	</CustomCommand>
 };
@@ -47,7 +47,7 @@ $extra = q{
 		Description = test command
 		Argument one		<the one switch>
 		action <<---
-			@ say %one
+			{ say %one }
 		---
 	</CustomCommand>
 };
@@ -67,7 +67,7 @@ $extra = q{
 		Argument one		<the one switch>
 		Argument two
 		action <<---
-			@ say %one
+			{ say %one }
 		---
 	</CustomCommand>
 };
@@ -89,7 +89,7 @@ $extra = q{
 		Argument two		<the two switch>
 		Argument three		<the three switch>
 		action <<---
-			@ say %one
+			{ say %one }
 		---
 	</CustomCommand>
 };

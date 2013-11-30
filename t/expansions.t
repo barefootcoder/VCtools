@@ -13,7 +13,7 @@ use File::Temp qw< tempfile >;
 my $action = q{
 	TEST=1
 	TEST2=$TEST+1
-	@ say $ENV{TEST2}
+	{ say $ENV{TEST2} }
 };
 
 my $cmd = fake_cmd( action => $action );
@@ -24,7 +24,7 @@ $cmd->test_execute_output("2\n", 'command with env expansion in env assignment')
 
 $action = q{
 	TEST="fred" =~ /(.)red/ && $1
-	@ say $ENV{TEST}
+	{ say $ENV{TEST} }
 };
 
 $cmd = fake_cmd( action => $action );
@@ -34,7 +34,7 @@ $cmd->test_execute_output("f\n", "env expansion doesn't mess with backreferences
 # test to make sure info expansion is sufficiently conservative
 
 $action = q{
-	@ printf('%s', "fred")
+	{ printf('%s', "fred") }
 };
 
 $cmd = fake_cmd( action => $action );
@@ -45,7 +45,7 @@ $cmd->test_execute_output("fred", "info expansion doesn't mess with printf specs
 
 $action = q{
 	TEST=undef
-	@ say $ENV{TEST} // ''
+	{ say $ENV{TEST} // '' }
 };
 
 $cmd = fake_cmd( action => $action );
@@ -57,7 +57,7 @@ $cmd->test_execute_output("\n", "env expansion handles undef");
 my ($fh, $fname) = tempfile('tXXXX', TMPDIR => 1, UNLINK => 1);
 $action = q{
 	echo $$ >T
-	@ say "$$"
+	{ say "$$" }
 };
 $action =~ s/T/$fname/;
 
@@ -87,9 +87,9 @@ close $tmpfile;
 
 $action = q{
 	OUT="\%one"
-	@ say "\%one"
+	{ say "\%one" }
 	bash -c '[[ $(cat {}) == $OUT ]]'
-	"$OUT" eq '\%one' -> @ say "yes"
+	"$OUT" eq '\%one' -> { say "yes" }
 };
 $action =~ s/\{}/$tmpfile/;
 

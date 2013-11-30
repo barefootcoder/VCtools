@@ -327,7 +327,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 		{
 			return $self->execute_directive($disposition, env_assign => $1, $2);
 		}
-		elsif ($line =~ s/^\@\s+//)
+		elsif ($line =~ s/^\{\s*(.*)\s*\}$/$1/ or $line =~ s/^\@\s+//)
 		{
 			return $self->execute_directive($disposition, code => $line);
 		}

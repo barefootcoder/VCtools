@@ -87,7 +87,7 @@ Blank lines or lines starting with `#` are ignored.  Note that you may **not** p
 There are 8 types of actions:
 
 * shell directives (Ex: `git branch`)
-* code directives (Ex: `@ %trunk_version - 1`)
+* code directives (Ex: `{ %trunk_version - 1 }`)
 * nested commands (Ex: `= publish`)
 * message directives (Ex: `> current branch is %cur_branch`)
 * confirmation directives (Ex: `? This could be dangerous.`)
@@ -105,9 +105,9 @@ Any directive that is not identified as another type of directive is passed on t
 Code Directives
 ---------------
 
-	@ %trunk_version - 1
+	{ %trunk_version - 1 }
 
-Starts with `@` followed by whitespace.  Code directives are evaluated as Perl code (after expansions; see below).  They fail if the final expression is false (by Perl's defintion); otherwise they pass.  Code directives should only be used when no other directives will work, or sometimes in info methods.
+Starts with `{` and ends with `}`.  Code directives are evaluated as Perl code (after expansions; see below).  They fail if the final expression is false (by Perl's defintion); otherwise they pass.  Code directives should only be used when no other directives will work, or sometimes in info methods.
 
 Nested Commands
 ---------------

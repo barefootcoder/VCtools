@@ -19,8 +19,8 @@ my $action = q{
 	# this line should never produce any output, nor should the next
 
 	TEST=1
-	$TEST -> @ say "true"
-	!$TEST -> @ say "false"
+	$TEST -> { say "true" }
+	!$TEST -> { say "false" }
 	? check the *!bmoogle!*
 	echo >/dev/null
 	> testing *=white=*

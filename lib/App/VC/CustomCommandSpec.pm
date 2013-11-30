@@ -26,7 +26,7 @@ class CustomCommandSpec::Arg
 			/^
 				(\w+)													# the name
 				(?: \s+ <(.*?)> )?										# optionally, a <description>
-				(?: \s+ @ \s+ (.*) )?									# optionally, a validation (@ code)
+				(?: \s+ \{ \s* (.*) \s* \} )?							# optionally, a validation: { code }
 			$/x
 				or die("Argument spec");								# our caller will make this prettier
 			$_ = { name => $1 };

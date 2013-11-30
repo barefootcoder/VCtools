@@ -32,7 +32,7 @@ my $config_tmpl = fake_confstring(<<END);
 		Argument = arg2
 		action <<---
 			echo %arg1 >/dev/null
-			@ say %arg2
+			{ say %arg2 }
 		---
 	</CustomCommand>
 	##extra##
