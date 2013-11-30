@@ -12,10 +12,12 @@ class CustomCommandSpec::Arg
 	use autodie qw< :all >;
 	use MooseX::Has::Sugar;
 	use MooseX::Types::Moose qw< :all >;
+	use Moose::Util::TypeConstraints qw< enum >;
 
 	has name			=>	( ro, isa => Str, required, );
 	has description		=>	( ro, isa => Str, );
-	has validation		=>	( ro, isa => Str, );
+	has valid_type		=>	( ro, isa => enum([qw< code list >]), );
+	has validation		=>	( ro, isa => Str, predicate => 'has_validation', );
 
 	method parse ($class: $spec)
 	{
@@ -26,12 +28,13 @@ class CustomCommandSpec::Arg
 			/^
 				(\w+)													# the name
 				(?: \s+ <(.*?)> )?										# optionally, a <description>
-				(?: \s+ \{ \s* (.*) \s* \} )?							# optionally, a validation: { code }
+				(?: \s+ ([[{]) \s* (.*) \s* []}] )?						# optionally, a validation: { code } or [ list ]
 			$/x
-				or die("Argument spec");								# our caller will make this prettier
+				or die("Invalid argument spec: $_");					# our caller will make this prettier
 			$_ = { name => $1 };
 			$_->{description} = $2 if $2;
-			$_->{validation} = $3 if $3;
+			$_->{valid_type} = { '{' => 'code', '[' => 'list' }->{$3} if $3;
+			$_->{validation} = $4 if $4;
 		}
 		return [ map { $class->new($_) } @specs ];
 	}
@@ -45,6 +48,7 @@ class App::VC::CustomCommandSpec
 	use experimental 'smartmatch';
 
 	use Path::Class;
+	use IO::Prompter;
 	use MooseX::Has::Sugar;
 	use MooseX::Types::Moose qw< :all >;
 
@@ -185,11 +189,39 @@ class App::VC::CustomCommandSpec
 		$cmd->verify_project	if $self->should_verify_project;
 		$cmd->verify_clean		if $self->should_verify_clean;
 
-		foreach ($self->arguments)
+		foreach my $arg ($self->arguments)
 		{
-			$cmd->fatal("Did not receive argument: " . $_->name) unless @$args;
+			if ($arg->has_validation)
+			{
+				given ($arg->valid_type)
+				{
+					when ('list')
+					{
+# line 200
+						my $list = [ eval $arg->validation ];
+						if (@$args and $args->[0] ne '?')
+						{
+							unless ($args->[0] ~~ $list)
+							{
+								my @list = map { "'$_'" } @$list;
+								$list = @list < 3
+									? join(' or ', @list)
+									: ($list[-1] = 'or ' . $list[-1], join(', ', @list));
+								$cmd->fatal("Argument '" . $arg->name . "' must be one of: $list");
+							}
+						}
+						else
+						{
+							shift @$args if @$args;						# get rid of '?'
+							my $choice = prompt "Choose " . $arg->name, -single, -menu => $list, '>';
+							unshift @$args, "$choice";
+						}
+					}
+				}
+			}
+			$cmd->fatal("Did not receive argument: " . $arg->name) unless @$args;
 
-			$cmd->set_info($_->name => shift @$args);
+			$cmd->set_info($arg->name => shift @$args);
 		}
 
 		if (@$args < $self->min_files or $self->max_files != -1 && @$args > $self->max_files)
