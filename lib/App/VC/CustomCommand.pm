@@ -6,7 +6,7 @@ use MooseX::Declare;
 use Method::Signatures::Modifiers;
 
 
-class App::VC::CustomCommand extends App::VC::Command with App::VC::BiColumnar
+class App::VC::CustomCommand extends App::VC::Command with (App::VC::BiColumnar, App::VC::Recoverable)
 {
 	use Debuggit;
 	use autodie qw< :all >;

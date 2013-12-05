@@ -7,7 +7,7 @@ use Method::Signatures::Modifiers;
 use MooseX::Attribute::ENV;
 
 
-class App::VC::Command extends MooseX::App::Cmd::Command
+class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverable
 {
 	use Debuggit;
 	use autodie qw< :all >;
@@ -24,7 +24,14 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 
 	# EXTENSION OF INHERITED ATTRIBUTES
-	has '+app'		=>	( handles => [qw< running_nested >], );			# pass on a few methods to our app
+	has '+app'		=>	(	handles => [								# pass on a few methods to our app
+										qw<
+											running_nested
+											failing start_failing
+											remaining_actions post_fail_action had_post_fail_actions
+											recovery_cmds add_recovery_cmd
+										>],
+						);
 
 	# CONFIGURATION ATTRIBUTES
 	# (figured out by reading config file or from command line invocation)
@@ -44,16 +51,18 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 							traits => [qw< NoGetopt >],
 							ro, isa => Maybe[Str], lazy, default => method { ($self->command_names)[0] },
 						);
-	# this one will be overridden in we're running nested
-	has running_command	=>	(
-							traits => [qw< NoGetopt >],
-							ro, lazy, default => method { $self->command },
-						);
+	# RUN-TIME ATTRIBUTES
+	# (used during run-time operation of the command
 	has _info		=>	(
 							traits => [qw< NoGetopt >],
 							ro, isa => 'App::VC::InfoCache',
 								handles => { get_info => 'get', set_info => 'set', },
 								default => method { App::VC::InfoCache->new( $self ) },
+						);
+	# this one will be overridden if we're running nested
+	has running_command	=>	(
+							traits => [qw< NoGetopt >],
+							ro, lazy, default => method { $self->command },
 						);
 
 	# GLOBAL OPTIONS
@@ -213,6 +222,22 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	}
 
 
+	method build_env_line ($varname, $value)
+	{
+		my $csh_style = $ENV{SHELL} && $ENV{SHELL} =~ /csh/;
+		if (defined $value)
+		{
+			$value =~ s/'/'"'"'/g;
+			$value = "'$value'";
+			return $csh_style ? "setenv $varname $value" : "export $varname=$value";
+		}
+		else
+		{
+			return $csh_style ? "unsetenv $varname" : "unset $varname; export $varname";
+		}
+	}
+
+
 	# Normally, the project root is "discovered" (based on `pwd`) at the same time as the project
 	# (see _discover_project()).  However, if you want a project root for a given project, it's much
 	# easier to determine, so here's how you can do that.
@@ -269,15 +294,9 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			default { die("don't know what to do with command type $type") }
 		}
 
-		my $bail = 0;
 		foreach my $line (@actions)
 		{
-			if ($bail)													# something keeled over previously;
-			{															# just print the command and move on
-				say STDERR $self->color_msg(white => "  $line");
-				$bail = 1;												# indicates we got some more output after bailing
-				next;
-			}
+			$self->check_fail(remaining => $line);
 
 			my $success = 0;
 			my $error;
@@ -296,19 +315,27 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 			unless ($success)
 			{
+				say STDERR '';
 				say STDERR $self->color_msg(red => $error);
-				say STDERR $self->color_msg(cyan => "remaining commands that would have been run:");
-				$bail = -1;												# indicates we need more output
+				$self->start_failing;									# don't execute further commands, but report them
 			}
 		}
-		if ($bail)														# if something keeled over, stop right here
-		{
-			say STDERR "  <none>" if $bail == -1;
-			return 0 if $self->running_nested;							# if inside a nested command, just return false
-			exit 1;														# else bomb out completely
-		}
 
-		return 1;														# success!
+		return not $self->failing;
+	}
+
+	# something keeled over previously; record the action for later output
+	method check_fail ($type, $line)
+	{
+		if ($self->failing)
+		{
+			given ($type)
+			{
+				$self->post_fail_action($line)			when 'remaining';
+				$self->add_recovery_cmd($line)			when 'recovery';
+				die("unknown check_fail type $type")	# otherwise
+			}
+		}
 	}
 
 	method process_action_line ($disposition, $line)
@@ -375,6 +402,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 					when ('output')
 					{
 						$pass = $self->handle_output($disposition, command => $directive, sub { !system($directive) });
+						$self->check_fail(recovery => $directive);
 					}
 					when ('capture')
 					{
@@ -385,14 +413,32 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 
 			when ('code')
 			{
-				$pass = $self->evaluate_code($directive);				# evaluate_code handles info expansion
+				# code doesn't go through handle_output (should it?)
+				# so we'll handle the case when we're failling here
+				if ($self->failing)
+				{
+					return 1;											# just keep right on failing
+				}
+				else
+				{
+					$pass = $self->evaluate_code($directive);			# evaluate_code handles info expansion
+				}
 			}
 
 			when ('nested')
 			{
 				$directive = $self->env_expand($directive);
 				$directive = $self->info_expand($directive);
-				$pass = $self->app->nested_cmd($self, $directive);
+				if ($self->failing)
+				{
+					# no need to go through check_fail here, as we're already checking
+					$self->add_recovery_cmd(join(' ', $self->me, $directive));
+					$pass = 1;											# so we continue to record actions post-failure
+				}
+				else
+				{
+					$pass = $self->app->nested_cmd($self, $directive);
+				}
 			}
 
 			when ('message')
@@ -430,6 +476,8 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 				# env assignments are always done and never fail
 				$pass = $self->handle_output(capture => command => "$lhs=" . ($val // ''), sub { $ENV{$lhs} = $val; 1; });
 				debuggit(3 => "set env var", $lhs, "to", $ENV{$lhs});
+				# don't go through check_fail here, because these should _always_ be added
+				$self->add_recovery_cmd($self->build_env_line($lhs, $val));
 			}
 
 			when ('conditional')
@@ -492,6 +540,9 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 			my $echo = $self->pretend || $self->echo || $self->interactive;
 			my $doit = $self->interactive ? '?' : $self->pretend ? 0 : 1;
 			$doit = 1 if $disposition eq 'capture';						# 'capture' overrides everything else
+
+			# if we're just doing post-processing after a failure, don't do anything at all
+			return 1 if $self->failing;									# pass, so that other actions will be recorded
 
 			# a bit of a hack to make sure confirm directives are handled appropriately in pretend mode
 			my $add_pause = 0;
@@ -650,6 +701,11 @@ class App::VC::Command extends MooseX::App::Cmd::Command
 	{
 		say STDERR $self->me . ' ' . $self->running_command . ': ' . $self->color_msg(red => $msg);
 		exit 1;
+	}
+
+	method print_codeline ($line)
+	{
+		say STDERR $self->color_msg(white => "  $line");
 	}
 
 	method custom_message ($msg)

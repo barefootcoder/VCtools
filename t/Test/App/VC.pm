@@ -2,7 +2,7 @@ package Test::App::VC;
 
 use parent 'Exporter';
 
-our @EXPORT = qw< fake_cmd >;
+our @EXPORT = qw< fake_cmd fake_custom >;
 
 
 use Test::Most;
@@ -16,10 +16,10 @@ use App::VC;
 use App::VC::Command;
 
 
-my $ME = '%VC-TEST%';
+our $ME = '%VC-TEST%';													# in case our caller needs it
 my $cmd = 'testit';
 
-my $config_tmpl = fake_confstring(<<END);
+my $config_cmd_tmpl = fake_confstring(<<END);
 	<fake>
 		<commands>
 			$cmd <<---
@@ -38,10 +38,25 @@ my $config_tmpl = fake_confstring(<<END);
 	##extra##
 END
 
+my $config_custom_tmpl = fake_confstring(<<END);
+	<fake>
+		<commands>
+		</commands>
+	</fake>
+	<CustomCommand $cmd>
+		action <<---
+			##action##
+		---
+	</CustomCommand>
+	##extra##
+END
 
-func fake_cmd (%args)
+
+func fake_cmd (%args)		{ create_fake_command( 'App::VC::Command', $config_cmd_tmpl, %args ) }
+func fake_custom (%args)	{ create_fake_command( 'App::VC::CustomCommand', $config_custom_tmpl, %args ) }
+
+func create_fake_command ($class, $config, %args)
 {
-	my $config = $config_tmpl;
 	foreach (qw< action extra >)
 	{
 		if (exists $args{$_})
@@ -51,7 +66,8 @@ func fake_cmd (%args)
 		}
 	}
 
-	my $class = 'App::VC::Command';
+	my $is_custom = $class =~ /Custom/;
+
 	my $fake_app = bless {}, 'App::VC';									# temporary, to solve chicken-and-egg issue
 	my $fake_usage = bless {}, 'Doesnt::Matter';
 	my $cmd = $class->new(
@@ -62,7 +78,7 @@ func fake_cmd (%args)
 	);
 
 	# now fixup with a real app
-	$fake_app = App::VC->new( config => $cmd->config );
+	$fake_app = fake_app( $cmd->config, $is_custom );
 	$cmd->{'app'} = $fake_app;											# totally cheating here, because these accessors
 	$cmd->config->{'app'} = $fake_app;									# are (rightfully) read-only
 
@@ -71,6 +87,20 @@ func fake_cmd (%args)
 	is $cmd->vc, 'fake', 'test command returns proper vc';
 
 	return $cmd;
+}
+
+func fake_app (App::VC::Config $config, $is_custom)
+{
+	my $app = App::VC->new( config => $config );
+	if ($is_custom)
+	{
+		my $custom = $config->custom_command($cmd);
+		die("can't get custom command out of custom command template!") unless $custom;
+		my $spec = App::VC::CustomCommandSpec->new( $cmd, $custom );
+		die("can't parse custom command spec!") unless $spec;
+		$app->_set_spec($spec);
+	}
+	return $app;
 }
 
 

@@ -35,6 +35,28 @@ class App::VC extends MooseX::App::Cmd
 							predicate => 'running_nested', clearer => '_clear_nested',
 						);
 
+	# attributes to deal with command failures
+	has failing		=>	(
+							traits => [qw< NoGetopt Bool >],
+								handles => { start_failing => 'set', },
+							ro, isa => Bool, default => 0,
+						);
+	has _post_fail	=>	(
+							traits => [qw< NoGetopt Array >],
+								handles =>
+								{
+									remaining_actions => 'elements',
+									post_fail_action => 'push',
+									had_post_fail_actions => 'count',
+								},
+							ro, isa => ArrayRef, default => method { [] },
+						);
+	has _recovery_cmds	=>	(
+							traits => [qw< NoGetopt Array >],
+								handles => { recovery_cmds => 'elements', add_recovery_cmd => 'push', },
+							ro, isa => ArrayRef, default => method { [] },
+						);
+
 
 	# PRIVATE METHODS
 

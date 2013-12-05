@@ -197,7 +197,6 @@ class App::VC::CustomCommandSpec
 				{
 					when ('list')
 					{
-# line 200
 						my $list = [ eval $arg->validation ];
 						if (@$args and $args->[0] ne '?')
 						{
