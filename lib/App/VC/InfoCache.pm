@@ -32,6 +32,7 @@ class App::VC::InfoCache
 		is_dirty		=>	'Bool',
 		has_staged		=>	'Bool',
 		mod_files		=>	'ArrayRef',
+		staged_files	=>	'ArrayRef',
 		cur_branch		=>	'Str',
 		branches		=>	'ArrayRef',
 		remote_branches	=>	'ArrayRef',

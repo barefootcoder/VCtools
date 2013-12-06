@@ -15,6 +15,7 @@ The actions of an info method are executed and its output is gathered.  That out
 * %is_dirty
 * %has_staged
 * %mod_files
+* %staged_files
 * %cur_branch
 * %branches
 * %remote_branches
