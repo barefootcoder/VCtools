@@ -194,7 +194,11 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 
 	method env_expand ($string)
 	{
-		$string =~ s{\$([a-zA-Z]\w+)}{ $ENV{$1} // '' }eg;
+		# technically these are expanded to themselves as opposed to not expanded at all
+		# but the end result is the same
+		state $DONT_EXPAND = { map { $_ => 1 } qw< self > };
+
+		$string =~ s{\$([a-zA-Z]\w+)}{ $DONT_EXPAND->{$1} ? '$' . $1 : $ENV{$1} // '' }eg;
 		return $string;
 	}
 
@@ -202,8 +206,10 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 		# (could make it an anonymous method in a state var, I suppose ...)
 		method _code_info_expand ($method)
 		{
-			my $val = $self->get_info($method);
-			return ref $val eq 'ARRAY' ? '(my @' . "$method=(" . join(',', map { "q{$_}" } @$val) . '))' : "q{$val}";
+			my $val = $self->get_info($method);							# just to see if it's an arrayref or not
+			my $code = '$self->get_info(q{' . $method . '})';			# note that $self is ignored by env_expand
+			$code = '@{' . $code . '}' if ref $val eq 'ARRAY';			# this makes things like `scalar` and indexing work
+			return $code;
 		}
 	method info_expand ($string, :$code = 0)
 	{

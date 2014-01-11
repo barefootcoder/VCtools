@@ -172,6 +172,8 @@ Env Expansion
 
 A `$` followed by a name (two or more letters or digits).  Replaced with the value of that env variable.  Env expansion is performed on: nested commands, message directives, confimation directives, fatal directives, and expressions (i.e. the right-hand sides of env assignments and the left-hand sides of conditionals).  Env expansion is not performed on shell directives, but the shell will most likely expand them anyway.  It is not performed on code directives; in expressions, they often need quotes to avoid syntax errors.
 
+Note that the variable name must start with a letter, so things such as `$_FOO` are not expanded.  Also, `$self` is not expanded as an env var (we recommend you use all caps for env var names anyway).
+
 PID Expansion
 -------------
 

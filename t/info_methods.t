@@ -70,6 +70,17 @@ $cmd = fake_cmd( action => $action, extra => $extra );
 $cmd->test_execute_output("3\n", 'info expansion of ArrayRef in code (scalar)');
 
 
+# twice in one line, both in code and not in code
+
+$action = q{
+	> first: %list // second: %list
+	{ say scalar %list, ':', %list }
+};
+
+$cmd = fake_cmd( action => $action, extra => $extra );
+$cmd->test_execute_output("first: a b c // second: a b c\n3:abc\n", 'info expansion of ArrayRef in message');
+
+
 # insure it's an array, not a list
 
 $action = q{
