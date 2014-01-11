@@ -36,7 +36,10 @@ role App::VC::Recoverable
 					unless ($self->running_nested)
 					{
 						say STDERR "";
-						say STDERR $self->color_msg(cyan => "to attempt manual recovery, try:"), "     ",
+						say STDERR $self->color_msg(cyan => "to attempt manual recovery, "
+								. "first fix and (if necessary) re-run the failed command above");
+						say STDERR $self->color_msg(cyan => "then try running the following commands:"),
+								" " x 26,
 								$self->color_msg(yellow => "warning: EXPERIMENTAL!");
 						$self->print_codeline($_) foreach $self->recovery_cmds;
 					}

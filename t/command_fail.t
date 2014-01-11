@@ -137,7 +137,8 @@ sub command_fail
 	if (@$recovery)
 	{
 		push @out, "\n";
-		push @out, cyan => "to attempt manual recovery, try:", "     ", yellow => "warning: EXPERIMENTAL!", "\n";
+		push @out, cyan => "to attempt manual recovery, first fix and (if necessary) re-run the failed command above", "\n";
+		push @out, cyan => "then try running the following commands:", " " x 26, yellow => "warning: EXPERIMENTAL!", "\n";
 		push @out, white => "  $_", "\n" foreach @$recovery;
 	}
 
