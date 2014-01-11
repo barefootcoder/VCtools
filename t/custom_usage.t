@@ -3,7 +3,7 @@ use Test::Most;
 use App::VC::CustomCommandSpec;
 
 
-my %FILE_SPECS =
+my %TRAILING_SPECS =
 (
 	'0'		=>	'',
 	'1'		=>	' file',
@@ -22,12 +22,12 @@ my %FILE_SPECS =
 );
 
 my ($spec, $desc);
-foreach (keys %FILE_SPECS)
+foreach (keys %TRAILING_SPECS)
 {
 	$spec = App::VC::CustomCommandSpec->new( test => { Files => $_, action => '' } );
 	lives_ok { $desc = $spec->usage_desc } "can create spec: $_";
-	is $desc, "%c test %o$FILE_SPECS{$_}", "passed spec: $_"
-			or diag "min files: ", $spec->min_files, " max files: ", $spec->max_files;
+	is $desc, "%c test %o$TRAILING_SPECS{$_}", "passed spec: $_"
+			or diag "min trailing: ", $spec->min_trailing, " max trailing: ", $spec->max_trailing;
 }
 
 done_testing;

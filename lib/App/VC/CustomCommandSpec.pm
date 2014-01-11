@@ -6,7 +6,7 @@ use MooseX::Declare;
 use Method::Signatures::Modifiers;
 
 
-# a little class-let to hold custom args
+# a little classlet to hold custom args
 class CustomCommandSpec::Arg
 {
 	use autodie qw< :all >;
@@ -30,13 +30,47 @@ class CustomCommandSpec::Arg
 				(?: \s+ <(.*?)> )?										# optionally, a <description>
 				(?: \s+ ([[{]) \s* (.*) \s* []}] )?						# optionally, a validation: { code } or [ list ]
 			$/x
-				or die("Invalid argument spec: $_");					# our caller will make this prettier
+				or die("Invalid argument spec: $_\n");					# our caller will make this prettier
 			$_ = { name => $1 };
 			$_->{description} = $2 if $2;
 			$_->{valid_type} = { '{' => 'code', '[' => 'list' }->{$3} if $3;
 			$_->{validation} = $4 if $4;
 		}
 		return [ map { $class->new($_) } @specs ];
+	}
+}
+
+# and another classlet for trailing args
+class CustomCommandSpec::Trailing
+{
+	use autodie qw< :all >;
+	use MooseX::Has::Sugar;
+	use MooseX::Types::Moose qw< :all >;
+
+	has name			=>	( ro, isa => Str, );
+	has singular		=>	( ro, isa => Str, );
+	has description		=>	( ro, isa => Str, );
+	has min				=>	( ro, isa => Int, required, );
+	has max				=>	( ro, isa => Int, required, );
+
+	method parse ($class: $spec)
+	{
+		if (!defined $spec)
+		{
+			return $class->new( name => "trailing arguments", min => 0, max => 0 );
+		}
+		else
+		{
+			unless ( $spec =~ /^ (\d+) ( \.\. (\d+)? )? $/x )
+			{
+				die "Invalid files spec: $spec\n";						# our caller will make this prettier
+			}
+			my $min = $1;
+			# with .. -> max is either the number provided, or -1 (meaning Inf); without .. -> max is same as min
+			my $max = $2 ? $3 // -1 : $1;
+
+			return $class->new( name => 'files', singular => 'file', min => $min, max => $max );
+		}
 	}
 }
 
@@ -47,6 +81,7 @@ class App::VC::CustomCommandSpec
 	use autodie qw< :all >;
 	use experimental 'smartmatch';
 
+	use TryCatch;
 	use Path::Class;
 	use IO::Prompter;
 	use MooseX::Has::Sugar;
@@ -65,9 +100,10 @@ class App::VC::CustomCommandSpec
 									handles => { arguments => 'elements' },
 								ro, isa => 'ArrayRef[CustomCommandSpec::Arg]', required, init_arg => 'arguments',
 							);
-
-	has min_files		=>	( ro, isa => Int, required, );
-	has max_files		=>	( ro, isa => Int, required, );
+	has _trailing		=>	(
+								ro, isa => 'CustomCommandSpec::Trailing', required, init_arg => 'trailing',
+									handles => { min_trailing => 'min', max_trailing => 'max' },
+							);
 
 	has description		=>	( ro, isa => Str, lazy, default => "\n", );
 	has action			=>	( ro, isa => Str, required, );
@@ -95,20 +131,21 @@ class App::VC::CustomCommandSpec
 
 	method usage_desc
 	{
-		my @files;
-		if ($self->max_files != 0)
+		my @trailing;
+		if ($self->max_trailing != 0)
 		{
-			@files = ('file') x ($self->max_files == -1 ? $self->min_files : $self->max_files);
-			unshift @files, 'file' if $self->min_files == 0 and $self->max_files == -1;
-			push @files, '...' if $self->max_files == -1;
-			if ($self->max_files > $self->min_files or $self->max_files == -1)
+			my $name = $self->_trailing->singular;
+			@trailing = ($name) x ($self->max_trailing == -1 ? $self->min_trailing : $self->max_trailing);
+			unshift @trailing, $name if $self->min_trailing == 0 and $self->max_trailing == -1;
+			push @trailing, '...' if $self->max_trailing == -1;
+			if ($self->max_trailing > $self->min_trailing or $self->max_trailing == -1)
 			{
-				$files[$self->min_files] = '[' . $files[$self->min_files];
-				$files[-1] .= ']'
+				$trailing[$self->min_trailing] = '[' . $trailing[$self->min_trailing];
+				$trailing[-1] .= ']'
 			}
 		}
 		my @args = map { "<$_>" } map { $_->name } $self->arguments;
-		return join(' ', '%c', $self->command, '%o', @args, @files);
+		return join(' ', '%c', $self->command, '%o', @args, @trailing);
 	}
 
 
@@ -128,45 +165,56 @@ class App::VC::CustomCommandSpec
 			my $validate = $spec->{'Verify'};
 			if (!ref $validate)											# it's a scalar; only one validation
 			{
-				$validate = [ $validate ];
-			}
-			elsif (ref $validate ne 'ARRAY')							# then it's something bogus
-			{
-				$fatal_error //= "Verify spec for CustomCommand $command";
+				$validate = [ $validate ];								# so make it an arrayref
 			}
 
-			# at this point, we're sure it's an arrayref, so loop through it
-			foreach (@$validate)
+			if (ref $validate eq 'ARRAY')								# good; it's an array
 			{
-				if (exists $VALIDATIONS{$_})
+				# now that we're sure it's an arrayref, loop through it
+				foreach (@$validate)
 				{
-					$args->{"should_verify_$_"} = 1;
+					if (exists $VALIDATIONS{$_})
+					{
+						$args->{"should_verify_$_"} = 1;
+					}
+					else
+					{
+						$fatal_error //= "Invalid verify spec for CustomCommand $command: $_";
+					}
 				}
-				else
-				{
-					$fatal_error //= "Verify spec for CustomCommand $command (`$_' unknown)";
-				}
+			}
+			else														# it's something bogus
+			{
+				$fatal_error //= "Invalid verify spec format for CustomCommand $command";
 			}
 		}
 
 		# arguments
 		# all the hard work now done by CustomCommandSpec::Arg
-		$args->{'arguments'} = CustomCommandSpec::Arg->parse( $spec->{'Argument'} );
-
-		# files
-		if (not exists $spec->{'Files'})								# command takes no files at all
+		try
 		{
-			$args->{'min_files'} = $args->{'max_files'} = 0;
+			$args->{'arguments'} = CustomCommandSpec::Arg->parse( $spec->{'Argument'} );
 		}
-		else
+		catch ($e where { /^Invalid argument/ })
 		{
-			unless ( $spec->{'Files'} =~ /^ (\d+) ( \.\. (\d+)? )? $/x )
-			{
-				$fatal_error //= "Files spec for CustomCommand $command";
-			}
-			$args->{'min_files'} = $1;
-			# with .. -> max is either the number provided, or -1 (meaning Inf); without .. -> max is same as min
-			$args->{'max_files'} = $2 ? $3 // -1 : $1;
+			chomp $e;
+			$e =~ s/:/ for CustomCommand $command:/;
+			$fatal_error //= $e;
+			$args->{'arguments'} = [];
+		}
+
+		# trailing arguments
+		# likewise handled by CustomCommandSpec::Trailing
+		try
+		{
+			$args->{'trailing'} = CustomCommandSpec::Trailing->parse( $spec->{'Files'} );
+		}
+		catch ($e where { /^Invalid files/ })
+		{
+			chomp $e;
+			$e =~ s/:/ for CustomCommand $command:/;
+			$fatal_error //= $e;
+			$args->{'trailing'} = CustomCommandSpec::Trailing->new( min => 0, max => 0 );
 		}
 
 		# description
@@ -223,14 +271,15 @@ class App::VC::CustomCommandSpec
 			$cmd->set_info($arg->name => shift @$args);
 		}
 
-		if (@$args < $self->min_files or $self->max_files != -1 && @$args > $self->max_files)
+		my $tname = $self->_trailing->name;
+		if (@$args < $self->min_trailing or $self->max_trailing != -1 && @$args > $self->max_trailing)
 		{
-			my $proper_number = $self->max_files == -1
-					? join(' ', $self->min_files, "or more")
-					: join(' ', "between", $self->min_files, "and", $self->max_files);
-			$cmd->fatal("Wrong number of files: must be $proper_number");
+			my $proper_number = $self->max_trailing == -1
+					? join(' ', $self->min_trailing, "or more")
+					: join(' ', "between", $self->min_trailing, "and", $self->max_trailing);
+			$cmd->fatal("Wrong number of $tname: must be $proper_number");
 		}
-		$cmd->set_info(files => $args);
+		$cmd->set_info($tname => $args) if $self->max_trailing != 0;
 	}
 }
 
