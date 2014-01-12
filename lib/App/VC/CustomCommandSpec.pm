@@ -53,21 +53,59 @@ class CustomCommandSpec::Trailing
 	has min				=>	( ro, isa => Int, required, );
 	has max				=>	( ro, isa => Int, required, );
 
+	method _parse_qty ($inv: $qty)										# class or object method; doesn't matter
+	{
+		unless ( $qty and $qty =~ /^ (\d+) ( \.\. (\d+)? )? $/x )
+		{
+			return ();
+		}
+		my $min = $1;
+		# with .. -> max is either the number provided, or -1 (meaning Inf); without .. -> max is same as min
+		my $max = $2 ? $3 // -1 : $1;
+		return ($min, $max);
+	}
+
 	method parse ($class: $spec)
 	{
+		# our caller will make all the `die`s prettier
+		# just be sure to add newlines to avoid unsightly file/line number garbage
+
 		if (!defined $spec)
 		{
 			return $class->new( name => "trailing arguments", min => 0, max => 0 );
 		}
-		else
+		elsif (ref $spec eq 'HASH')										# full Trailing spec
 		{
-			unless ( $spec =~ /^ (\d+) ( \.\. (\d+)? )? $/x )
+			my $args = {};
+			my @keys = keys %$spec;
+			die("Invalid trailing spec: can be only one\n") if @keys > 1;
+			my $name = $args->{'name'} = $keys[0];
+			$spec = $spec->{$name};
+
+			foreach (qw< singular qty >)
 			{
-				die "Invalid files spec: $spec\n";						# our caller will make this prettier
+				die("Invalid trailing spec: must supply $_\n") unless defined $spec->{$_};
+				$args->{$_} = $spec->{$_};
 			}
-			my $min = $1;
-			# with .. -> max is either the number provided, or -1 (meaning Inf); without .. -> max is same as min
-			my $max = $2 ? $3 // -1 : $1;
+
+			# quantity requires some extra processing
+			my $qty = $args->{'qty'};
+			my ($min, $max) = $class->_parse_qty($qty);
+			unless ( defined $min and defined $max )
+			{
+				die "Invalid trailing spec (qty): $spec->{'qty'}\n";
+			}
+			@$args{qw< min max >} = ($min, $max);
+
+			return $class->new( $args );
+		}
+		else															# just Files spec
+		{
+			my ($min, $max) = $class->_parse_qty($spec);
+			unless ( defined $min and defined $max )
+			{
+				die "Invalid files spec: $spec\n";
+			}
 
 			return $class->new( name => 'files', singular => 'file', min => $min, max => $max );
 		}
@@ -102,7 +140,11 @@ class App::VC::CustomCommandSpec
 							);
 	has _trailing		=>	(
 								ro, isa => 'CustomCommandSpec::Trailing', required, init_arg => 'trailing',
-									handles => { min_trailing => 'min', max_trailing => 'max' },
+								handles =>
+								{
+									min_trailing => 'min', max_trailing => 'max',
+									trailing_name => 'name', trailing_singular => 'singular',
+								},
 							);
 
 	has description		=>	( ro, isa => Str, lazy, default => "\n", );
@@ -134,7 +176,7 @@ class App::VC::CustomCommandSpec
 		my @trailing;
 		if ($self->max_trailing != 0)
 		{
-			my $name = $self->_trailing->singular;
+			my $name = $self->trailing_singular;
 			@trailing = ($name) x ($self->max_trailing == -1 ? $self->min_trailing : $self->max_trailing);
 			unshift @trailing, $name if $self->min_trailing == 0 and $self->max_trailing == -1;
 			push @trailing, '...' if $self->max_trailing == -1;
@@ -207,9 +249,9 @@ class App::VC::CustomCommandSpec
 		# likewise handled by CustomCommandSpec::Trailing
 		try
 		{
-			$args->{'trailing'} = CustomCommandSpec::Trailing->parse( $spec->{'Files'} );
+			$args->{'trailing'} = CustomCommandSpec::Trailing->parse( $spec->{'Trailing'} // $spec->{'Files'} );
 		}
-		catch ($e where { /^Invalid files/ })
+		catch ($e where { /^Invalid (files|trailing)/ })
 		{
 			chomp $e;
 			$e =~ s/:/ for CustomCommand $command:/;
@@ -271,7 +313,7 @@ class App::VC::CustomCommandSpec
 			$cmd->set_info($arg->name => shift @$args);
 		}
 
-		my $tname = $self->_trailing->name;
+		my $tname = $self->trailing_name;
 		if (@$args < $self->min_trailing or $self->max_trailing != -1 && @$args > $self->max_trailing)
 		{
 			my $proper_number = $self->max_trailing == -1

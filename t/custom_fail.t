@@ -77,6 +77,84 @@ test_fatal('Config file error: Invalid files spec for CustomCommand failtest: 1-
 		'bad files spec fails gracefully');
 
 
+# trailing args: multiple specs
+
+$extra = q{
+	<CustomCommand failtest>
+		Argument = one
+		<Trailing commits>
+			singular = commit
+			qty = 0..3
+		</Trailing>
+		<Trailing files>
+			singular = file
+			qty = 0..3
+		</Trailing>
+		action <<---
+			{ say %one }
+		---
+	</CustomCommand>
+};
+
+test_fatal('Config file error: Invalid trailing spec for CustomCommand failtest: can be only one',
+		'bad trailing spec (multiple) fails gracefully');
+
+
+# trailing args: missing qty
+
+$extra = q{
+	<CustomCommand failtest>
+		Argument = one
+		<Trailing commits>
+			singular = commit
+		</Trailing>
+		action <<---
+			{ say %one }
+		---
+	</CustomCommand>
+};
+
+test_fatal('Config file error: Invalid trailing spec for CustomCommand failtest: must supply qty',
+		'bad trailing spec (no qty) fails gracefully');
+
+
+# trailing args: missing singular
+
+$extra = q{
+	<CustomCommand failtest>
+		Argument = one
+		<Trailing commits>
+			qty = 0..3
+		</Trailing>
+		action <<---
+			{ say %one }
+		---
+	</CustomCommand>
+};
+
+test_fatal('Config file error: Invalid trailing spec for CustomCommand failtest: must supply singular',
+		'bad trailing spec (no singular) fails gracefully');
+
+
+# other trailing args spec bad format
+
+$extra = q{
+	<CustomCommand failtest>
+		Argument = one
+		<Trailing commits>
+			singular = commit
+			qty = 1-5
+		</Trailing>
+		action <<---
+			{ say %one }
+		---
+	</CustomCommand>
+};
+
+test_fatal('Config file error: Invalid trailing spec (qty) for CustomCommand failtest: 1-5',
+		'bad trailing spec (bad qty) fails gracefully');
+
+
 done_testing;
 
 
