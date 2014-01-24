@@ -55,7 +55,7 @@ class CustomCommandSpec::Trailing
 
 	method _parse_qty ($inv: $qty)										# class or object method; doesn't matter
 	{
-		unless ( $qty and $qty =~ /^ (\d+) ( \.\. (\d+)? )? $/x )
+		unless ( defined $qty and $qty =~ /^ (\d+) ( \.\. (\d+)? )? $/x )
 		{
 			return ();
 		}

@@ -115,4 +115,24 @@ $cmd = fake_cmd( action => $action, extra => $extra );
 $cmd->test_execute_output("three\n", 'menu provides arg for ?');
 
 
+# simple argument with no files (explicit)
+
+$action = q{
+	= custtest 1
+};
+
+$extra = q{
+	<CustomCommand custtest>
+		Argument = one
+		Files = 0
+		action <<---
+			{ say %one }
+		---
+	</CustomCommand>
+};
+
+$cmd = fake_cmd( action => $action, extra => $extra );
+$cmd->test_execute_output("1\n", '1 arg w/ explicit 0 files works');
+
+
 done_testing;
