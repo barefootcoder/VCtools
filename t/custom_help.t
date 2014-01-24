@@ -103,4 +103,53 @@ $cmd = fake_cmd( action => $action, extra => $extra );
 $cmd->test_help_output(custtest => "%c custtest %o <one> <two> <three>\n\n\ntest command\n\n$switch_help\n");
 
 
+# with a Files section
+
+$extra = q{
+	<CustomCommand custtest>
+		Description = test command
+		Argument one		<the one switch>
+		Argument two		<the two switch>
+		Argument three		<the three switch>
+		Files 1..
+		action <<---
+			{ say %one }
+		---
+	</CustomCommand>
+};
+
+$switch_help = <<END;
+    <one> : the one switch
+    <two> : the two switch
+  <three> : the three switch
+END
+$cmd = fake_cmd( action => $action, extra => $extra );
+$cmd->test_help_output(custtest => "%c custtest %o <one> <two> <three> <file> [...]\n\n\ntest command\n\n$switch_help\n");
+
+
+# trailing args with a description
+
+$extra = q{
+	<CustomCommand custtest>
+		Description = test command
+		Argument one		<the one switch>
+		<Trailing thingies>
+			description = things that go at the end
+			singular = thingy
+			qty = 1..
+		</Trailing>
+		action <<---
+			{ say %one }
+		---
+	</CustomCommand>
+};
+
+$switch_help = <<END;
+     <one> : the one switch
+  <thingy> : things that go at the end
+END
+$cmd = fake_cmd( action => $action, extra => $extra );
+$cmd->test_help_output(custtest => "%c custtest %o <one> <thingy> [...]\n\n\ntest command\n\n$switch_help\n");
+
+
 done_testing;

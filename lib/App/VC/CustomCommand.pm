@@ -64,7 +64,14 @@ class App::VC::CustomCommand extends App::VC::Command with (App::VC::BiColumnar,
 		my $spec = $self->spec;
 		my $desc = $spec->description;
 		my @args = $spec->arguments;
-		if (@args = $spec->arguments and grep { $_->description } @args)
+		# make a "fake" arg for the trailing args, if there are any and if they have a description
+		if ($spec->max_trailing and $spec->trailing_description)
+		{
+			my ($name, $descr) = ( $spec->trailing_singular, $spec->trailing_description );
+			push @args, CustomCommandSpec::Arg->new( name => $name, description => $descr );
+		}
+
+		if (@args and grep { $_->description } @args)
 		{
 			state $xform = sub { "<$_[0]> " };
 			$desc .= $self->format_bicol(

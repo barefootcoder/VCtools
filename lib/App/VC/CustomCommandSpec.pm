@@ -82,10 +82,17 @@ class CustomCommandSpec::Trailing
 			my $name = $args->{'name'} = $keys[0];
 			$spec = $spec->{$name};
 
+			# required attributes
 			foreach (qw< singular qty >)
 			{
 				die("Invalid trailing spec: must supply $_\n") unless defined $spec->{$_};
 				$args->{$_} = $spec->{$_};
+			}
+
+			# optional attributes
+			foreach (qw< description >)
+			{
+				$args->{$_} = $spec->{$_} if exists $spec->{$_};
 			}
 
 			# quantity requires some extra processing
@@ -144,6 +151,7 @@ class App::VC::CustomCommandSpec
 								{
 									min_trailing => 'min', max_trailing => 'max',
 									trailing_name => 'name', trailing_singular => 'singular',
+									trailing_description => 'description',
 								},
 							);
 
@@ -176,7 +184,7 @@ class App::VC::CustomCommandSpec
 		my @trailing;
 		if ($self->max_trailing != 0)
 		{
-			my $name = $self->trailing_singular;
+			my $name = '<' . $self->trailing_singular . '>';
 			@trailing = ($name) x ($self->max_trailing == -1 ? $self->min_trailing : $self->max_trailing);
 			unshift @trailing, $name if $self->min_trailing == 0 and $self->max_trailing == -1;
 			push @trailing, '...' if $self->max_trailing == -1;
