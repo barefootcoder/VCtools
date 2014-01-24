@@ -33,7 +33,7 @@ BEGIN
 # We're going to load modules very cautiously so that, if anything is missing, we can catch that and
 # possibly do something about it.  This is handled by the check_prereqs() function below, which is
 # mostly a moderately thin wrapper around bin/vctools-prereq-verify (which is just a separate
-# program so we can move all that logic into it's own file, and it's also convenient to be able to
+# program so we can move all that logic into its own file, and it's also convenient to be able to
 # run it directly).  So, if just about anything goes wrong, we'll call check_prereqs().  If it
 # happens _not_ to be a missing prereq, that will be handled appropriately as well.
 

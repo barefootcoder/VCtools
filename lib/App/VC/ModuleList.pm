@@ -23,7 +23,7 @@ use File::Spec;
 use File::Basename;
 
 use base 'Exporter';													# `parent` not core until 5.10.1 (too new)
-our @EXPORT = qw< install_all_modules get_all_modules >;
+our @EXPORT = qw< install_modules install_all_modules get_all_modules >;
 
 
 
@@ -40,16 +40,28 @@ my $modules = { map { $_ => 1 } qw< IPC::System::Simple Term::ANSIColor > };
 
 
 
-sub install_all_modules
+sub install_modules
 {
-	my ($base_dir) = @_;
+	my ($base_dir, @modules) = @_;
 
 	# crude errors; if you don't like that, check yourself before calling this
 	my $extlib = File::Spec->catfile($base_dir, 'extlib');
 	die("can't locate cpanm") unless `cpanm --version`;
 	die("don't have a local::lib to install to") unless -d $extlib;
 
-	system( qw< cpanm -n -q -L >, $extlib, get_all_modules($base_dir) );
+	system( qw< cpanm -n -q -L >, $extlib, @modules );
+	# we really have to fight for this not to be installed
+	system("echo y | cpanm -q -L $extlib -U Carp") if -e File::Spec->catfile($extlib, 'lib', 'perl5', 'Carp.pm');
+
+	# in case our caller wants it
+	return $extlib;
+}
+
+sub install_all_modules
+{
+	my ($base_dir) = @_;
+
+	my $extlib = install_modules( $base_dir, get_all_modules($base_dir) );
 	# we really have to fight for this not to be installed
 	system("echo y | cpanm -q -L $extlib -U Carp") if -e File::Spec->catfile($extlib, 'lib', 'perl5', 'Carp.pm');
 }
