@@ -2,6 +2,8 @@ Revision history for VCtools
 
 0.14	
 
+	*	bug fixes:
+		`vc help` with no args now works properly again
 	*	base command improvements:
 		added version variable for `vc version` or `--version` switch
 			(assuming new enough version of App::Cmd)

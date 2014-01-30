@@ -23,7 +23,7 @@ class App::VC extends MooseX::App::Cmd
 	use App::VC::CustomCommandSpec;
 
 
-	const our $VERSION => 'v0.13_01';
+	const our $VERSION => 'v0.13_02';
 
 
 	# ATTRIBUTES
@@ -71,7 +71,7 @@ class App::VC extends MooseX::App::Cmd
 	# move one layer higher up the stack and intercept App::Cmd::_prepare_command.  Either way,
 	# we're overriding a private method, which is a bit squicky, but I've done this type of thing a
 	# few times now and it seems to work well.
-	override _prepare_command ($command, $opt, @args)
+	override _prepare_command ($command, $opt?, @args)
 	{
 		debuggit(4 => "overridden prepare command handler:", $command, DUMP => $opt, DUMP => \@args);
 
