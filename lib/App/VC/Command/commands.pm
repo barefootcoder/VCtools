@@ -55,6 +55,11 @@ class App::VC::Command::commands extends App::VC::Command with App::VC::BiColumn
 		say $out '';
 
 		my @structural = qw< help commands info >;
+		try
+		{
+			App::Cmd->VERSION(0.321);									# if this dies,
+			push @structural, 'version';								# this doesn't get executed
+		}																# and we don't need to catch anything
 		push @structural, 'self-upgrade' unless $self->policy;
 
 		my %builtin	= map { ($_->command_names)[0] => $_->abstract } $self->app->command_plugins;

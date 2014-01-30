@@ -1,0 +1,188 @@
+Revision history for VCtools
+
+0.14	
+
+	*	base command improvements:
+		added version variable for `vc version` or `--version` switch
+			(assuming new enough version of App::Cmd)
+
+0.13	2014-01-23		e2af02f2c5
+
+	*	bug fixes:
+		no longer get errors for using the same ArrayRef %info method twice in one command
+	*	base command improvements:
+		now printing "recovery commands" when a command fails
+	*	new commands:
+		vc stash
+		vc unstash
+		vc unstage
+		vc push
+	*	modified commands:
+		vc info: no longer using commas to separate elements in ArrayRef %info methods
+		vc self-upgrade: can upgrade a Perl prereq
+	*	new %info methods:
+		%staged_files
+	*	modified action directives:
+		code: now using { } (@ is informally deprecated)
+	*	custom command improvements:
+		arguments can now have list validation
+		can replace Files with the more general <Trailing>
+	*	improvements in config file processing:
+		custom commands can override internal commands
+	*	general cleanup and refactoring
+
+0.12	2013-11-27		24758697af
+
+	*	bug fixes:
+		corrected error message when VC section in config is improperly formatted
+		redefine "bright white" as "bold whatever-color-you-use-for-text"
+	*	new global switches:
+		--default_yn
+
+0.11	2013-11-21		b7eca1d9c3
+
+	FIRST OFFICIAL VERSION USED BY CO-WORKERS
+	*	bug fixes:
+		better handling of symlinks
+		fix when %cur_branch tries to return two branches at once
+		fix confirm directives
+	*	base command improvements:
+		prereqs now installed in a separate extlib/
+		some tweaks to smooth install process
+	*	modified commands:
+		vc commands: now shows custom commands
+	*	new global switches:
+		--policy
+	*	new %info methods:
+		%branches
+		%remote_branches
+		%tags
+	*	new validation directives:
+		Verify = clean
+	*	custom command improvements:
+		arguments can now have descriptions
+	*	initial implementation of custom info methods
+	*	general cleanup and refactoring
+	*	unit test improvements
+
+0.10	2013-11-04		08a883ecf9
+
+	FIRST VERSION SHARED WITH CO-WORKERS (beta)
+	*	bug fixes:
+		stop custom commands blowing up on confirm directives
+		stop env assigns blowing up when value was undef
+	*	new commands:
+		vc self-upgrade
+	*	modified commands:
+		vc info: new target (policy:all)
+		vc commands: now respects $VCTOOLS_RUNAS
+	*	new global switches:
+		--debug (undocumented)
+	*	new %info methods:
+		%running_nested
+	*	new action directives:
+		= (nested command)
+		# (comment)
+		  (blank line)
+	*	modified action directives:
+		shell: does PID expansion
+		nested command: does env expansion
+	*	improvements in config file processing:
+		switch from ~/.vctools.conf to ~/.vctools/vctools.conf
+		add VCtoolsDir directive
+	*	general cleanup and refactoring
+	*	unit test improvements
+
+0.05	2013-10-24		20be771b4f
+
+	*	base command improvements:
+		when action directives fail, print what went wrong and what was left to do
+	*	modified commands:
+		vc stage: can now take files
+	*	new global switches:
+		--run-as
+		--interactive
+	*	new action directives:
+		? (confirm)
+	*	improvements in config file processing:
+		can now override internal command in Policy sections
+		can now override internal command at the global level
+	*	general cleanup and refactoring
+	*	unit test improvements
+
+0.04	2013-10-14		ad7e9dd4c5
+
+	*	new global switches:
+		--color
+		--echo
+	*	new %info methods:
+		%cur_branch
+		can now use config directives as pseudo-info-methods
+	*	new action directives:
+		! (fatal directive)
+		> (message directive; can include color expansions)
+	*	modified action directives:
+		envassign: now interpreting rhs as a Perl expression (show any compilation errors)
+		envassign: now prints value set to under --pretend
+		message: does env expansion
+		message: does %info expansion
+		message: new color expansion for (bright) white
+	*	custom command improvements:
+		descriptions now do %info expansion
+	*	improvements in config file processing:
+		can put custom commands in Policy sections
+	*	general cleanup and refactoring
+	*	unit test improvements
+
+0.03	2013-10-02		cadbc7c2eb
+
+	*	base command improvements:
+		`vc` can now install missing Perl prereqs
+		`vc` can now create a basic config if you don't have one
+	*	initial implementation of custom commands
+	*	new %info methods:
+		%user
+	*	move standard VC commands to VCtools-specific configs
+	*	improvements in config file processing:
+		can now use ~ in config *Dir directives
+		can now use %info methods in SourcePath directive
+		initial implementation of Policy (and ProjectPolicy) directives
+	*	general cleanup and refactoring
+
+0.02	2013-09-23		d514dc7051
+
+	*	`vc` can now install missing Perl prereqs
+	*	modified commands:
+		vc commit: now works differently depending on whether you provide files on command line
+		vc info: new target (project:all) provides necessary infrastructure to implement `vcd`
+	*	new commands:
+		vc resolved
+	*	new %info methods:
+		%has_staged
+		%mod_files
+	*	modified global switches:
+		--pretend: now prints commands executed by %info methods
+	*	some config file fixups
+	*	general cleanup and refactoring
+
+0.01	2013-08-30		8c41730b8e
+
+    *	initial version:
+		one command (vc) with subcommands
+		handles Git pretty well, Subversion okay, CVS not at all
+		underlying VC command now in config (easier for user to customize)
+	*	early versions of:
+		vc info
+		vc stat
+		vc sync
+		vc stage
+		vc commit
+		vc unget
+		vc show-branches
+
+<pre>
+
+	*	old style:
+		separate scripts for each command
+		handled Subversion pretty well, CVS okay, Git not at all
+		underlying VC commands were in code, not in config

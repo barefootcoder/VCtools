@@ -13,6 +13,7 @@ class App::VC extends MooseX::App::Cmd
 	use experimental 'smartmatch';
 
 	use Path::Class;
+	use Const::Fast;
 	use File::HomeDir;
 	use MooseX::Has::Sugar;
 	use MooseX::Types::Moose qw< :all >;
@@ -20,6 +21,9 @@ class App::VC extends MooseX::App::Cmd
 	use App::VC::Config;
 	use App::VC::Command;
 	use App::VC::CustomCommandSpec;
+
+
+	const our $VERSION => 'v0.13_01';
 
 
 	# ATTRIBUTES
