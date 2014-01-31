@@ -49,7 +49,8 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 						);
 	has command		=>	(
 							traits => [qw< NoGetopt >],
-							ro, isa => Maybe[Str], lazy, default => method { ($self->command_names)[0] },
+							ro, isa => Maybe[Str], lazy, writer => 'transmogrify',
+							default => method { ($self->command_names)[0] },
 						);
 	# RUN-TIME ATTRIBUTES
 	# (used during run-time operation of the command

@@ -6,6 +6,9 @@ Revision history for VCtools
 		`vc help` with no args now works properly again
 	*	new commands:
 		vc unbranch
+		vc commit-fix
+	*	modified commands:
+		vc commit -F : same as `vc commit-fix`
 	*	base command improvements:
 		added version variable for `vc version` or `--version` switch
 			(assuming new enough version of App::Cmd)

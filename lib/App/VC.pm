@@ -23,7 +23,7 @@ class App::VC extends MooseX::App::Cmd
 	use App::VC::CustomCommandSpec;
 
 
-	const our $VERSION => 'v0.13_03';
+	const our $VERSION => 'v0.13_04';
 
 
 	# ATTRIBUTES

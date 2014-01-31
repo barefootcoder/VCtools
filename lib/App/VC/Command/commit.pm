@@ -18,6 +18,21 @@ class App::VC::Command::commit extends App::VC::Command
 	use MooseX::Types::Moose qw< :all >;
 
 
+	# OPTIONS
+
+	has fix			=>	(
+							traits => [qw< Getopt >],
+								documentation => "fix last commit (if possible)",
+									cmd_aliases => 'F',
+							ro, isa => Bool,
+						);
+
+
+	override usage_desc (...)
+	{
+		return super() . " [file ...]";
+	}
+
 	method description
 	{
 		return	"\n"
@@ -34,7 +49,15 @@ class App::VC::Command::commit extends App::VC::Command
 
 	augment execute (...)
 	{
-		$self->fatal("no changes to commit") unless $self->is_dirty;
+		if ($self->fix)
+		{
+			$self->fatal("cannot specify files with --fix") if @{ $self->get_info('files') };
+			$self->transmogrify('commit-fix');
+		}
+		else
+		{
+			$self->fatal("no changes to commit") unless $self->is_dirty;
+		}
 	}
 }
 
