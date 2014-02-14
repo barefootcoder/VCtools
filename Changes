@@ -12,6 +12,8 @@ Revision history for VCtools
 	*	base command improvements:
 		added version variable for `vc version` or `--version` switch
 			(assuming new enough version of App::Cmd)
+	*	doc improvements:
+		better help for `vc stash` and `vc unstash`
 
 0.13	2014-01-23		e2af02f2c5
 
