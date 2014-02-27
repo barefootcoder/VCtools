@@ -192,6 +192,6 @@ A `*` followed by some punctuation to start; the same punctuation followed by a 
 * `*~yellow text~*`
 * `*+green text+*`
 * `*-cyan text-*`
-* `*=white text=*`
+* `*=bold text=*`
 
 All colors are bold/bright.
