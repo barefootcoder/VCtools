@@ -136,6 +136,9 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 	method is_dirty		{ $self->get_info('is_dirty') }
 	method mod_files	{ $self->get_info('mod_files') }
 
+	# override this if you happen to be a structural command
+	method structural	{ 0 }
+
 
 	# BUILDERS
 

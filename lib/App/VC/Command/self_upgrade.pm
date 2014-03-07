@@ -37,6 +37,11 @@ class App::VC::Command::self_upgrade extends App::VC::Command
 		return 'self-upgrade', super();
 	}
 
+	method structural
+	{
+		return 1;
+	}
+
 
 	augment validate_args ($opt, ArrayRef $args)
 	{

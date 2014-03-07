@@ -240,16 +240,109 @@ class App::VC::Config
 	# list all the commands we know about (don't forget: this is from the perspective of the config)
 	# default is to return both internal commands and custom commands
 	# but you can get either one or the other by passing appropriate args
-	method list_commands (:$internal, :$custom)
+	# can also request structural commands, but don't forget those are a _subset_ of internal
+	# asking for internal implies structural, unless you explicitly say otherwise
+	# thus:
+	#		list_commands()												# return all commands
+	#		list_commands(internal => 1, custom => 1)					# same thing
+	#		list_commands(internal => 1, custom => 1, structural => 1)	# same thing
+	#		list_commands(internal => 1)								# return only internal (including structural)
+	#		list_commands(internal => 1, custom => 0)					# same thing
+	#		list_commands(internal => 1, structural => 1)				# same thing
+	#		list_commands(internal => 1, custom => 0, structural => 1)	# same thing
+	#		list_commands(structural => 1)								# return only structural
+	#		list_commands(internal => 0, structural => 1)				# same thing
+	#		list_commands(internal => 0, custom => 0, structural => 1)	# same thing
+	#		list_commands(internal => 1, structural => 0)				# return all internal _except_ structural
+	#		list_commands(internal => 1, custom => 0, structural => 0)	# same thing
+	#		list_commands(custom => 1)									# return only custom
+	#		list_commands(internal => 0, custom => 1)					# same thing
+	#		list_commands(internal => 0, custom => 1, structural => 0)	# same thing
+	#		list_commands(custom => 1, structural => 1)					# return custom plus structural
+	#		list_commands(internal => 0, custom => 1, structural => 1)	# same thing
+	#		list_commands(internal => 1, custom => 1, structural => 0)	# all internal except sturctural, plus custom
+	#		list_commands(internal => 0)								# returns nothing
+	#		list_commands(custom => 0)									# ditto
+	#		list_commands(structural => 0)								# ditto
+	#
+	method list_commands (:$internal, :$custom, :$structural)
 	{
-		# passing no args is like passing all 1's
-		($internal, $custom) = (1,1) unless $internal or $custom;
+		# passing nothing at all is like passing everything as 1
+		($internal, $custom) = (1,1) unless defined $internal or defined $custom or defined $structural;
+		# if structural not passed and internal is 1, set structural to 1 as well
+		$structural //= 1 if $internal;
 
 		my @sources;
 		push @sources, $self->_potential_command_sources('commands') if $internal;
 		push @sources, $self->_potential_command_sources('commands', custom => 1) if $custom;
 
-		return uniq map { keys %$_ } @sources;
+		my $struct_cmds = {};
+		if ($structural)
+		{
+			# get every command that returns a true value for structural()
+			$struct_cmds = {
+					map { ($_->command_names)[0] => $_->abstract }
+					grep { $_->can('structural') and $_->structural }
+					$self->app->command_plugins,
+			};
+
+			# add this one by hand until we make our own version
+			$struct_cmds->{'help'} = App::Cmd::Command::help->abstract;
+
+			# only add this one if the App::Cmd version is high enough
+			try
+			{
+				App::Cmd->VERSION(0.321);									# if this dies,
+				$struct_cmds->{'version'}									# this doesn't get executed
+						= App::Cmd::Command::version->abstract;				# and we don't need to catch anything
+			}
+		}
+
+		if (wantarray)
+		{
+			# they want a list of the commands
+			# fairly simple:
+			# take the keys from all the hashrefs in source, plus the keys from struct_cmds
+			# uniq them JIC there are any overrides
+			return uniq map { keys %$_ } (@sources, $struct_cmds);
+		}
+		else
+		{
+			# they want a hashref of command name => command description
+			# a bit harder:
+			# for struct_cmds, our hash is already correct
+			# for the hashrefs in sources, the keys are correct
+			# but the values are not
+			# for an internal command, the value is the action(s) of the command, which is useless
+			# for a custom command, the value is the whole command def, which includes a description
+			# (although description is optional, so we have to handle that too)
+			# we also have to honor earlier instances and throw out later one
+			# to make the overrides work properly
+			# ready? here we go
+
+			my $commands = {};
+			foreach my $s (@sources)
+			{
+				foreach (keys %$s)
+				{
+					next if exists $commands->{$_};						# this command overridden by something earlier
+
+					if (ref $s->{$_} eq 'HASH')							# must be a custom command
+					{
+						$commands->{$_} = $s->{$_}->{'Description'} // '<<no description specified>>';
+					}
+					else												# must be an internal command
+					{
+						my $class = "App::VC::Command::$_";
+						$class =~ s/-/_/g;								# in case command name has dashes
+						$commands->{$_} = $class->abstract;
+					}
+				}
+			}
+			$commands->{$_} //= $struct_cmds->{$_}						# add in structrual commands (if any)
+					foreach keys %$struct_cmds;
+			return $commands;
+		}
 	}
 
 

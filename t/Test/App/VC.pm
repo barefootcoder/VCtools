@@ -2,7 +2,7 @@ package Test::App::VC;
 
 use parent 'Exporter';
 
-our @EXPORT = qw< fake_cmd fake_custom >;
+our @EXPORT = qw< fake_app fake_cmd fake_custom >;
 
 
 use Test::Most;
@@ -78,9 +78,8 @@ func create_fake_command ($class, $config, %args)
 	);
 
 	# now fixup with a real app
-	$fake_app = fake_app( $cmd->config, $is_custom );
-	$cmd->{'app'} = $fake_app;											# totally cheating here, because these accessors
-	$cmd->config->{'app'} = $fake_app;									# are (rightfully) read-only
+	$fake_app = fake_app( $cmd->config, is_custom => $is_custom );
+	$cmd->{'app'} = $fake_app;						# totally cheating here, because accessor is (rightfully) read-only
 
 	isa_ok $cmd, $class, 'test command';
 	is $cmd->project, 'test', 'test command returns proper project';
@@ -89,9 +88,9 @@ func create_fake_command ($class, $config, %args)
 	return $cmd;
 }
 
-func fake_app (App::VC::Config $config, $is_custom)
+func fake_app (App::VC::Config $config, :$is_custom = 0, :$policy)
 {
-	my $app = App::VC->new( config => $config );
+	my $app = App::VC->new( config => $config, defined $policy ? (policy => $policy) : () );
 	if ($is_custom)
 	{
 		my $custom = $config->custom_command($cmd);
@@ -100,6 +99,7 @@ func fake_app (App::VC::Config $config, $is_custom)
 		die("can't parse custom command spec!") unless $spec;
 		$app->_set_spec($spec);
 	}
+	$config->{'app'} = $app;						# totally cheating here, because accessor is (rightfully) read-only
 	return $app;
 }
 

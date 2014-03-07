@@ -39,6 +39,11 @@ class App::VC::Command::info extends App::VC::Command
 			;
 	}
 
+	method structural
+	{
+		return 1;
+	}
+
 
 	augment validate_args ($opt, ArrayRef $args)
 	{

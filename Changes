@@ -9,6 +9,8 @@ Revision history for VCtools
 		vc commit-fix
 	*	modified commands:
 		vc commit -F : same as `vc commit-fix`
+		vc commands : much more consistent about what commands are listed
+		vc commands : also more consistent about what commands are "structural"
 	*	modified Git implementions:
 		%staged_files : consider additions and deletions as well as mods
 		vc unstage : no longer throws bogus error

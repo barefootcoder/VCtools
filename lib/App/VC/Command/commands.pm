@@ -38,6 +38,11 @@ class App::VC::Command::commands extends App::VC::Command with App::VC::BiColumn
 			;
 	}
 
+	method structural
+	{
+		return 1;
+	}
+
 
 	augment validate_args ($opt, ArrayRef $args)
 	{
@@ -54,22 +59,13 @@ class App::VC::Command::commands extends App::VC::Command with App::VC::BiColumn
 		say $out "Available commands:";
 		say $out '';
 
-		my @structural = qw< help commands info >;
-		try
-		{
-			App::Cmd->VERSION(0.321);									# if this dies,
-			push @structural, 'version';								# this doesn't get executed
-		}																# and we don't need to catch anything
-		push @structural, 'self-upgrade' unless $self->policy;
+		my @structural = $self->config->list_commands( structural => 1 );
 
-		my %builtin	= map { ($_->command_names)[0] => $_->abstract } $self->app->command_plugins;
-		my %custom =
-			map { $_ => $self->config->custom_command($_)->{'Description'} // '<<no description specified>>' }
-			$self->config->list_commands( custom => 1 );
-		my $all = { %builtin, %custom };
-		my @config = $self->policy ? keys %custom : grep { not $_ ~~ @structural } keys %$all;
+		my $all = $self->config->list_commands( internal => !$self->policy, custom => 1, structural => 1 );
+		debuggit(3 => "command/description hash:", DUMP => $all);
+		my @rest = grep { not $_ ~~ @structural } keys %$all;
 
-		say $out $self->format_bicol( [ (sort @structural), undef, (sort @config) ], $all );
+		say $out $self->format_bicol( [ (sort @structural), undef, (sort @rest) ], $all );
 	}
 }
 
