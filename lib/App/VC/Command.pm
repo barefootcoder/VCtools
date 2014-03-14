@@ -236,6 +236,23 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 		return $string;
 	}
 
+	method fill_template ($file)
+	{
+		my $templ = $self->my_dir->file('share', 'templ', $file)->slurp;
+		$templ =~ s/%%/\\%/g;											# %% should be the same as \% (ie a literal '%')
+
+		# whatever is between a '%foreach %something' line and an '%end' line gets replaced
+		# specifically, by looping through each possible value of %something, setting $_ to each
+		# (just like a Perl foreach loop), evaluating the contents over and over as if it were a
+		# double-quoted string in Perl, then having all the results concatenated together and jammed
+		# in where the %foreach construct was
+		# make sense?  good, here we go:
+		$templ =~ 	s{^ %foreach \s+ %(\w+) \n (.*?) ^%end \s* \n }
+					 { my $t = $2; join('', map { my $i = "qq{$t}"; eval $i // die $@ } $self->get_info($1)) }msgex;
+
+		return $self->info_expand($templ);
+	}
+
 
 	method build_env_line ($varname, $value)
 	{
