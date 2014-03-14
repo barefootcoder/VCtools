@@ -47,6 +47,11 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 								env_key => 'VCTOOLS_RUNAS',
 							ro, isa => Str, lazy, default => method { $self->app->arg0 },
 						);
+	has my_dir		=>	(
+							traits => [qw< NoGetopt >],
+							ro, isa => 'Path::Class::Dir', lazy,
+							default => method { file($0)->absolute->resolve->dir->parent },
+						);
 	has command		=>	(
 							traits => [qw< NoGetopt >],
 							ro, isa => Maybe[Str], lazy, writer => 'transmogrify',
@@ -619,7 +624,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 	method verify_vctoolsdir
 	{
 		my $theoretical_dir = $self->directive("VCtoolsDir");
-		my $actual_dir = file($0)->absolute->resolve->dir->parent;
+		my $actual_dir = $self->my_dir;
 		debuggit(4 => "theoretical", DUMP => [$theoretical_dir], "actual", DUMP => [$actual_dir]);
 		$self->warning("VCtoolsDir directive in config is missing or wrong; wrapper scripts may not function properly.")
 			if not $theoretical_dir or dir($theoretical_dir)->resolve ne $actual_dir;
