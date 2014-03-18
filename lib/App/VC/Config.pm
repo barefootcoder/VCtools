@@ -383,6 +383,21 @@ class App::VC::Config
 		return $custom;
 	}
 
+	method custom_command_specs ()
+	{
+		my $commands = {};
+		foreach my $src ($self->_potential_command_sources('commands', custom => 1))
+		{
+			foreach (keys %$src)
+			{
+				next if exists $commands->{$_};						# this command overridden by something earlier
+				$commands->{$_} = App::VC::CustomCommandSpec->new( $_, $src->{$_} );
+			}
+		}
+
+		return $commands;
+	}
+
 
 	# USER MESSAGING METHODS
 	# we pass these off to our command, if we have one (if not, we handle them fairly crudely)

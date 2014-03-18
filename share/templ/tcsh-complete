@@ -1,0 +1,6 @@
+complete %me \
+	'p/1/(%commands)/' \
+%foreach %command_options
+	'n/$_->{name}/($_->{opts})/' \\
+%end
+	'n/help/(%commands)/'

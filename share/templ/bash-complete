@@ -1,0 +1,71 @@
+# Derived from a hardcoded file written by Steve Caldwell, 2014.
+# Used with permission.
+
+# bash completion file for VCtools
+# To install (Ubuntu):
+#
+#   %me shell-complete | sudo tee /etc/bash_completion.d/ >/dev/null
+#   source ~/.bashrc
+#
+# To install (OS X):
+#
+#   brew install bash-completion
+#   # (Follow instructions for updating .bash_profile)
+#   %me shell-complete | sudo tee /usr/local/etc/bash_completion.d/ >/dev/null
+#   source ~/.bash_profile
+#
+# bash completion basics:
+#
+# 'complete -F _foo bar' get completions for command 'bar' from
+# function '_foo()' which must put the completions into $COMPREPLY.
+#
+# Within such a function, $COMP_WORDS is an array holding the words
+# of the current command line.
+#
+# $COMP_CWORD is an index into that array corresponding to the current
+# cursor position.
+#
+# ${COMP_WORDS[@]} expands to all those words; ${COMP_WORDS[COMP_CWORD]}
+# is the current word at the cursor.
+#
+# COMPREPLY=( $(somecmd) ) sets the reply to the output of the command,
+# separated into array elements by $IFS
+
+
+_%me()
+{
+    local cur prev opts base_commands
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    base_commands="%commands"
+
+    if [ $COMP_CWORD == 1 ]; then
+        opts="$base_commands"
+    else
+        #
+        # Complete the arguments to some of the commands.
+        #
+        case "${prev}" in
+            help)
+                opts="$base_commands"
+                ;;
+%foreach %command_options
+            $_->{name})
+                opts="$_->{opts}"
+                ;;
+%end
+        esac
+    fi
+
+    if [[ $opts ]]
+    then
+        COMPREPLY=($(compgen -W "${opts}" -- ${cur}))
+    else
+        COMPREPLY=()
+    fi
+    return 0
+}
+
+complete -F _%me %me

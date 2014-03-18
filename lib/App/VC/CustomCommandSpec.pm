@@ -142,7 +142,7 @@ class App::VC::CustomCommandSpec
 							);
 	has _arguments		=>	(
 								traits => [qw< Array >],
-									handles => { arguments => 'elements' },
+									handles => { arguments => 'elements', num_arguments => 'count' },
 								ro, isa => 'ArrayRef[CustomCommandSpec::Arg]', required, init_arg => 'arguments',
 							);
 	has _trailing		=>	(
