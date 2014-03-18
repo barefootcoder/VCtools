@@ -92,7 +92,7 @@ class App::VC::InfoCache
 			{
 				$self->_info->{$key} = $self->_fetch_info($key, $INFO_ATTRIBUTES{$key});
 			}
-			elsif ($key ~~ [qw< project proj_root vc >])				# these are things that our cmd knows how to do
+			elsif ($key ~~ [qw< me project proj_root vc >])				# these are things that our cmd knows how to do
 			{
 				$self->_info->{$key} = $self->cmd->$key;
 			}

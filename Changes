@@ -15,6 +15,8 @@ Revision history for VCtools
 		%staged_files : consider additions and deletions as well as mods
 		vc unstage : no longer throws bogus error
 		vc resolved : now actually works
+	*	new %info methods:
+		%me
 	*	base command improvements:
 		added version variable for `vc version` or `--version` switch
 			(assuming new enough version of App::Cmd)

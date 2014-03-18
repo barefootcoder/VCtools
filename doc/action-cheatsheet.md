@@ -24,6 +24,7 @@ The actions of an info method are executed and its output is gathered.  That out
 There are also some other internal things which act like info methods:
 
 * %running_nested
+* %me
 * %project
 * %proj_root
 * %vc
