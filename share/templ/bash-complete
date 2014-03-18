@@ -4,14 +4,14 @@
 # bash completion file for VCtools
 # To install (Ubuntu):
 #
-#   %me shell-complete | sudo tee /etc/bash_completion.d/ >/dev/null
+#   %me shell-complete | sudo tee /etc/bash_completion.d/%me >/dev/null
 #   source ~/.bashrc
 #
 # To install (OS X):
 #
 #   brew install bash-completion
 #   # (Follow instructions for updating .bash_profile)
-#   %me shell-complete | sudo tee /usr/local/etc/bash_completion.d/ >/dev/null
+#   %me shell-complete | sudo tee /usr/local/etc/bash_completion.d/%me >/dev/null
 #   source ~/.bash_profile
 #
 # bash completion basics:
