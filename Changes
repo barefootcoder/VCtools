@@ -7,6 +7,7 @@ Revision history for VCtools
 	*	new commands:
 		vc unbranch
 		vc commit-fix
+		vc shell-complete
 	*	modified commands:
 		vc commit -F : same as `vc commit-fix`
 		vc commands : much more consistent about what commands are listed

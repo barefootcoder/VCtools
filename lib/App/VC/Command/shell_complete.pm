@@ -41,7 +41,6 @@ class App::VC::Command::shell_complete extends App::VC::Command
 
 	augment validate_args ($opt, ArrayRef $args)
 	{
-		$self->verify_project;
 	}
 
 	augment execute (...)
