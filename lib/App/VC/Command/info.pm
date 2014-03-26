@@ -25,16 +25,31 @@ class App::VC::Command::info extends App::VC::Command
 									cmd_flag => 'alt-project', cmd_aliases => [qw< P >],
 							ro, isa => Str,
 						);
+	has oneline		=>	(
+							traits => [qw< Getopt >],
+								documentation => "If key has multiple values, separate with spaces (default: oneline).",
+							ro, isa => Bool,
+						);
 	has key			=>	(
 							traits => [qw< NoGetopt >],
 							rw, isa => Str,
 						);
 
+	method separator
+	{
+		return $self->oneline ? ' ' : "\n";
+	}
+
+
+	override usage_desc (...)
+	{
+		return super() . " key";
+	}
 
 	method description
 	{
 		return	"\n"
-			.	"Print information about the given directive.\n"
+			.	"Print information about the given key (can be: directive, pseudo-directive, or %info method).\n"
 			.	"\n"
 			;
 	}
@@ -67,22 +82,22 @@ class App::VC::Command::info extends App::VC::Command
 			}
 			when ('project:all')
 			{
-				say foreach $self->list_all_projects;
+				say join($self->separator, $self->list_all_projects);
 			}
 			when ('policy:all')
 			{
-				say foreach $self->list_all_policies;
+				say join($self->separator, $self->list_all_policies);
 			}
 			when (/^%(\w+)/)
 			{
 				debuggit(3 => "going to run method", $1);
-				say join(' ', $self->get_info($1));
+				say join($self->separator, $self->get_info($1));
 			}
 			default
 			{
 				my %args = $self->alt_project ? (project => $self->alt_project) : ();
 				my @vals = $self->directive($_, %args);
-				say @vals ? join(' ', @vals) : "DO NOT RECOGNIZE DIRECTIVE";
+				say @vals ? join($self->separator, @vals) : "DO NOT RECOGNIZE DIRECTIVE";
 			}
 		}
 	}

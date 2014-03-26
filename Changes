@@ -12,6 +12,8 @@ Revision history for VCtools
 		vc commit -F : same as `vc commit-fix`
 		vc commands : much more consistent about what commands are listed
 		vc commands : also more consistent about what commands are "structural"
+		vc info : fixed help message
+		vc info : now consistenly using newlines for separators; added `--oneline` switch to use spaces instead
 	*	modified Git implementions:
 		%staged_files : consider additions and deletions as well as mods
 		vc unstage : no longer throws bogus error
