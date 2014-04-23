@@ -489,7 +489,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 
 				# confirm directive never fail either, although they might exit
 				$pass = $self->handle_output($disposition, confirm => $msg,
-						sub { die("user chose not to proceed") unless $self->confirm($msg, proceed => 1); 1; });
+						sub { die("user chose not to proceed") unless $self->confirm_proceed($msg); 1; });
 			}
 
 			when ('fatal')
@@ -596,7 +596,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 				{
 					# if user doesn't confirm, that doesn't mean move on to the next command
 					# that means stop right there
-					return 0 unless $self->confirm($msg, proceed => 1, no_color => 1);
+					return 0 unless $self->confirm_proceed($msg);
 				}
 				else
 				{
@@ -777,6 +777,14 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 		}
 
 		return prompt(@prompt_args) ? 1 : 0;
+	}
+
+	# quick wrapper around confirm for confirm directive and interactive switch
+	method confirm_proceed ($msg)
+	{
+		my %opts = ( proceed => 1 );									# always do this
+		$opts{no_color} = 1 if $self->interactive;						# but only this when running under -i
+		return $self->confirm($msg, %opts);
 	}
 
 }
