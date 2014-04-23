@@ -23,6 +23,9 @@ Revision history for VCtools
 	*	base command improvements:
 		added version variable for `vc version` or `--version` switch
 			(assuming new enough version of App::Cmd)
+	*	code expansion improvements
+		now easier to call confirm() to make a custom prompt
+			(ex: `BAIL=$self->confirm("Do you want to quit now?")` / `$BAIL -> ! Bailing.`)
 	*	doc improvements:
 		better help for `vc stash` and `vc unstash`
 		fixed reference to "white" in the action cheatsheet

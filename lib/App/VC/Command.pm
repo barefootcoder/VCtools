@@ -489,7 +489,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 
 				# confirm directive never fail either, although they might exit
 				$pass = $self->handle_output($disposition, confirm => $msg,
-						sub { die("user chose not to proceed") unless $self->confirm($self->custom_message($msg)); 1; });
+						sub { die("user chose not to proceed") unless $self->confirm($msg, proceed => 1); 1; });
 			}
 
 			when ('fatal')
@@ -596,7 +596,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 				{
 					# if user doesn't confirm, that doesn't mean move on to the next command
 					# that means stop right there
-					return 0 unless $self->confirm($msg);
+					return 0 unless $self->confirm($msg, proceed => 1, no_color => 1);
 				}
 				else
 				{
@@ -759,21 +759,24 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 		return $message;
 	}
 
-	method confirm ($msg)
+	method confirm ($msg, :$proceed, :$no_color)
 	{
 		use IO::Prompter;
+		$msg = $self->custom_message($msg) unless $no_color;
 
 		# for some reason, passing color output to prompt messes it up
 		# so we'll just print that part out first
 		my $def_prompt = { y => '[Y/n]', n => '[y/N]', off => '[y/n]' }->{$self->default_yn};
-		print join(' ', $msg, $self->color_msg(white => 'Proceed?'), $def_prompt);
-		my $reply;
+		print join(' ', $msg, $proceed ? $self->color_msg(white => 'Proceed?') : (), $def_prompt);
+		my @prompt_args;
 		given ($self->default_yn)
 		{
-			return prompt -yn1, -def => 'y'			when 'y';
-			return prompt -y1						when 'n';
-			return prompt -yn1						when 'off';
+			@prompt_args = ( -yn1, -def => 'y' )		when 'y';
+			@prompt_args = ( -y1 )						when 'n';
+			@prompt_args = ( -yn1 )						when 'off';
 		}
+
+		return prompt(@prompt_args) ? 1 : 0;
 	}
 
 }
