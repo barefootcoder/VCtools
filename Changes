@@ -10,6 +10,8 @@ Revision history for VCtools
 		vc unbranch
 		vc commit-fix
 		vc shell-complete
+	*	modified global switches:
+		--pretend: when `verify = clean` fails, only print a message, don't actually exit
 	*	modified commands:
 		vc commit -F : same as `vc commit-fix`
 		vc commands : much more consistent about what commands are listed

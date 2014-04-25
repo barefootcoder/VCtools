@@ -669,14 +669,24 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 
 	method verify_clean
 	{
-		# trying to test config file changes when the config file is in the repo can be painful
-		# so, allow an exception to verify_clean, but only *iff*:
-		#	*	--debug is requested
-		#	*	*and* we're in pretend mode, so wouldn't be executing any commands anyway
-		return if $self->pretend and $self->debug;
-
-		# could institute some sort of "auto-stash" here, optionally
-		$self->fatal("Working copy has changes; stash them first.") if $self->is_dirty;
+		if ($self->is_dirty)
+		{
+			# if we're in pretend mode, just say that we _would_ have bailed
+			# this helps vastly both with dev testing and user info gathering
+			if ($self->pretend)
+			{
+				say join(' ',
+					$self->color_msg( cyan => "would" ),
+					$self->color_msg( red => "exit"),
+					$self->color_msg( cyan => "because working copy is dirty")
+				);
+			}
+			else
+			{
+				# could institute some sort of "auto-stash" here, optionally
+				$self->fatal("Working copy has changes; stash them first.");
+			}
+		}
 	}
 
 
