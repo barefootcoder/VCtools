@@ -120,6 +120,13 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 								env_prefix => 'VCTOOLS',
 							ro, isa => Bool,
 						);
+	has yes			=>	(
+							traits => [qw< Getopt ENV >],
+								documentation => "Automatically answer `y' to all confirmation prompts.",
+									cmd_aliases => 'y',
+								env_prefix => 'VCTOOLS',
+							ro, isa => Bool,
+						);
 	has default_yn	=>	(
 							traits => [qw< Getopt ENV >],
 								documentation => "Change default for yes/no prompts (one of: y, n, off; default: n).",
@@ -759,7 +766,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 		return $message;
 	}
 
-	method confirm ($msg, :$proceed, :$no_color)
+	method confirm ($msg, :$proceed, :$no_color, :$honor_yes)
 	{
 		use IO::Prompter;
 		$msg = $self->custom_message($msg) unless $no_color;
@@ -768,6 +775,14 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 		# so we'll just print that part out first
 		my $def_prompt = { y => '[Y/n]', n => '[y/N]', off => '[y/n]' }->{$self->default_yn};
 		print join(' ', $msg, $proceed ? $self->color_msg(white => 'Proceed?') : (), $def_prompt);
+
+		# honor the --yes switch if we've been requested to do so
+		if ($honor_yes and $self->yes)
+		{
+			say " y";
+			return 1;
+		}
+
 		my @prompt_args;
 		given ($self->default_yn)
 		{
@@ -783,7 +798,14 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 	method confirm_proceed ($msg)
 	{
 		my %opts = ( proceed => 1 );									# always do this
-		$opts{no_color} = 1 if $self->interactive;						# but only this when running under -i
+		if ($self->interactive)
+		{
+			$opts{no_color} = 1											# but only this when running under -i
+		}
+		else
+		{
+			$opts{honor_yes} = 1;										# only for confirm directives, not with -i
+		}
 		return $self->confirm($msg, %opts);
 	}
 

@@ -123,6 +123,19 @@ set_prompt_input( 'y', 'n' );
 );
 $cmd->test_execute_output(@output, {exit_okay => 1}, 'command with --interactive (1 y, 1 n)');
 
+# adding the --yes switch should not impact interactive mode
+$cmd = fake_cmd( action => $action, interactive => 1, yes => 1 );
+set_prompt_input( 'y', 'n' );
+@output = (
+	@NOW_RUNNING, "TEST=1\n",											# line 1
+	"true\n",															# line 2
+	'',																	# line 3
+	@ABOUT_TO_SAY, "check the *!bmoogle!*", @PROCEED,					# line 4
+	"check the ", red => 'bmoogle', "\n",								# line 4 (also)
+	@ABOUT_TO_RUN, "echo >/dev/null", @PROCEED,							# line 5
+);
+$cmd->test_execute_output(@output, {exit_okay => 1}, 'command with --interactive and --yes (1 y, 1 n)');
+
 # test with all no (stop output immediately)
 $cmd = fake_cmd( action => $action, interactive => 1 );
 set_prompt_input( 'n' );

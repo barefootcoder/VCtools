@@ -62,6 +62,17 @@ set_prompt_input( '', 'x', 'n' );
 $cmd->test_execute_output(@output, {exit_okay => 1}, 'default off, no answer');
 
 
+# use --yes to ignore prompts altogether
+
+$cmd = fake_cmd( action => $action, yes => 1, );
+set_prompt_input( 'n' );
+@output = (
+	"stop here ", white => "Proceed?", " [y/N] y\n",
+	"final output\n",
+);
+$cmd->test_execute_output(@output, 'using --yes switch');
+
+
 # make sure you can't set default to anything funky
 
 throws_ok { $cmd = fake_cmd( action => $action, default_yn => 'bmoogle', ) } qr/default_yn.*no.*pass.*constraint/,

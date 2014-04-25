@@ -41,6 +41,17 @@ set_prompt_input( '' );
 $cmd->test_execute_output(@output, 'default set to yes');
 
 
+# turning on auto-yes shouldn't impact custom confirm calls
+
+$cmd = fake_cmd( action => $action, yes => 1, );
+set_prompt_input( 'n' );
+@output = (
+	"Do you like my test? [y/N]",
+	"test is 0\n",
+);
+$cmd->test_execute_output(@output, 'ignoring --yes');
+
+
 # test color expansion
 
 $action = q{

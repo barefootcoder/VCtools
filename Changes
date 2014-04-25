@@ -4,6 +4,8 @@ Revision history for VCtools
 
 	*	bug fixes:
 		`vc help` with no args now works properly again
+	*	new global switches:
+		--yes
 	*	new commands:
 		vc unbranch
 		vc commit-fix
