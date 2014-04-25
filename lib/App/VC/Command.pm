@@ -130,7 +130,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 	has default_yn	=>	(
 							traits => [qw< Getopt ENV >],
 								documentation => "Change default for yes/no prompts (one of: y, n, off; default: n).",
-									cmd_aliases => 'default-yn',
+									cmd_flag => 'default-yn',
 								env_prefix => 'VCTOOLS',
 							ro, isa => enum([qw< y n off >]), default => 'n',
 						);
