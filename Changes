@@ -1,6 +1,6 @@
 Revision history for VCtools
 
-0.14	
+0.14	2014-04-27		
 
 	*	bug fixes:
 		`vc help` with no args now works properly again
