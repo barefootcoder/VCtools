@@ -18,12 +18,12 @@ class App::VC::Command::shell_complete extends App::VC::Command
 	use MooseX::Types::Moose qw< :all >;
 
 
-	method abstract { "FILL ME IN" }
+	method abstract { "get shell tab-completion commands" }
 
 	method description
 	{
 		return	"\n"
-			.	"FILL ME IN.\n"
+			.	"Output a file with shell tab-completion commands for the invoking shell.\n"
 			.	"\n"
 			;
 	}

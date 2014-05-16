@@ -17,12 +17,12 @@ class App::VC::Command::push extends App::VC::Command
 	use MooseX::Types::Moose qw< :all >;
 
 
-	method abstract { "FILL ME IN" }
+	method abstract { "push changes to server" }
 
 	method description
 	{
 		return	"\n"
-			.	"FILL ME IN.\n"
+			.	"Upload recent modifications to the central server.\n"
 			.	"\n"
 			;
 	}
