@@ -44,6 +44,7 @@ class App::VC::Command::commit extends App::VC::Command
 
 	augment validate_args ($opt, ArrayRef $args)
 	{
+		$self->verify_project;
 		$self->set_info(files => $args);
 	}
 

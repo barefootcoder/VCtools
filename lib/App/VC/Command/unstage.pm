@@ -19,10 +19,15 @@ class App::VC::Command::unstage extends App::VC::Command
 
 	method abstract { "unprepare previously staged files" }
 
+	override usage_desc (...)
+	{
+		return super() . " [file ...]";
+	}
+
 	method description
 	{
 		return	"\n"
-			.	"Remove all files from the staging area.\n"
+			.	"Remove files from the staging area (default: all staged files).\n"
 			.	"\n"
 			;
 	}
@@ -31,6 +36,7 @@ class App::VC::Command::unstage extends App::VC::Command
 	augment validate_args ($opt, ArrayRef $args)
 	{
 		$self->verify_project;
+		$self->set_info(files => $args);
 	}
 
 	augment execute (...)

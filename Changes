@@ -3,6 +3,8 @@ Revision history for VCtools
 0.15
 	*	bug fixes:
 		`vc commands` no longer has "FILL ME IN" for some commands
+		`vc commit` now does a `verify = project`
+		`vc unstage` now accepts files (and therefore doesn't unstage everything when you request just one file)
 
 0.14	2014-04-27		10aefe9b72
 
