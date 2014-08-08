@@ -57,6 +57,10 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 							ro, isa => Maybe[Str], lazy, writer => 'transmogrify',
 							default => method { ($self->command_names)[0] },
 						);
+	has option_text	=>	(
+							traits => [qw< NoGetopt >],
+							ro, isa => Str, lazy, builder => '_build_option_text',
+						);
 	# RUN-TIME ATTRIBUTES
 	# (used during run-time operation of the command
 	has _info		=>	(
@@ -151,8 +155,17 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 	# override this if you happen to be a structural command
 	method structural	{ 0 }
 
+	# mainly needed by the `help` command
+	method usage_text ()
+	{
+		my $text = $self->usage_desc;
+		my %repl = ( c => $self->me, o => $self->option_text, '%' => '%' );
+		$text =~ s{%(.)}{ $repl{$1} // $self->fatal("unknown sequence %$1 in usage desc") }eg;
+		return $text;
+	}
 
-	# BUILDERS
+
+	# CONSTRUCTORS
 
 	method _connect_config
 	{
@@ -161,6 +174,26 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 			: $self->app->config;
 		$conf->register_command($self);
 		return $conf;
+	}
+
+
+	method _build_option_text
+	{
+		# Because we don't really like the way the leader_text() method works, we're going to do our
+		# own replacements for %c and %o in the usage_desc().  Replacing %c is trivial.  But %o is
+		# harder.  Since there doesn't seem to be a way to get Getopt::Long::Descriptive's %o
+		# replacement string directly, we're going to cheat a bit.
+
+		my ($opt_spec) = $self->_getopt_spec(options => [$self->_attrs_to_options]);
+		debuggit(4 => "option spec from _getopt_spec:", DUMP => $opt_spec);
+		my $usage = Getopt::Long::Descriptive::describe_options("%o", @$opt_spec);
+		debuggit(4 => "usage object from describe_options", DUMP => $usage);
+
+		# tweak the "long options" part, if present
+		my $text = $usage->leader_text;
+		$text =~ s/\[long options\s*\.{3}\]/[--long-option ...]/;
+
+		return $text;
 	}
 
 
@@ -750,6 +783,16 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 	{
 		say STDERR $self->me . ' ' . $self->running_command . ': ' . $self->color_msg(red => $msg);
 		exit 1;
+	}
+
+	method usage_error ($msg)
+	{
+		my ($me, $cmd) = ($self->me, $self->running_command);
+		say STDERR "$me $cmd: " . $self->color_msg(red => $msg);
+		say '';
+		say 'Usage: ', $self->color_msg(white => $self->usage->leader_text);
+		say $self->color_msg(cyan => "for more help, do:"), ' ', $self->color_msg(white => "$me help $cmd");
+		exit 2;
 	}
 
 	method print_codeline ($line)

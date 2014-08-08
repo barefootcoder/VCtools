@@ -286,9 +286,6 @@ class App::VC::Config
 					$self->app->command_plugins,
 			};
 
-			# add this one by hand until we make our own version
-			$struct_cmds->{'help'} = App::Cmd::Command::help->abstract;
-
 			# only add this one if the App::Cmd version is high enough
 			try
 			{

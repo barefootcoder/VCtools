@@ -5,6 +5,8 @@ Revision history for VCtools
 		`vc commands` no longer has "FILL ME IN" for some commands
 		`vc commit` now does a `verify = project`
 		`vc unstage` now accepts files (and therefore doesn't unstage everything when you request just one file)
+	*	base command improvements:
+		vc help : rewritten so we have our own version (not relying on default from App::Cmd any more)
 
 0.14	2014-04-27		10aefe9b72
 

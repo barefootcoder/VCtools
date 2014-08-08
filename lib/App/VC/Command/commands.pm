@@ -30,10 +30,15 @@ class App::VC::Command::commands extends App::VC::Command with App::VC::BiColumn
 	# using the # ABSTRACT: comment doesn't work here for some reason
 	method abstract { "list available commands" }
 
+	override usage_desc (...)
+	{
+		return super() . " <args>";
+	}
+
 	method description
 	{
 		return	"\n"
-			.	"This command will list all commands available and brief descriptions.\n"
+			.	"List all commands available with brief descriptions of each.\n"
 			.	"\n"
 			;
 	}
@@ -46,7 +51,6 @@ class App::VC::Command::commands extends App::VC::Command with App::VC::BiColumn
 
 	augment validate_args ($opt, ArrayRef $args)
 	{
-		$self->verify_project;
 	}
 
 	augment execute (...)
