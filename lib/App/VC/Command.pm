@@ -262,7 +262,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 		}
 	method info_expand ($string, :$code = 0)
 	{
-		debuggit(4 => "going to expand string", $string);
+		debuggit(4 => "going to expand", $code ? 'code:' : 'string:', $string);
 		my $info_method = qr/(?<!\\)%([a-zA-Z]\w+)/;					# ie, not following a backslash
 		if ($code)
 		{
@@ -365,6 +365,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 
 			default { die("don't know what to do with command type $type") }
 		}
+		debuggit(2 => "command", $self->command, "is", $type, "with actions", DUMP => \@actions);
 
 		foreach my $line (@actions)
 		{

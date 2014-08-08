@@ -5,7 +5,7 @@ use lib dirname($0);
 use Test::App::VC;
 
 
-# all directives (except fatal) in normal mode
+# all deprecated directives in normal mode
 
 my $action = q{
 	@ say "true"

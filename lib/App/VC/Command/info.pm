@@ -27,7 +27,7 @@ class App::VC::Command::info extends App::VC::Command
 						);
 	has oneline		=>	(
 							traits => [qw< Getopt >],
-								documentation => "If key has multiple values, separate with spaces (default: oneline).",
+								documentation => "If key has multiple values, separate with spaces (default: newlines).",
 							ro, isa => Bool,
 						);
 	has key			=>	(
@@ -59,7 +59,7 @@ class App::VC::Command::info extends App::VC::Command
 
 	augment validate_args ($opt, ArrayRef $args)
 	{
-		$self->usage_error("must supply directive to lookup") unless $args->[0];
+		$self->usage_error("must supply key to lookup") unless $args->[0];
 		$self->key($args->[0]);
 	}
 
