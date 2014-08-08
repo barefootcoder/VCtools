@@ -161,6 +161,8 @@ method App::VC::Command::test_help_output ($cmd, $output)
 	# first switch is always -h, so look for that one
 	# and go until the first blank line
 	$help_out =~ s/^\s*-h\s+.*?^$//ms or _unexpected('option help', $help_out);
+	# just verify that the line about def: is there
+	$help_out =~ s/^\s*\[.*?vc info def:$cmd.*?\]$//ms or _unexpected('info def: reference', $help_out);
 	# don't really care how many blank lines there are
 	$help_out =~ s/\n+/\n/g;
 	is $help_out, $self->make_testmsg($output), "proper output for help $cmd";

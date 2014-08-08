@@ -85,6 +85,67 @@ class App::VC::Command::info extends App::VC::Command
 			{
 				say join($self->separator, $self->list_all_policies);
 			}
+			when ( /^def:(.*)$/ )
+			{
+				my $cmd = $1;
+				my ($type, $thing, @actions);
+				my $struct = 0;
+				if ( $cmd =~ s/^%// )
+				{
+					# "command" is actually an info method
+					$thing = 'info method';
+
+					if ( @actions = $self->config->action_lines(info => $cmd) )
+					{
+						$type = 'an internal';
+					}
+					elsif ( my $custom = $self->config->custom_info($cmd) )
+					{
+						$type = 'a custom';
+						@actions = $self->config->process_command_string( $custom->{'action'} );
+					}
+					else
+					{
+						$self->fatal("don't know what `%$cmd' is");
+					}
+				}
+				else
+				{
+					# actual command
+					$thing = 'command';
+
+					if ( $self->config->command_is_structural($cmd) )
+					{
+						$struct = 1;
+					}
+					elsif ( @actions = $self->config->action_lines(commands => $cmd) )
+					{
+						$type = 'an internal';
+					}
+					elsif ( my $custom = $self->config->custom_command($cmd) )
+					{
+						$type = 'a custom';
+						@actions = $self->config->process_command_string( $custom->{'action'} );
+					}
+					else
+					{
+						$self->fatal("don't know what `$cmd' is");
+					}
+				}
+
+				if ($struct)
+				{
+					say $self->color_msg(white => $cmd), " is an internal command";
+					say "it is structural, and therefore not defined in the config";
+				}
+				else
+				{
+					say $self->color_msg(white => $cmd), " is $type $thing, defined thusly:";
+					say '';
+					say "    $_" foreach @actions;
+					say '';
+				}
+			}
 			when (/^%(\w+)/)
 			{
 				debuggit(3 => "going to run method", $1);

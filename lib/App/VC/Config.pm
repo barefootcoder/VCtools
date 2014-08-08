@@ -152,7 +152,7 @@ class App::VC::Config
 
 	# PRIVATE METHODS
 
-	# this is called by list_commands, action_lines, and custom_command
+	# this is called by list_commands, action_lines, and custom_*
 	method _potential_command_sources ($type where [qw< info commands >], :$custom = 0)
 	{
 		my $vc = $self->vc;
@@ -340,6 +340,11 @@ class App::VC::Config
 					foreach keys %$struct_cmds;
 			return $commands;
 		}
+	}
+
+	method command_is_structural ($cmd)
+	{
+		return $cmd ~~ [ $self->list_commands(structural => 1) ];
 	}
 
 
