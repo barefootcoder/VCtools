@@ -26,10 +26,7 @@ class App::VC::Command::help extends App::VC::Command
 
 	method description
 	{
-		return	"\n"
-			.	"List all commands, or get detailed help on individual commands.\n"
-			.	"\n"
-			;
+		return	"List all commands, or get detailed help on individual commands.";
 	}
 
 	method structural
@@ -60,7 +57,9 @@ class App::VC::Command::help extends App::VC::Command
 
 			say 'Usage:';
 			say '    ', $self->color_msg(white => $cmd->usage_text);
+			say '';
 			say $self->color_msg(cyan => $cmd->description);
+			say '';
 			say $cmd->usage->option_text;
 			say '';
 		}

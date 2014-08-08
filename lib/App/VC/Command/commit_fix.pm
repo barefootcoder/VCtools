@@ -21,10 +21,7 @@ class App::VC::Command::commit_fix extends App::VC::Command
 
 	method description
 	{
-		return	"\n"
-			.	"Fix last commit, if possible.\n"
-			.	"\n"
-			;
+		return	"Fix last commit, if possible.";
 	}
 
 	override command_names

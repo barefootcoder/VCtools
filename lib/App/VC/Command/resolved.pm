@@ -20,10 +20,7 @@ class App::VC::Command::resolved extends App::VC::Command
 
 	method description
 	{
-		return	"\n"
-			.	"Mark one or more files as resolved (after manually resolving conflicts).\n"
-			.	"\n"
-			;
+		return	"Mark one or more files as resolved (after manually resolving conflicts).";
 	}
 
 

@@ -20,10 +20,7 @@ class App::VC::Command::show_branches extends App::VC::Command
 
 	method description
 	{
-		return	"\n"
-			.	"List all known branches.\n"
-			.	"\n"
-			;
+		return	"List all known branches.";
 	}
 
 	override command_names

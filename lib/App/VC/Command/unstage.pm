@@ -26,10 +26,7 @@ class App::VC::Command::unstage extends App::VC::Command
 
 	method description
 	{
-		return	"\n"
-			.	"Remove files from the staging area (default: all staged files).\n"
-			.	"\n"
-			;
+		return	"Remove files from the staging area (default: all staged files).";
 	}
 
 

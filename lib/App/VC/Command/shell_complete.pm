@@ -22,10 +22,7 @@ class App::VC::Command::shell_complete extends App::VC::Command
 
 	method description
 	{
-		return	"\n"
-			.	"Output a file with shell tab-completion commands for the invoking shell.\n"
-			.	"\n"
-			;
+		return	"Output a file with shell tab-completion commands for the invoking shell.";
 	}
 
 	override command_names

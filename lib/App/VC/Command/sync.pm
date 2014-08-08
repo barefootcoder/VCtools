@@ -20,10 +20,7 @@ class App::VC::Command::sync extends App::VC::Command
 
 	method description
 	{
-		return	"\n"
-			.	"Update working copy with latest changes from server.\n"
-			.	"\n"
-			;
+		return	"Update working copy with latest changes from server.";
 	}
 
 

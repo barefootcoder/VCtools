@@ -20,10 +20,7 @@ class App::VC::Command::stat extends App::VC::Command
 
 	method description
 	{
-		return	"\n"
-			.	"Show status of working copy.\n"
-			.	"\n"
-			;
+		return	"Show status of working copy.";
 	}
 
 

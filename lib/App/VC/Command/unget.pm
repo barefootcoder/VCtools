@@ -20,10 +20,7 @@ class App::VC::Command::unget extends App::VC::Command
 
 	method description
 	{
-		return	"\n"
-			.	"Revert (throw away) changes to file(s) in the working copy.\n"
-			.	"\n"
-			;
+		return	"Revert (throw away) changes to file(s) in the working copy.";
 	}
 
 

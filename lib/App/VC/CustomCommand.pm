@@ -74,11 +74,10 @@ class App::VC::CustomCommand extends App::VC::Command with (App::VC::BiColumnar,
 		if (@args and grep { $_->description } @args)
 		{
 			state $xform = sub { "<$_[0]> " };
-			$desc .= $self->format_bicol(
+			$desc .= "\n\n" . $self->format_bicol(
 				[ map { $xform->( $_->name ) } @args ],
 				{ map { $xform->( $_->name ) => $_->description // '<<no description specified>>' } @args }
 			);
-			$desc .= "\n";
 		}
 		return $self->info_expand($desc);
 	}

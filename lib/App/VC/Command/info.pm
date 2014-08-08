@@ -48,10 +48,7 @@ class App::VC::Command::info extends App::VC::Command
 
 	method description
 	{
-		return	"\n"
-			.	"Print information about the given key (can be: directive, pseudo-directive, or %info method).\n"
-			.	"\n"
-			;
+		return	"Print information about the given key (can be: directive, pseudo-directive, or %info method).";
 	}
 
 	method structural

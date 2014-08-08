@@ -21,10 +21,7 @@ class App::VC::Command::unbranch extends App::VC::Command
 
 	method description
 	{
-		return	"\n"
-			.	"Checkout the mainline branch of the code.\n"
-			.	"\n"
-			;
+		return	"Checkout the mainline branch of the code.";
 	}
 
 

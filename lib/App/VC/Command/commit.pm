@@ -35,10 +35,7 @@ class App::VC::Command::commit extends App::VC::Command
 
 	method description
 	{
-		return	"\n"
-			.	"Commit changes in working copy (previously staged, files specified on command line, or all changes).\n"
-			.	"\n"
-			;
+		return	"Commit changes in working copy (previously staged, files specified on command line, or all changes).";
 	}
 
 

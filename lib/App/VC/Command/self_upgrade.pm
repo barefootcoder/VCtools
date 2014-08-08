@@ -26,10 +26,7 @@ class App::VC::Command::self_upgrade extends App::VC::Command
 
 	method description
 	{
-		return	"\n"
-			.	"Upgrade VCtools with latest changes, or update a VCtools-local Perl module.\n"
-			.	"\n"
-			;
+		return	"Upgrade VCtools with latest changes, or update a VCtools-local Perl module.";
 	}
 
 	override command_names

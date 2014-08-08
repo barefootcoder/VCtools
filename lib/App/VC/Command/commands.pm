@@ -37,10 +37,7 @@ class App::VC::Command::commands extends App::VC::Command with App::VC::BiColumn
 
 	method description
 	{
-		return	"\n"
-			.	"List all commands available with brief descriptions of each.\n"
-			.	"\n"
-			;
+		return	"List all commands available with brief descriptions of each.";
 	}
 
 	method structural

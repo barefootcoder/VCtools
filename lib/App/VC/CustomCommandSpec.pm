@@ -268,7 +268,7 @@ class App::VC::CustomCommandSpec
 		}
 
 		# description
-		$args->{'description'} = "\n" . $spec->{'Description'} . "\n\n" if exists $spec->{'Description'};
+		$args->{'description'} = $spec->{'Description'} if exists $spec->{'Description'};
 
 		# action
 		$args->{'action'} = $spec->{'action'} or $fatal_error //= "action spec for CustomCommand $command";

@@ -20,10 +20,7 @@ class App::VC::Command::stage extends App::VC::Command
 
 	method description
 	{
-		return	"\n"
-			.	"Prepare (stage) working copy changes for commit.\n"
-			.	"\n"
-			;
+		return	"Prepare (stage) working copy changes for commit.";
 	}
 
 

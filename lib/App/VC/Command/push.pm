@@ -21,10 +21,7 @@ class App::VC::Command::push extends App::VC::Command
 
 	method description
 	{
-		return	"\n"
-			.	"Upload recent modifications to the central server.\n"
-			.	"\n"
-			;
+		return	"Upload recent modifications to the central server.";
 	}
 
 
