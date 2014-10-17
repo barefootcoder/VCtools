@@ -143,8 +143,9 @@ method App::VC::Command::test_execute_output (...)
 sub _unexpected { fail "help text doesn't look right: " . shift; diag(@_) }
 method App::VC::Command::test_help_output ($cmd, $output)
 {
-	require App::Cmd::Command::help;
-	my ($help) = App::Cmd::Command::help->prepare( $self->app );
+	require App::VC::Command::help;
+	my ($help) = App::VC::Command::help->prepare( $self->app );
+	$help->validate_args( {}, [$cmd] );
 	trap { $help->execute( {}, [$cmd] ) };
 
 	is $trap->die, undef, "no die from: help $cmd";
@@ -153,12 +154,15 @@ method App::VC::Command::test_help_output ($cmd, $output)
 	my $help_out = $trap->stdout;
 	# replace the leading command and any options with placeholders
 	# this makes it easier for our caller to match
-	$help_out =~ s/\A\S+/%c/ or _unexpected('command name', $help_out);
-	$help_out =~ s/\[-\?\w+\] \Q[long options...]/%o/ or _unexpected('options', $help_out);
+	$help_out =~ s/\AUsage:\s+\S+/%c/ or _unexpected('command name', $help_out);
+	$help_out =~ s/\[-\?\w+\] \Q[--long-option ...]/%o/ or _unexpected('options', $help_out);
 	# ditch help for switches
 	# it's always the same, and we don't want to have to change it here every time add a new one
 	# first switch is always -h, so look for that one
-	$help_out =~ s/^[ \t]*-h\s+.*\z//ms or _unexpected('option help', $help_out);
+	# and go until the first blank line
+	$help_out =~ s/^\s*-h\s+.*?^$//ms or _unexpected('option help', $help_out);
+	# don't really care how many blank lines there are
+	$help_out =~ s/\n+/\n/g;
 	is $help_out, $self->make_testmsg($output), "proper output for help $cmd";
 }
 

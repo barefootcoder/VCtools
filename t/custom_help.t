@@ -21,13 +21,13 @@ my $extra = q{
 };
 
 my $cmd = fake_cmd( action => $action, extra => $extra );
-$cmd->test_help_output(custtest => "%c custtest %o <one>\n\n\n\n");
+$cmd->test_help_output(custtest => "%c custtest %o <one>\n");
 
 
 # custom command with a description
 
 $extra = q{
-	<CustomCommand custtest>
+	<CustomCommand custdesc>
 		Description = test command
 		Argument = one
 		action <<---
@@ -37,13 +37,13 @@ $extra = q{
 };
 
 $cmd = fake_cmd( action => $action, extra => $extra );
-$cmd->test_help_output(custtest => "%c custtest %o <one>\n\n\ntest command\n\n\n");
+$cmd->test_help_output(custdesc => "%c custdesc %o <one>\ntest command\n");
 
 
 # arg with a description
 
 $extra = q{
-	<CustomCommand custtest>
+	<CustomCommand custargdesc>
 		Description = test command
 		Argument one		<the one switch>
 		action <<---
@@ -56,13 +56,13 @@ my $switch_help = <<END;
   <one> : the one switch
 END
 $cmd = fake_cmd( action => $action, extra => $extra );
-$cmd->test_help_output(custtest => "%c custtest %o <one>\n\n\ntest command\n\n$switch_help\n");
+$cmd->test_help_output(custargdesc => "%c custargdesc %o <one>\ntest command\n$switch_help");
 
 
 # some with and some without
 
 $extra = q{
-	<CustomCommand custtest>
+	<CustomCommand custmultargs>
 		Description = test command
 		Argument one		<the one switch>
 		Argument two
@@ -77,13 +77,13 @@ $switch_help = <<END;
   <two> : <<no description specified>>
 END
 $cmd = fake_cmd( action => $action, extra => $extra );
-$cmd->test_help_output(custtest => "%c custtest %o <one> <two>\n\n\ntest command\n\n$switch_help\n");
+$cmd->test_help_output(custmultargs => "%c custmultargs %o <one> <two>\ntest command\n$switch_help");
 
 
 # different name lengths
 
 $extra = q{
-	<CustomCommand custtest>
+	<CustomCommand custargnames>
 		Description = test command
 		Argument one		<the one switch>
 		Argument two		<the two switch>
@@ -100,13 +100,13 @@ $switch_help = <<END;
   <three> : the three switch
 END
 $cmd = fake_cmd( action => $action, extra => $extra );
-$cmd->test_help_output(custtest => "%c custtest %o <one> <two> <three>\n\n\ntest command\n\n$switch_help\n");
+$cmd->test_help_output(custargnames => "%c custargnames %o <one> <two> <three>\ntest command\n$switch_help");
 
 
 # with a Files section
 
 $extra = q{
-	<CustomCommand custtest>
+	<CustomCommand custfiles>
 		Description = test command
 		Argument one		<the one switch>
 		Argument two		<the two switch>
@@ -124,13 +124,13 @@ $switch_help = <<END;
   <three> : the three switch
 END
 $cmd = fake_cmd( action => $action, extra => $extra );
-$cmd->test_help_output(custtest => "%c custtest %o <one> <two> <three> <file> [...]\n\n\ntest command\n\n$switch_help\n");
+$cmd->test_help_output(custfiles => "%c custfiles %o <one> <two> <three> <file> [...]\ntest command\n$switch_help");
 
 
 # trailing args with a description
 
 $extra = q{
-	<CustomCommand custtest>
+	<CustomCommand custtrail>
 		Description = test command
 		Argument one		<the one switch>
 		<Trailing thingies>
@@ -149,7 +149,7 @@ $switch_help = <<END;
   <thingy> : things that go at the end
 END
 $cmd = fake_cmd( action => $action, extra => $extra );
-$cmd->test_help_output(custtest => "%c custtest %o <one> <thingy> [...]\n\n\ntest command\n\n$switch_help\n");
+$cmd->test_help_output(custtrail => "%c custtrail %o <one> <thingy> [...]\ntest command\n$switch_help");
 
 
 done_testing;
