@@ -17,6 +17,8 @@ class App::VC::Command::shell_complete extends App::VC::Command
 	use MooseX::Has::Sugar;
 	use MooseX::Types::Moose qw< :all >;
 
+	use App::VC::Command::info;											# because we need access to its $SPECIAL_KEYS
+
 
 	method abstract { "get shell tab-completion commands" }
 
@@ -62,8 +64,16 @@ class App::VC::Command::shell_complete extends App::VC::Command
 			}
 		}
 
+		my @info_keys = ('list');
+		push @info_keys, keys %$App::VC::Command::info::SPECIAL_KEYS;
+		push @info_keys, $self->config->list_directives, map { "%$_" } $self->config->list_directives;
+		my @info_methods = map { "%$_" } $self->config->list_info_methods;
+		push @info_keys, @info_methods;
+		push @info_keys, map { "def:$_" } $self->config->list_commands, @info_methods;
+
 		$self->set_info(commands => [ sort @commands ]);
 		$self->set_info(command_options => $command_opts);
+		$self->set_info(info_keys => [ sort @info_keys ]);
 		try
 		{
 			say $self->fill_template($templ);

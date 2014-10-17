@@ -51,6 +51,9 @@ _%me()
             help)
                 opts="$base_commands"
                 ;;
+			info)
+                opts="%info_keys"
+                ;;
 %foreach %command_options
             $_->{name})
                 opts="$_->{opts}"

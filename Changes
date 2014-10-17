@@ -11,6 +11,7 @@ Revision history for VCtools
 		vc info : can now do `vc info list` to get all possible keys (args to `vc info`)
 					(request from Steve Caldwell)
 		vc help : now advises people to try `vc info def:command`
+		vc shell-complete : now provides completion for `vc info`
 	*	base command improvements:
 		vc help : rewritten so we have our own version (not relying on default from App::Cmd any more)
 
