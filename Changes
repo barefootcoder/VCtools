@@ -8,6 +8,8 @@ Revision history for VCtools
 		`vc` no longer repeatedly tries to run `vctools-prereq-verify` when what's missing is an internal module
 	*	modified commands:
 		vc info : can now ask for `def:command` or `def:%info`
+		vc info : can now do `vc info list` to get all possible keys (args to `vc info`)
+					(request from Steve Caldwell)
 		vc help : now advises people to try `vc info def:command`
 	*	base command improvements:
 		vc help : rewritten so we have our own version (not relying on default from App::Cmd any more)

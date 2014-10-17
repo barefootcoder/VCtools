@@ -237,6 +237,36 @@ class App::VC::Config
 		return $self->deref($value);
 	}
 
+	# List all the *value* directives for the given project.  In the absence of a project, will just
+	# return global directives (but without the "Default" prefix).  By "value" directives, we mean
+	# values which are either scalars or lists (arrayrefs).  A value which is a hashref contains
+	# multiple levels of keys and other values, so those are skipped.
+	method list_directives (:$project = $self->project, :$vc = $self->has_project && $self->vc)
+	{
+		my $policy = $self->policy;
+
+		# Possibly this should be refactored into something common with directive(), above.  Then it
+		# could work like _potential_command_sources().
+		#
+		# Then again, here we're taking full advantage of the fact that we don't have to find things
+		# in the right order.  So that might present a bit of a problem in the general case.  We're
+		# also playing just a bit fast and loose with keys that start with "Default".
+		my @sources;
+		push @sources, $self->_config->{'Project'}->{$project}				if $project;
+		push @sources, $self->_config->{'Policy'}->{$policy}->{$self->vc}	if $policy and $vc;
+		push @sources, $self->_config->{'Policy'}->{$policy}				if $policy;
+		push @sources, $self->_config->{$self->vc}							if $vc;
+		push @sources, $self->_config;
+
+		my @directives;
+		foreach my $hash (@sources)
+		{
+			push @directives, grep { ref $hash->{$_} ne 'HASH' } keys %$hash;
+		}
+
+		return uniq map { s/^Default//r } @directives;
+	}
+
 	# list all the commands we know about (don't forget: this is from the perspective of the config)
 	# default is to return both internal commands and custom commands
 	# but you can get either one or the other by passing appropriate args
@@ -345,6 +375,38 @@ class App::VC::Config
 	method command_is_structural ($cmd)
 	{
 		return $cmd ~~ [ $self->list_commands(structural => 1) ];
+	}
+
+	# This is basically a lot like _list_commands, except not as complicated, because there are no
+	# structural info methods.  Again, asking for nothing gets you everything.
+	#
+	# Another simplification: info methods don't (currently) have any descriptions, so you can't
+	# call this in a scalar context to get a hashref.  In fact, if you call it in a scalar context,
+	# it `die`s.  This is because, no matter what it did, it still probably wouldn't be what you
+	# expected, so better not to do anything at all.
+	method list_info_methods (:$internal, :$custom)
+	{
+		# passing nothing at all is like passing everything as 1
+		($internal, $custom) = (1,1) unless defined $internal or defined $custom;
+
+		my @sources;
+		push @sources, $self->_potential_command_sources('info') if $internal;
+		push @sources, $self->_potential_command_sources('info', custom => 1) if $custom;
+
+		if (wantarray)
+		{
+			# they want a list of the info methods
+			# fairly simple:
+			# take the keys from all the hashrefs in source
+			# uniq them JIC there are any overrides
+			return uniq map { keys %$_ } (@sources);
+		}
+		else
+		{
+			# I don't know what they want
+			# just barf
+			die("info methods have no descriptions; cannot call in scalar context");
+		}
 	}
 
 

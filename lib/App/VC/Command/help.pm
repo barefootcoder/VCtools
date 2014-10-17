@@ -62,6 +62,8 @@ class App::VC::Command::help extends App::VC::Command
 			say '';
 			say $cmd->usage->option_text;
 			say '';
+
+			debuggit(3 => "command", $self->config->command_is_structural($command) ? "is" : "isn't", "structural");
 			unless ($self->config->command_is_structural($command))
 			{
 				say '  [try ', $self->color_msg(white => "vc info def:$command"), ' to see how this command is defined]';

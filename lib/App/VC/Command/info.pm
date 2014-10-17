@@ -8,15 +8,25 @@ use Method::Signatures::Modifiers;
 # ABSTRACT: print configuration info
 
 
-class App::VC::Command::info extends App::VC::Command
+class App::VC::Command::info extends App::VC::Command with App::VC::Columnar
 {
 	use Debuggit;
 	use autodie qw< :all >;
 	use experimental 'smartmatch';
 
+	use Const::Fast;
 	use Path::Class;
 	use MooseX::Has::Sugar;
 	use MooseX::Types::Moose qw< :all >;
+
+
+	const our $SPECIAL_KEYS =>
+	{
+		'project'			=>	'List the name of the current project.',
+		'project:root'		=>	'List the root directory of the current project.',
+		'project:all'		=>	'List all the known projects.',
+		'policy:all'		=>	'List all the known policies.',
+	};
 
 
 	has alt_project	=>	(
@@ -48,7 +58,7 @@ class App::VC::Command::info extends App::VC::Command
 
 	method description
 	{
-		return	"Print information about the given key (can be: directive, pseudo-directive, or %info method).";
+		return	"Print information about the given key (use `ceflow info list` to see all possible keys).";
 	}
 
 	method structural
@@ -68,21 +78,73 @@ class App::VC::Command::info extends App::VC::Command
 
 		given ($self->key)
 		{
+			when ('list')
+			{
+				my $stdout;
+				if (-t STDOUT)
+				{
+					my $pager = $ENV{'PAGER'} // 'less';
+					open($stdout, "| $pager");
+					select $stdout;
+				}
+
+				say '';
+				say 'Special Keys:';
+				say 'These give special information.';
+				say '';
+				say $self->format_bicol([qw< project project:root project:all policy:all >], $SPECIAL_KEYS,
+						separator => '  ->  ');;
+				say '';
+
+				say '';
+				say 'Directives:';
+				say 'You can ask to see the value(s) of any directive in the current project.';
+				say 'Only single-valued and multi-value directives can be queried.';
+				say 'Values that contain other keys and values (e.g. `CustomCommand\') cannot be queried.';
+				say 'All these values can double as info methods as well, so these are equivalent:';
+				say '        `ceflow info VC`    and    `ceflow info %VC`';
+				say '';
+				say $self->list_in_columns([ sort $self->config->list_directives ]);
+
+				say '';
+				say 'Info methods:';
+				say 'You can ask to see what any info method will return.';
+				say '';
+				say $self->list_in_columns([ map { "%$_" } sort $self->config->list_info_methods ]);
+
+				say '';
+				say 'Command definitions:';
+				say 'You can ask to see the defintion of any command, internal or custom.';
+				say '';
+				say $self->list_in_columns([ map { "def:$_" } sort $self->config->list_commands ]);
+
+				say '';
+				say 'Info method definitions:';
+				say 'You can also ask to see the defintion of any info method, internal or custom.';
+				say '';
+				say $self->list_in_columns([ map { "def:%$_" } sort $self->config->list_info_methods ]);
+
+				say '';
+			}
 			when ('project')
 			{
+				die("please add $_ to the SPECIAL_KEYS hash!") unless exists $SPECIAL_KEYS->{$_};
 				say $self->alt_project // $self->project // "CANNOT DETERMINE PROJECT";
 			}
 			when ('project:root')
 			{
+				die("please add $_ to the SPECIAL_KEYS hash!") unless exists $SPECIAL_KEYS->{$_};
 				my $root = $self->alt_project ? $self->root_for_project($self->alt_project) : $self->proj_root;
 				say $root // "CANNOT DETERMINE PROJECT ROOT";
 			}
 			when ('project:all')
 			{
+				die("please add $_ to the SPECIAL_KEYS hash!") unless exists $SPECIAL_KEYS->{$_};
 				say join($self->separator, $self->list_all_projects);
 			}
 			when ('policy:all')
 			{
+				die("please add $_ to the SPECIAL_KEYS hash!") unless exists $SPECIAL_KEYS->{$_};
 				say join($self->separator, $self->list_all_policies);
 			}
 			when ( /^def:(.*)$/ )
