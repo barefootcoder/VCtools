@@ -664,11 +664,17 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 		$code = $self->env_expand($code) if $env_expand;				# evironment expansion only if requested
 		say STDERR "# code after expansion: ", $self->color_msg(white => $code) if $self->debug;
 
+		state $seq = 0;
+		++$seq;
+		my $prefix = $self->directive('CodePrefix');
+		debuggit(4 => "code prefix is:", $prefix);
+
 		local $@;
-		my $retval = eval $code;
+		my $retval = eval "package App::VC::Command::Code::Eval$seq; $prefix; $code";
 		if ($@)
 		{
 			my $error = $@;
+			say STDERR "code prefix:   ", $self->color_msg( white => $prefix ) if $self->debug and $prefix;
 			say STDERR "expanded code: ", $self->color_msg( white => $code );
 			$self->fatal("code fails compilation: $error");
 		}

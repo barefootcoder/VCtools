@@ -20,6 +20,7 @@ our $ME = '%VC-TEST%';													# in case our caller needs it
 my $cmd = 'testit';
 
 my $config_cmd_tmpl = fake_confstring(<<END);
+	##prefix##
 	<fake>
 		<commands>
 			$cmd <<---
@@ -39,6 +40,7 @@ my $config_cmd_tmpl = fake_confstring(<<END);
 END
 
 my $config_custom_tmpl = fake_confstring(<<END);
+	##prefix##
 	<fake>
 		<commands>
 		</commands>
@@ -65,6 +67,8 @@ func create_fake_command ($class, $config, %args)
 			delete $args{$_};
 		}
 	}
+	$config =~ s/##prefix##/CodePrefix <<---\n$args{prefix}\n---/ and delete $args{prefix} if exists $args{prefix};
+	note "fake config is:\n$config";
 
 	my $is_custom = $class =~ /Custom/;
 

@@ -15,6 +15,8 @@ Revision history for VCtools
 	*	base command improvements:
 		vc help : rewritten so we have our own version (not relying on default from App::Cmd any more)
 		vc DEBUG=x cmd : new debugging mode controls Debuggit's DEBUG level + automatically turns on --debug
+	*	config file improvements:
+		new directive: CodePrefix
 
 0.14	2014-04-27		10aefe9b72
 
@@ -131,7 +133,7 @@ Revision history for VCtools
 	*	modified action directives:
 		shell: does PID expansion
 		nested command: does env expansion
-	*	improvements in config file processing:
+	*	config file improvements:
 		switch from ~/.vctools.conf to ~/.vctools/vctools.conf
 		add VCtoolsDir directive
 	*	general cleanup and refactoring
