@@ -88,6 +88,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 								documentation => "hidden",
 								env_prefix => 'VCTOOLS',
 							ro, isa => Bool,
+							default => sub { !!DEBUG },
 						);
 	has no_color	=>	(
 							traits => [qw< Getopt ENV >],
@@ -495,6 +496,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 				else
 				{
 					$pass = $self->evaluate_code($directive);			# evaluate_code handles info expansion
+					debuggit(3 => "after evaluate, code is:", $pass);
 				}
 			}
 

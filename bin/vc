@@ -39,7 +39,10 @@ BEGIN
 
 eval { require Path::Class } ? Path::Class->import : check_prereqs();
 
-eval { require Debuggit } ? Debuggit->import( DataPrinter => 1, DEBUG => 1 ) : check_prereqs();
+my $debug = 0;
+shift and $debug = $1 if $ARGV[0] =~ /DEBUG=(\d+)/;
+warn("debug set to $debug") if $debug;
+eval { require Debuggit } ? Debuggit->import( DataPrinter => 1, DEBUG => $debug ) : check_prereqs();
 
 
 # now we can go get the app class

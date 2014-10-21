@@ -14,6 +14,7 @@ Revision history for VCtools
 		vc shell-complete : now provides completion for `vc info`
 	*	base command improvements:
 		vc help : rewritten so we have our own version (not relying on default from App::Cmd any more)
+		vc DEBUG=x cmd : new debugging mode controls Debuggit's DEBUG level + automatically turns on --debug
 
 0.14	2014-04-27		10aefe9b72
 
@@ -42,7 +43,7 @@ Revision history for VCtools
 	*	base command improvements:
 		added version variable for `vc version` or `--version` switch
 			(assuming new enough version of App::Cmd)
-	*	code expansion improvements
+	*	code expansion improvements:
 		now easier to call confirm() to make a custom prompt
 			(ex: `BAIL=$self->confirm("Do you want to quit now?")` / `$BAIL -> ! Bailing.`)
 	*	doc improvements:
