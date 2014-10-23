@@ -6,6 +6,7 @@ Revision history for VCtools
 		`vc commit` now does a `verify = project`
 		`vc unstage` now accepts files (and therefore doesn't unstage everything when you request just one file)
 		`vc` no longer repeatedly tries to run `vctools-prereq-verify` when what's missing is an internal module
+		"no output" directives (e.g. comments, env assigns) inside %info methods no longer produce bogus output
 	*	modified commands:
 		vc info : can now ask for `def:command` or `def:%info`
 		vc info : can now do `vc info list` to get all possible keys (args to `vc info`)

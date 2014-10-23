@@ -71,4 +71,38 @@ $cmd = fake_cmd( action => $action, extra => $extra );
 $cmd->test_execute_output("one two\n", 'ArrayRef custom info works');
 
 
+# some things should *not* put output into the info method value
+# other things should
+
+$extra = q{
+	# one day, I'd like nested command called from info methods to have their output captured
+	# but that ain't working just yet
+	<CustomCommand custtest>
+		action <<---
+			{ say "nested" }
+		---
+	</CustomCommand>
+	<CustomInfo info2>
+		action <<---
+			echo "info"
+		---
+	</CustomInfo>
+	<CustomInfo infotest>
+		Type = ArrayRef
+		# message is printed immediately, not made part of %info method value
+		action <<---
+			# comment
+			ENV="assign"
+			echo "shell"
+			{ "code\n" }
+			> message
+			{ %info2 }
+		---
+	</CustomInfo>
+};
+
+$cmd = fake_cmd( action => $action, extra => $extra );
+$cmd->test_execute_output("message\nshell code info\n", "misc actions succeed without putting `1' into the output");
+
+
 done_testing;

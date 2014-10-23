@@ -418,7 +418,10 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 
 		if ($line =~ /^#/ or $line =~ /^$/)								# comments and blank lines
 		{
-			return 1;													# just ignore (by returning a 'pass')
+			use Contextual::Return;
+			return	BOOL	{ 1 }										# just ignore (by returning a 'pass')
+					SCALAR	{ '' }
+			;
 		}
 		elsif ($line =~ /^(.*?)\s+->\s+(.*)$/)
 		{
@@ -428,7 +431,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 		{
 			return $self->execute_directive($disposition, env_assign => $1, $2);
 		}
-		elsif ($line =~ s/^\{\s*(.*)\s*\}$/$1/ or $line =~ s/^\@\s+//)
+		elsif ($line =~ s/^\{\s*(.*?)\s*\}$/$1/ or $line =~ s/^\@\s+//)
 		{
 			return $self->execute_directive($disposition, code => $line);
 		}
@@ -462,7 +465,11 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 	{
 		my ($lhs, $directive) = @directive == 1 ? (undef, @directive) : @directive;
 
-		my $pass;
+		# Default is for things to succeeed in output disposition and be ignored in capture disposition.
+		# If you want things to fail in output disp and be ignored in capture disp, set $pass = 0.
+		# If you want things to fail in both disp's, die() instead.
+		my ($pass, $value) = (1,'');
+
 		given ($type)
 		{
 			when ('shell')
@@ -480,7 +487,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 					}
 					when ('capture')
 					{
-						$pass = $self->handle_output($disposition, command => $directive, sub { `$directive` });
+						$value = $self->handle_output($disposition, command => $directive, sub { `$directive` });
 					}
 				}
 			}
@@ -495,7 +502,8 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 				}
 				else
 				{
-					$pass = $self->evaluate_code($directive);			# evaluate_code handles info expansion
+					$value = $self->evaluate_code($directive);			# evaluate_code handles info expansion
+					$pass = !!$value;
 					debuggit(3 => "after evaluate, code is:", $pass);
 				}
 			}
@@ -508,7 +516,6 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 				{
 					# no need to go through check_fail here, as we're already checking
 					$self->add_recovery_cmd(join(' ', $self->me, $directive));
-					$pass = 1;											# so we continue to record actions post-failure
 				}
 				else
 				{
@@ -522,6 +529,7 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 				$msg = $self->info_expand($msg);
 
 				# message directives never fail
+				# (except under --interactive)
 				$pass = $self->handle_output($disposition, message => $msg, sub { say $self->custom_message($msg); 1; });
 			}
 
@@ -530,7 +538,8 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 				my $msg = $self->env_expand($directive);
 				$msg = $self->info_expand($msg);
 
-				# confirm directive never fail either, although they might exit
+				# confirm directives never fail either, although they might exit
+				# (except under --interactive)
 				$pass = $self->handle_output($disposition, confirm => $msg,
 						sub { die("user chose not to proceed") unless $self->confirm_proceed($msg); 1; });
 			}
@@ -548,7 +557,8 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 			{
 				my $val = $self->evaluate_expression($directive);		# evaluate_expression handles expansions
 
-				# env assignments are always done and never fail
+				# env assignments are always done, never fail, and never produce output in capture disposition
+				# (could still fail under --interactive)
 				$pass = $self->handle_output(capture => command => "$lhs=" . ($val // ''), sub { $ENV{$lhs} = $val; 1; });
 				debuggit(3 => "set env var", $lhs, "to", $ENV{$lhs});
 				# don't go through check_fail here, because these should _always_ be added
@@ -564,16 +574,15 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 				{
 					$pass = $self->process_action_line($disposition, $directive);
 				}
-				else
-				{
-					$pass = 1;											# if conditional is not executed, don't fail
-				}
 			}
 
 			default { die("unknown directive type: $_"); }
 		}
 
-		return $pass;
+		use Contextual::Return;
+		return	BOOL	{ $pass }
+				SCALAR	{ $value }
+		;
 	}
 
 	# methd handle_output
