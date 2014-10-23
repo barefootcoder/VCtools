@@ -1,6 +1,6 @@
 Revision history for VCtools
 
-0.15
+0.15	2014-10-23
 	*	bug fixes:
 		`vc commands` no longer has "FILL ME IN" for some commands
 		`vc commit` now does a `verify = project`
