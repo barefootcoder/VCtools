@@ -55,6 +55,21 @@ $cmd = fake_cmd( action => $action, extra => $extra );
 $cmd->test_execute_output("0\n", 'false Bool custom info works');
 
 
+# Bool that should evaluate to false based on shell output
+
+$extra = q{
+	<CustomInfo infotest>
+		Type = Bool
+		action <<---
+			echo -n ""
+		---
+	</CustomInfo>
+};
+
+$cmd = fake_cmd( action => $action, extra => $extra );
+$cmd->test_execute_output("0\n", 'false Bool custom info shell directive works');
+
+
 # an ArrayRef method
 
 $extra = q{

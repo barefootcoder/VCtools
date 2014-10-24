@@ -95,7 +95,7 @@ class App::VC::Config
 				-String						=>	$raw_config,
 				-MergeDuplicateBlocks		=>	1,
 		) };
-		debuggit(3 => "read config:", DUMP => $config);
+		debuggit(6 => "read config:", DUMP => $config);
 		return $config;
 	}
 

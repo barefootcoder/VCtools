@@ -488,6 +488,8 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 					when ('capture')
 					{
 						$value = $self->handle_output($disposition, command => $directive, sub { `$directive` });
+						debuggit(3 => "shell directive/capture mode:", "//$value//");
+						$pass = !!$value;
 					}
 				}
 			}
