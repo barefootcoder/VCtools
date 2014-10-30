@@ -1,6 +1,6 @@
 Revision history for VCtools
 
-0.15	2014-10-23
+0.15	2014-10-23		dcbda2e6b6
 	*	bug fixes:
 		`vc commands` no longer has "FILL ME IN" for some commands
 		`vc commit` now does a `verify = project`
@@ -9,6 +9,7 @@ Revision history for VCtools
 		"no output" directives (e.g. comments, env assigns) inside %info methods no longer produce bogus output
 	*	modified commands:
 		vc info : can now ask for `def:command` or `def:%info`
+					(request from John Callender)
 		vc info : can now do `vc info list` to get all possible keys (args to `vc info`)
 					(request from Steve Caldwell)
 		vc help : now advises people to try `vc info def:command`
