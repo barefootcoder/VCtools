@@ -91,6 +91,11 @@ class App::VC::Config
 		$raw_config =~ s{ ^ (\s*   \w+Dir \s* = \s*) ~ (/|$) }{ $1 . $home . ($2 // '') }gmex;
 		$raw_config =~ s{ ^ (\s* << \s* include \s+) ~  /    }{ $1 . $home . '/'        }gmex;
 
+		# similar, but for allowing environment variables
+		# in the same directive types, only one env var per directive
+		$raw_config =~ s{ ^ (\s*   \w+Dir \s* = \s* .*? ) \$ (\w+) }{ $1 . $ENV{$2} }gmex;
+		$raw_config =~ s{ ^ (\s* << \s* include \s+ .*? ) \$ (\w+) }{ $1 . $ENV{$2} }gmex;
+
 		my $config = { Config::General::ParseConfig(
 				-String						=>	$raw_config,
 				-MergeDuplicateBlocks		=>	1,

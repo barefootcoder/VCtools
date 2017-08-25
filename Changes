@@ -8,6 +8,9 @@ NEXT
 		vc unstash : in Git, allow unstash by name as well as number (first matching string)
 		vc sync : in Git, now doing a much safer unstash
 		vc unstash : better error when requested stash doesn't exist; more efficient implementation
+	*	config file improvements:
+		can now use $ENV_VAR in config *Dir directives and <<include>> directives
+
 0.15	2014-10-23		dcbda2e6b6
 	*	bug fixes:
 		`vc commands` no longer has "FILL ME IN" for some commands

@@ -17,7 +17,8 @@ use File::HomeDir;
 use App::VC::Config;
 
 
-my $conf = fake_config( conf => <<END );
+$ENV{VCTOOLS_BMOOGLE} = '/bmoogle';
+my $conf = fake_config( conf => <<'END' );
 	Bmoogle=Test1
 	Bmoogle=Test2
 	<fake>
@@ -39,7 +40,9 @@ my $conf = fake_config( conf => <<END );
 	<fake>
 		SomeDir = ~/foo
 		OtherDir = /foo/~/bar
-		Notadir = ~/foo
+		EnvDir = $VCTOOLS_BMOOGLE/foo
+		OtherEnvDir = /foo$VCTOOLS_BMOOGLE/bar
+		Notadir = ~/foo/$VCTOOLS_BMOOGLE
 		<commands>
 			test3 = personal override3
 			test4 = personal override4
@@ -63,7 +66,9 @@ is_action_line(test4 => "policy override4", "policy override beats personal over
 # directory substitution
 is $conf->_config->{'fake'}->{'SomeDir'}, '/home/bmoogle/foo', 'tilde homedir substitution works';
 is $conf->_config->{'fake'}->{'OtherDir'}, '/foo/~/bar', 'no tilde substitution in the middles of paths';
-is $conf->_config->{'fake'}->{'Notadir'}, '~/foo', 'tilde substitution not done outside Dir directives';
+is $conf->_config->{'fake'}->{'EnvDir'}, '/bmoogle/foo', 'env var substitution works';
+is $conf->_config->{'fake'}->{'OtherEnvDir'}, '/foo/bmoogle/bar', 'env var substitution okay in the middles of paths';
+is $conf->_config->{'fake'}->{'Notadir'}, '~/foo/$VCTOOLS_BMOOGLE', 'dir substitution not done outside Dir directives';
 
 
 done_testing;
