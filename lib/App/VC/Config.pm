@@ -88,8 +88,8 @@ class App::VC::Config
 		# a small bit of pre-processing to allow ~ to refer to the user's home directory
 		# but only for *Dir directives, or in <<include>> statements
 		my $home = File::HomeDir->my_home;
-		$raw_config =~ s{ ^ (\s* \w+Dir \s* = \s*) ~ (/|$) }{ $1 . $home . ($2 // '') }gmex;
-		$raw_config =~ s{ ^ (\s* << \s* include \s+) ~/ }{ $1 . $home . '/' }gmex;
+		$raw_config =~ s{ ^ (\s*   \w+Dir \s* = \s*) ~ (/|$) }{ $1 . $home . ($2 // '') }gmex;
+		$raw_config =~ s{ ^ (\s* << \s* include \s+) ~  /    }{ $1 . $home . '/'        }gmex;
 
 		my $config = { Config::General::ParseConfig(
 				-String						=>	$raw_config,

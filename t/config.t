@@ -7,6 +7,13 @@ use Test::App::Config;
 use Data::Dumper;
 use Method::Signatures;
 
+package FakeHomeDir
+{
+	sub my_home { "/home/bmoogle" }
+}
+$File::HomeDir::IMPLEMENTED_BY = 'FakeHomeDir';
+use File::HomeDir;
+
 use App::VC::Config;
 
 
@@ -30,6 +37,9 @@ my $conf = fake_config( conf => <<END );
 		</fake>
 	</Policy>
 	<fake>
+		SomeDir = ~/foo
+		OtherDir = /foo/~/bar
+		Notadir = ~/foo
 		<commands>
 			test3 = personal override3
 			test4 = personal override4
@@ -48,6 +58,12 @@ is_action_line(test1 => "test1", "base command");
 is_action_line(test2 => "policy override2", "policy override");
 is_action_line(test3 => "personal override3", "personal override");
 is_action_line(test4 => "policy override4", "policy override beats personal override");
+
+
+# directory substitution
+is $conf->_config->{'fake'}->{'SomeDir'}, '/home/bmoogle/foo', 'tilde homedir substitution works';
+is $conf->_config->{'fake'}->{'OtherDir'}, '/foo/~/bar', 'no tilde substitution in the middles of paths';
+is $conf->_config->{'fake'}->{'Notadir'}, '~/foo', 'tilde substitution not done outside Dir directives';
 
 
 done_testing;
