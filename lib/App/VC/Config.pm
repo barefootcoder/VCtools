@@ -32,7 +32,8 @@ class App::VC::Config
 	has app			=>	( ro, isa => 'App::VC', required, weak_ref, );
 	has inline_conf	=>	( ro, isa => Str, predicate => 'is_inline', );
 	has command		=>	( ro, isa => 'App::VC::Command', weak_ref,
-								writer => 'register_command', predicate => 'command_registered', );
+								writer => 'register_command', predicate => 'command_registered',
+						);
 
 	has project		=>	(
 							ro, isa => Maybe[Str], lazy, predicate => 'has_project',
