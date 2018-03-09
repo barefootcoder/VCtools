@@ -133,25 +133,47 @@ class App::VC::Config
 			{
 				$info->{'project'} = $proj;
 				$info->{'project_root'} = "$projdir";
-				return $info;
 			}
 		}
 
-		foreach my $wdir (map { dir($_) } $self->directive('WorkingDir', project => undef))
+		unless ($info->{'project'})
 		{
-			foreach my $projdir (grep { -d } $wdir->children)
+			foreach my $wdir (map { dir($_) } $self->directive('WorkingDir', project => undef))
 			{
-				debuggit(4 => "checking", $pwd, "against", $projdir);
-				my $realpath = dir($projdir)->resolve;					# make a copy so resolve() won't change the path
-				if ($realpath->contains($pwd))
+				foreach my $projdir (grep { -d } $wdir->children)
 				{
-					$info->{'project'} = $projdir->basename;
-					$info->{'project_root'} = "$projdir";
-					return $info;
+					debuggit(4 => "checking", $pwd, "against", $projdir);
+					my $realpath = dir($projdir)->resolve;					# make a copy so resolve() won't change the path
+					if ($realpath->contains($pwd))
+					{
+						$info->{'project'} = $projdir->basename;
+						$info->{'project_root'} = "$projdir";
+					}
 				}
 			}
 		}
 
+		if (DEBUG >= 4)
+		{
+			my $project = $info->{project};
+			if (not defined $project)
+			{
+				debuggit("Project config: NO PROJECT FOUND!");
+			}
+			elsif (not defined $self->_config->{'Project'}->{$project})
+			{
+				debuggit("Project config: project is $project but no corresponding config (likely from a wdir)");
+			}
+			elsif (not ref $self->_config->{'Project'}->{$project})
+			{
+				debuggit("Project config: PROJECT IS $project BUT CONFIG IS A SCALAR!",
+						$self->_config->{'Project'}->{$project});
+			}
+			else
+			{
+				debuggit("Project config:", DUMP => $self->_config->{'Project'}->{$project});
+			}
+		}
 		return $info;
 	}
 
