@@ -242,13 +242,21 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 	}
 
 
+	# this just gets an environment var, but throws a warning if it's not defined
+	method ENV ($var)
+	{
+		return $ENV{$var} if defined $ENV{$var};
+		$self->warning("environment var $var not defined");
+		return '';
+	}
+
 	method env_expand ($string)
 	{
 		# technically these are expanded to themselves as opposed to not expanded at all
 		# but the end result is the same
 		state $DONT_EXPAND = { map { $_ => 1 } qw< self > };
 
-		$string =~ s{\$([a-zA-Z]\w+)}{ $DONT_EXPAND->{$1} ? '$' . $1 : $ENV{$1} // '' }eg;
+		$string =~ s{\$([a-zA-Z]\w+)}{ $DONT_EXPAND->{$1} ? '$' . $1 : $self->ENV($1) }eg;
 		return $string;
 	}
 

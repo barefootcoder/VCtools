@@ -93,8 +93,8 @@ class App::VC::Config
 
 		# similar, but for allowing environment variables
 		# in the same directive types, only one env var per directive
-		$raw_config =~ s{ ^ (\s*   \w+Dir \s* = \s* .*? ) \$ (\w+) }{ $1 . $ENV{$2} }gmex;
-		$raw_config =~ s{ ^ (\s* << \s* include \s+ .*? ) \$ (\w+) }{ $1 . $ENV{$2} }gmex;
+		$raw_config =~ s{ ^ (\s*   \w+Dir \s* = \s* .*? ) \$ (\w+) }{ $1 . $self->ENV($2) }gmex;
+		$raw_config =~ s{ ^ (\s* << \s* include \s+ .*? ) \$ (\w+) }{ $1 . $self->ENV($2) }gmex;
 
 		my $config = { Config::General::ParseConfig(
 				-String						=>	$raw_config,
@@ -470,6 +470,13 @@ class App::VC::Config
 
 	# USER MESSAGING METHODS
 	# we pass these off to our command, if we have one (if not, we handle them fairly crudely)
+
+	method ENV ($var)
+	{
+		$self->command_registered
+			? $self->command->ENV($var)
+			: $ENV{$var} // (warn("environment var $var not defined"), '');
+	}
 
 	method warning ($msg)
 	{

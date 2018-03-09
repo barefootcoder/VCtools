@@ -10,6 +10,8 @@ NEXT
 		vc unstash : better error when requested stash doesn't exist; more efficient implementation
 	*	config file improvements:
 		can now use $ENV_VAR in config *Dir directives and <<include>> directives
+	*	code expansion improvements:
+		now throws warning and uses '' when an env var doesn't exist
 
 0.15	2014-10-23		dcbda2e6b6
 	*	bug fixes:
