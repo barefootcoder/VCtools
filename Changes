@@ -1,6 +1,8 @@
 Revision history for VCtools
 
 NEXT
+
+0.16	2018-03-13		87bf6cc34e
 	*	bug fixes:
 		`%branches` and `%remote_branches` now eliminate colors to avoid bugs when matching against strings
 		`%is_dirty` no longer broken by changes in the `git status` message
