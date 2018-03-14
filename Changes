@@ -5,6 +5,8 @@ NEXT
 		`%branches` and `%remote_branches` now eliminate colors to avoid bugs when matching against strings
 		`%is_dirty` no longer broken by changes in the `git status` message
 	*	base command improvements:
+		vc : will now automatically respawn itself using included Perlbrew Perl iff it exists
+		     (Perlbrew Perl is not built by default install, but perhaps that will be a feature soon)
 		vc unstash : in Git, allow unstash by name as well as number (first matching string)
 		vc sync : in Git, now doing a much safer unstash
 		vc unstash : better error when requested stash doesn't exist; more efficient implementation
@@ -12,6 +14,8 @@ NEXT
 		can now use $ENV_VAR in config *Dir directives and <<include>> directives
 	*	code expansion improvements:
 		now throws warning and uses '' when an env var doesn't exist
+	*	debugging improvements:
+		vc DEBUG=x cmd : as long as x is 2 or higher, print Perl path and version
 
 0.15	2014-10-23		dcbda2e6b6
 	*	bug fixes:

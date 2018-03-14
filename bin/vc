@@ -18,6 +18,28 @@ BEGIN
 	my $base_dir = dirname dirname Cwd::realpath($0);
 	my $extlib_dir = File::Spec->catfile( $base_dir, 'extlib' );
 	my $lib_dir = File::Spec->catfile( $base_dir, 'lib' );
+	my $perlbrew_dir = File::Spec->catfile( $extlib_dir, 'perlbrew' );
+
+	# use perlbrewed Perl if present, and we're not already using it
+	if ($ARGV[0] eq 'NORESPAWN')
+	{
+		shift;
+	}
+	elsif ( -d $perlbrew_dir )
+	{
+		# okay, it's present, and we're not already using it
+		# first, set up env vars to point to it ...
+		$ENV{PERLBREW_ROOT} = $perlbrew_dir;
+		$ENV{PERLBREW_HOME} = $perlbrew_dir;
+		$ENV{PERLBREW_PERL} = 'perl-5.14.4';
+		my $perlbrew_gen_bin  = File::Spec->catfile( $perlbrew_dir, 'bin' );
+		my $perlbrew_perl_bin = File::Spec->catfile( $perlbrew_dir, 'perls', $ENV{PERLBREW_PERL}, 'bin' );
+		$ENV{PERLBREW_PATH} = join(':', $perlbrew_gen_bin, $perlbrew_perl_bin);
+		$ENV{PATH}          = join(':', $ENV{PERLBREW_PATH}, $ENV{PATH} || ());
+		$ENV{PERL_MM_OPT}   = undef;
+		# ... then re-exec ourselves, but with a flag to avoid infinite loops
+		exec $0, NORESPAWN => @ARGV;
+	}
 
 	# set up local::lib for our prereqs
 	# can't use `use` here because we need to refer to the vars above
@@ -43,6 +65,8 @@ my $debug = 0;
 shift and $debug = $1 if $ARGV[0] =~ /DEBUG=(\d+)/;
 warn("debug set to $debug") if $debug;
 eval { require Debuggit } ? Debuggit->import( DataPrinter => 1, DEBUG => $debug ) : check_prereqs();
+
+print "using Perl: $^X, version $^V\n" if DEBUG() >= 2;
 
 
 # now we can go get the app class
