@@ -1,6 +1,9 @@
 Revision history for VCtools
 
 NEXT
+	*	debugging improvements:
+		vc DEBUG=1 : with debugging, if a module can't be loaded (thus triggering running `vctools-prereq-verify`),
+		     show the exact error
 
 0.16	2018-03-13		87bf6cc34e
 	*	bug fixes:

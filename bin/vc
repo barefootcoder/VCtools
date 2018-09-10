@@ -83,6 +83,7 @@ sub check_prereqs
 	# make sure this is something we can do something about
 	die if $@ =~ m{Can't locate App/VC/};								# programmer error
 	die unless $@ =~ /Can't locate .* in \@INC/ or $@ =~ /Perl .* required/;
+	print STDERR "Attempting to correct: $@\n" if $debug;
 
 	my $prereq_checker = File::Spec->catfile( dirname(Cwd::realpath($0)), 'vctools-prereq-verify' );
 	unless ( -r $prereq_checker )
