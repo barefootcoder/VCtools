@@ -1,6 +1,8 @@
 Revision history for VCtools
 
 NEXT
+
+0.17	2018-09-13		027306f987
 	*	base command improvements:
 		vc : better and more stable respawning with Perlbrew-ed perl
 		vc-perlbrew : avoid respawning, or install Perlbrew in the first place
