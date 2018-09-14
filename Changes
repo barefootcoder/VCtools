@@ -1,6 +1,9 @@
 Revision history for VCtools
 
 NEXT
+	*	base command improvements:
+		vc : better and more stable respawning with Perlbrew-ed perl
+		vc-perlbrew : avoid respawning, or install Perlbrew in the first place
 	*	debugging improvements:
 		vc DEBUG=1 : with debugging, if a module can't be loaded (thus triggering running `vctools-prereq-verify`),
 		     show the exact error

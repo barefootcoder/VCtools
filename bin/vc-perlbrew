@@ -1,0 +1,124 @@
+#! /bin/bash -e
+# pusht: $CEROOT/devtools/cescp $1 i-066c2591fe09da6fd:/var/local/VCtools/bin
+
+function die
+{
+	echo "${0##*/}: $@" >&2
+	exit 1
+}
+
+vctoolsdir=${0%bin/*}
+vctoolsdir=${vctoolsdir%/}
+vctoolsdir=${vctoolsdir:-$PWD}
+[[ -d $vctoolsdir ]] || die "cannot determine VCtools directory"
+# get our env focussed on our extlib/ and exclude any other locations
+export PERL_LOCAL_LIB_ROOT=$vctoolsdir/extlib
+export PERL5LIB=$PERL_LOCAL_LIB_ROOT
+export PERL_MM_OPT=
+export PERL_MB_OPT=
+export PERLBREW_ROOT=$vctoolsdir/extlib/perlbrew
+
+# set vars for our necessary locations
+perlbrew=$PERLBREW_ROOT/bin/perlbrew
+cpanm=$PERLBREW_ROOT/bin/cpanm
+cpm=$PERLBREW_ROOT/bin/cpm
+perlver=5.14.4
+
+
+function perl-run
+{
+	$perlbrew --quiet exec --with $perlver "$@"
+}
+
+function perl-exec
+{
+	exec $perlbrew --quiet exec --with $perlver "$@"
+}
+
+function set_env
+{
+	[[ -x $perlbrew && -d $PERLBREW_ROOT/perls/perl-$perlver ]] || die "not enough parts installed; re-run without args"
+	eval $(perl-run perl -Mlocal::lib=$PERL_LOCAL_LIB_ROOT)
+}
+
+
+if [[ $1 == "RUNVC" ]]
+then
+
+	shift
+	set_env
+	perl-exec $vctoolsdir/bin/vc NORESPAWN "$@"
+
+elif [[ $1 == "RUN" ]]
+then
+
+	shift
+	set_env
+	perl-exec "$@"
+
+elif [[ $1 == "INSTALL" ]]
+then
+
+	# Assume nothing (well, except bash, I suppose).  Whatever we can't find, build.
+	cd $vctoolsdir
+
+	# Install perlbrew if necessary.
+	if [[ ! -r $perlbrew ]]
+	then
+		# try `curl` first; fall back to `wget`, then `fetch` as a last resort
+		if type -t curl >/dev/null
+		then
+			curl -L https://install.perlbrew.pl | bash
+		elif type -t wget >/dev/null
+		then
+			wget -O - https://install.perlbrew.pl | bash
+		elif type -t fetch >/dev/null
+		then
+			fetch -o- https://install.perlbrew.pl | sh
+		else
+			die "cannot figure out a way to download perlbrew"
+		fi
+	fi
+
+	# Install cpanm if necessary.
+	if [[ ! -r $cpanm ]]
+	then
+		$perlbrew install-cpanm
+	fi
+
+	# Install cpm if necessary.
+	if [[ ! -r $cpm ]]
+	then
+		$perlbrew install-cpm
+	fi
+
+	# Install base perl if necessary.
+	if [[ ! $($perlbrew list) ]]
+	then
+		$perlbrew install -n -j 5 --noman --no-patchperl $perlver
+	fi
+
+	# Install a very few necessary modules into the base perl lib dirs.
+	# Don't have to check if these are there or not, as `cpm` will just DTRT.
+	#perl-run cpm install Carp Errno local::lib List::Util
+	perl-run cpm install local::lib
+	# this is super-crude, but it's the only way I can see to keep from ending up with two Carp's
+	# and ending up with two different Carp's is tragic on an epic scale ...
+	#old_carp=$PERLBREW_ROOT/perls/perl-$perlver/lib/$perlver/Carp.pm
+	#if [[ -e $old_carp ]]
+	#then
+		#/bin/rm -f $old_carp
+		#old_carp=${old_carp%.pm}
+		#[[ -e $old_carp/Heavy.pm ]] && /bin/rm -f $old_carp/Heavy.pm
+		#[[ -d $old_carp ]] && rmdir $old_carp
+	#fi
+	perl-run cpm install -L $PERL_LOCAL_LIB_ROOT
+
+else
+
+	ME=${0##*/}
+	echo "usage: $ME INSTALL" >&2
+	echo "       $ME RUN cmd [arg ...]" >&2
+	echo "       $ME RUNVC cmd [arg ...]" >&2
+
+fi

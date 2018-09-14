@@ -36,20 +36,30 @@ BEGIN
 		my $perlbrew_perl_bin = File::Spec->catfile( $perlbrew_dir, 'perls', $ENV{PERLBREW_PERL}, 'bin' );
 		$ENV{PERLBREW_PATH} = join(':', $perlbrew_gen_bin, $perlbrew_perl_bin);
 		$ENV{PATH}          = join(':', $ENV{PERLBREW_PATH}, $ENV{PATH} || ());
+		$ENV{PERL5LIB}      = undef;
 		$ENV{PERL_MM_OPT}   = undef;
+		$ENV{PERL_MB_OPT}   = undef;
 		# ... then re-exec ourselves, but with a flag to avoid infinite loops
 		exec $0, NORESPAWN => @ARGV;
 	}
 
-	# set up local::lib for our prereqs
-	# can't use `use` here because we need to refer to the vars above
-	require local::lib;
-	local::lib->import($extlib_dir);
+	# set up our local::lib, if it isn't already set up
+	unless ( grep { /extlib/ } grep { ! /perlbrew/ } @INC )
+	{
+		require local::lib;
+		local::lib->import($extlib_dir);
+	}
 
 	# now jam our lib/ into @INC
 	# (not using `use lib` for same reasons as above)
 	unshift @INC, $lib_dir;
 }
+
+# Set up debugging if requested.
+my $debug = 0;
+shift and $debug = $1 if $ARGV[0] =~ /DEBUG=(\d+)/;
+warn("debug set to $debug") if $debug;
+print "using Perl: $^X, version $^V\n" if $debug >= 2;
 
 
 # We're going to load modules very cautiously so that, if anything is missing, we can catch that and
@@ -59,14 +69,8 @@ BEGIN
 # run it directly).  So, if just about anything goes wrong, we'll call check_prereqs().  If it
 # happens _not_ to be a missing prereq, that will be handled appropriately as well.
 
-eval { require Path::Class } ? Path::Class->import : check_prereqs();
-
-my $debug = 0;
-shift and $debug = $1 if $ARGV[0] =~ /DEBUG=(\d+)/;
-warn("debug set to $debug") if $debug;
-eval { require Debuggit } ? Debuggit->import( DataPrinter => 1, DEBUG => $debug ) : check_prereqs();
-
-print "using Perl: $^X, version $^V\n" if DEBUG() >= 2;
+eval { require Path::Class } ? Path::Class->import                                   : check_prereqs();
+eval { require Debuggit    } ? Debuggit->import( DataPrinter => 1, DEBUG => $debug ) : check_prereqs();
 
 
 # now we can go get the app class
