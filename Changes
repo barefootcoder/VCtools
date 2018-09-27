@@ -3,6 +3,7 @@ Revision history for VCtools
 NEXT
 	*	base command improvements:
 		vc-perlbrew : fix bugs in `INSTALL` that caused complete failure to install
+		vc-perlbrew : restore original values for Perl env vars when spawning shell commands
 
 0.17	2018-09-13		027306f987
 	*	base command improvements:

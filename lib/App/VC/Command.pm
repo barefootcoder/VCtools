@@ -486,6 +486,14 @@ class App::VC::Command extends MooseX::App::Cmd::Command with App::VC::Recoverab
 				$directive =~ s/\$\$/$$/g;								# PID expansion
 				debuggit(4 => "sending to system: $directive");
 
+				# run commands with original Perl environment values
+				my @restore_vars = qw< PATH PERL5LIB PERL_LOCAL_LIB_ROOT PERL_MM_OPT PERL_MB_OPT >;
+				local @ENV{@restore_vars} = @ENV{@restore_vars};		# localize them all no matter what
+				if (exists $ENV{PATH_WITHOUT_VC})						# but only restore them
+				{														# if they were set in the first place
+					$ENV{$_} = $ENV{ $_ . '_WITHOUT_VC' } foreach @restore_vars;
+				}
+
 				given ($disposition)
 				{
 					when ('output')
