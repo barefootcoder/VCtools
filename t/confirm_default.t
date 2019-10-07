@@ -72,6 +72,16 @@ set_prompt_input( 'n' );
 );
 $cmd->test_execute_output(@output, 'using --yes switch');
 
+# make sure --yes works even in nested commands
+
+$cmd = fake_cmd( action => '= nestedconfirm', yes => 1, );
+set_prompt_input( 'n' );
+@output = (
+	"stop here ", white => "Proceed?", " [y/N] y\n",
+	"got past it\n",
+);
+$cmd->test_execute_output(@output, 'using --yes switch w/ nested cmd');
+
 
 # make sure you can't set default to anything funky
 

@@ -36,6 +36,12 @@ my $config_cmd_tmpl = fake_confstring(<<END);
 			{ say %arg2 }
 		---
 	</CustomCommand>
+	<CustomCommand nestedconfirm>
+		action <<---
+			? stop here
+			> got past it
+		---
+	</CustomCommand>
 	##extra##
 END
 
