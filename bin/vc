@@ -15,7 +15,8 @@ BEGIN
 
 	# turn /something/something/bin/thisscript into /something/something
 	# (have to make sure we resolve symlinks and relative paths too)
-	my $base_dir = dirname dirname Cwd::realpath($0);
+	my $bin_dir = dirname Cwd::realpath($0);
+	my $base_dir = dirname $bin_dir;
 	my $extlib_dir = File::Spec->catfile( $base_dir, 'extlib' );
 	my $lib_dir = File::Spec->catfile( $base_dir, 'lib' );
 	my $perlbrew_dir = File::Spec->catfile( $extlib_dir, 'perlbrew' );
@@ -28,23 +29,14 @@ BEGIN
 	elsif ( -d $perlbrew_dir )
 	{
 		# okay, it's present, and we're not already using it
-		# first, set up env vars to point to it ...
-		$ENV{PERLBREW_ROOT} = $perlbrew_dir;
-		$ENV{PERLBREW_HOME} = $perlbrew_dir;
-		$ENV{PERLBREW_PERL} = 'perl-5.14.4';
-		my $perlbrew_gen_bin  = File::Spec->catfile( $perlbrew_dir, 'bin' );
-		my $perlbrew_perl_bin = File::Spec->catfile( $perlbrew_dir, 'perls', $ENV{PERLBREW_PERL}, 'bin' );
-		$ENV{PERLBREW_PATH} = join(':', $perlbrew_gen_bin, $perlbrew_perl_bin);
-		$ENV{PATH}          = join(':', $ENV{PERLBREW_PATH}, $ENV{PATH} || ());
-		$ENV{PERL5LIB}      = undef;
-		$ENV{PERL_MM_OPT}   = undef;
-		$ENV{PERL_MB_OPT}   = undef;
-		# ... then re-exec ourselves, but with a flag to avoid infinite loops
-		exec $0, NORESPAWN => @ARGV;
+		# just proxy to `vc-perlbrew`, which will handle all the env stuff and then proxy back to us
+		my $perlbrew_run = File::Spec->catfile( $bin_dir, 'vc-perlbrew' );
+		die("$0: perlbrew dir found, but no vc-perlbrew bin") unless -x $perlbrew_run;
+		exec $perlbrew_run, RUNVC => @ARGV;
 	}
 
 	# set up our local::lib, if it isn't already set up
-	unless ( grep { /extlib/ } grep { ! /perlbrew/ } @INC )
+	unless ( grep { -d && Cwd::realpath($_) eq $extlib_dir } @INC )		# `$extlib_dir` already `realpath`ed from above
 	{
 		require local::lib;
 		local::lib->import($extlib_dir);

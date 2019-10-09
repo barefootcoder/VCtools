@@ -1,6 +1,11 @@
 Revision history for VCtools
 
 NEXT
+	*	runtime improvements:
+		vc : when perlbrew detected, hand off to `vc-perlbrew` instead of trying to juggle env stuff directly
+		     (this avoids a lot of duplicated code, which was already divergent)
+		vc-perlbrew : use the lessons learned from `launch` and force bash syntax in local::lib setup
+		local::lib detection : more bulletproof detection of extlib/ already being in `@INC`
 
 0.18	2019-10-07		0eea0e572c
 	*	base command improvements:

@@ -43,7 +43,7 @@ function perl-exec
 function set_env
 {
 	[[ -x $perlbrew && -d $PERLBREW_ROOT/perls/perl-$perlver ]] || die "not enough parts installed; re-run without args"
-	eval $(perl-run perl -Mlocal::lib=$PERL_LOCAL_LIB_ROOT)
+	eval $(perl-run perl -Mlocal::lib=$PERL_LOCAL_LIB_ROOT,--no-create,--shelltype,bourne)
 }
 
 
