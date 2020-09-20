@@ -17,7 +17,7 @@ BEGIN
 	# (have to make sure we resolve symlinks and relative paths too)
 	my $bin_dir = dirname Cwd::realpath($0);
 	my $base_dir = dirname $bin_dir;
-	my $extlib_dir = File::Spec->catfile( $base_dir, 'extlib' );
+	my $extlib_dir = $ENV{VCTOOLS_EXTLIB_DIR} || File::Spec->catfile( $base_dir, 'extlib' );
 	my $lib_dir = File::Spec->catfile( $base_dir, 'lib' );
 	my $perlbrew_dir = File::Spec->catfile( $extlib_dir, 'perlbrew' );
 

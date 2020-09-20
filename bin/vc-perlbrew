@@ -17,11 +17,11 @@ export PERL5LIB_WITHOUT_VC=$PERL5LIB
 export PERL_MM_OPT_WITHOUT_VC=$PERL_MM_OPT
 export PERL_MB_OPT_WITHOUT_VC=$PERL_MB_OPT
 # get our env focussed on our extlib/ and exclude any other locations
-export PERL_LOCAL_LIB_ROOT=$vctoolsdir/extlib
+export PERL_LOCAL_LIB_ROOT=${VCTOOLS_EXTLIB_DIR:-$vctoolsdir/extlib}
 export PERL5LIB=$PERL_LOCAL_LIB_ROOT
 export PERL_MM_OPT=
 export PERL_MB_OPT=
-export PERLBREW_ROOT=$vctoolsdir/extlib/perlbrew
+export PERLBREW_ROOT=$PERL_LOCAL_LIB_ROOT/perlbrew
 
 # set vars for our necessary locations
 perlbrew=$PERLBREW_ROOT/bin/perlbrew

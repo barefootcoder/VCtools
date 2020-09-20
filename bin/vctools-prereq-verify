@@ -81,7 +81,8 @@ sub verify_cpanm
 
 sub verify_extlib_dir
 {
-	unless (-d File::Spec->catfile($base_dir, 'extlib'))
+	my $extlib_dir = $ENV{VCTOOLS_EXTLIB_DIR} || File::Spec->catfile($base_dir, 'extlib');
+	unless (-d $extlib_dir)
 	{
 		print STDERR "\n$ME: can't locate my extlib/ directory.  Either you didn't get the full\n";
 		print STDERR "package, or perhaps you moved me to a different directory (don't do that).\n";
