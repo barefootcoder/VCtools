@@ -15,7 +15,7 @@ requires 'List::Util';
 requires 'Method::Signatures';
 requires 'Method::Signatures::Modifiers';
 requires 'Moose::Util::TypeConstraints';
-requires 'MooseX::App::Cmd';
+requires 'MooseX::App::Cmd', '== 0.331';
 requires 'MooseX::App::Cmd::Command';
 requires 'MooseX::Attribute::ENV';
 requires 'MooseX::Declare';
