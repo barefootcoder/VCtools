@@ -51,3 +51,6 @@ on test => sub {
     requires 'parent';
 };
 
+# this is a horrible hack to keep from getting the newest version of EU::MM,
+# which seems to have an issue with some older version formats
+requires 'ExtUtils::MakeMaker', '==7.46';

@@ -5,6 +5,7 @@ NEXT
 		local::lib detection : can now put extlib/ in a user-chosen dir (pointed to by an env var)
 	*	installation improvements:
 		avoid conflicts with newer versions of App::Cmd
+		avoid conflicts with newer versions of ExtUtil::MakeMaker
 
 0.19	2019-10-10		eef813735a
 	*	runtime improvements:
