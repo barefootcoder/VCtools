@@ -6,6 +6,7 @@ NEXT
 	*	installation improvements:
 		avoid conflicts with newer versions of App::Cmd
 		avoid conflicts with newer versions of ExtUtil::MakeMaker
+		decrease optimization level in order to install on newer glibc versions
 
 0.19	2019-10-10		eef813735a
 	*	runtime improvements:

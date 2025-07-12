@@ -100,7 +100,7 @@ then
 	# Install base perl if necessary.
 	if [[ ! $($perlbrew list) ]]
 	then
-		$perlbrew install -n -j 5 --noman --no-patchperl $perlver
+		$perlbrew install -n -j 5 --noman --no-patchperl -D optimize=-O1 $perlver
 	fi
 
 	# Install a very few necessary modules into the base perl lib dirs.
