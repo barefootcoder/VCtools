@@ -1,6 +1,8 @@
 Revision history for VCtools
 
 NEXT
+
+0.20   2025-07-12      d253c55f39f
 	*	runtime improvements:
 		local::lib detection : can now put extlib/ in a user-chosen dir (pointed to by an env var)
 	*	installation improvements:
