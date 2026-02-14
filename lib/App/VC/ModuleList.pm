@@ -46,7 +46,7 @@ sub install_modules
 
 	# crude errors; if you don't like that, check yourself before calling this
 	my $extlib = $ENV{VCTOOLS_EXTLIB_DIR} || File::Spec->catfile($base_dir, 'extlib');
-	die("can't locate cpanm") unless `cpanm --version`;
+	die("can't locate cpanm") unless `cpanm --version </dev/null`;
 	die("don't have a local::lib to install to") unless -d $extlib;
 
 	system( qw< cpanm -n -q -L >, $extlib, @modules );

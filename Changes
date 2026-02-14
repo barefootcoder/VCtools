@@ -1,6 +1,9 @@
 Revision history for VCtools
 
 NEXT
+	*	bug fixes:
+		vc-perlbrew : fix duplicated PERL_LOCAL_LIB_ROOT in set_env that broke cpanm's local::lib
+		vctools-prereq-verify, ModuleList : redirect stdin from /dev/null in cpanm calls to prevent hang on piped input
 
 0.20   2025-07-12      d253c55f39f
 	*	runtime improvements:

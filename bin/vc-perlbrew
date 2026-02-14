@@ -43,7 +43,12 @@ function perl-exec
 function set_env
 {
 	[[ -x $perlbrew && -d $PERLBREW_ROOT/perls/perl-$perlver ]] || die "not enough parts installed; re-run without args"
-	eval $(perl-run perl -Mlocal::lib=$PERL_LOCAL_LIB_ROOT,--no-create,--shelltype,bourne)
+	# Save the path, then clear env vars that were initialized at the top of the script.  This
+	# prevents local::lib from seeing them and creating duplicated entries in PERL_LOCAL_LIB_ROOT,
+	# which breaks cpanm's internal (fat-packed) local::lib v2.000015.
+	local _plr=$PERL_LOCAL_LIB_ROOT
+	unset PERL_LOCAL_LIB_ROOT PERL5LIB PERL_MM_OPT PERL_MB_OPT
+	eval $(perl-run perl -Mlocal::lib=$_plr,--no-create,--shelltype,bourne)
 }
 
 

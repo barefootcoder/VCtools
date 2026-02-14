@@ -71,7 +71,7 @@ sub verify_perl_version
 
 sub verify_cpanm
 {
-	unless (`cpanm --version`)
+	unless (`cpanm --version </dev/null`)
 	{
 		print STDERR "\n$ME: can't locate `cpan' in your path.  Please install it.\n";
 		exit 1;
