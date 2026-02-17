@@ -6,6 +6,7 @@ NEXT
 		vctools-prereq-verify, ModuleList : redirect stdin from /dev/null in cpanm calls to prevent hang on piped input
 	*	installation improvements:
 		cpanfile : pin App::Cmd to 0.331 (last version compatible with Perl 5.14)
+		vc-perlbrew : allow patchperl to fix Errno.pm generation on GCC 5+ (fixes cpm failure on Ubuntu 22.04+)
 
 0.20   2025-07-12      d253c55f39f
 	*	runtime improvements:
