@@ -1,4 +1,5 @@
 requires 'Any::Moose', '==0.26';
+requires 'App::Cmd', '==0.331';
 requires 'Config::General';
 requires 'Const::Fast';
 requires 'Contextual::Return';
