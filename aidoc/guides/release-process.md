@@ -163,33 +163,36 @@ VCtools has a built-in upgrade system that works with wrapper scripts (like `cef
 2. **`update-request`** -- a timestamp file managed by the consuming project (e.g.,
    CE's `ceflow` keeps one at its config dir). When this file's timestamp is newer than
    `last-updated.vctools`, the wrapper prompts the user to upgrade.
-3. **`extlib/update-request`** -- a file in the VCtools repo itself. When this file's
-   timestamp is newer than `~/.vctools/last-updated.extlib`, `vc self-upgrade` also
-   reinstalls extlib dependencies.
+3. **`share/build/update-request`** -- a file in the VCtools repo itself. When this
+   file's timestamp is newer than `~/.vctools/last-updated.extlib`, `vc self-upgrade`
+   runs `vc-perlbrew INSTALL` to reinstall extlib dependencies.
+4. **`~/.vctools/last-updated.extlib`** -- timestamp file written by `vc-perlbrew INSTALL`
+   after a successful extlib build.
 
 ### When to Touch update-request Files
 
-- **If you changed `cpanfile`** (added/removed/changed dependencies): create or touch
-  `extlib/update-request` with a current timestamp so that `vc self-upgrade` knows to
-  reinstall extlib:
+- **If you changed `cpanfile`** (added/removed/changed dependencies): update
+  `share/build/update-request` with a current timestamp so that `vc self-upgrade` knows
+  to reinstall extlib:
   ```bash
-  date +%s > extlib/update-request
-  git add extlib/update-request
+  date +%s > share/build/update-request
+  git add share/build/update-request
   ```
-  (Note: `extlib/` is in `.gitignore` but `extlib/update-request` should be committed
-  if dependency changes need to propagate.)
 
 - **If the consuming project (e.g., CE) manages its own `update-request` file**: after
   pushing a VCtools release, touch that project's `update-request` file to trigger
-  upgrade prompts for all users.
+  upgrade prompts for all users. (For CE, this is `$CEROOT/etc/ceflow/update-request`.)
 
 ### The `vc self-upgrade` Command
 
 This structural command (`lib/App/VC/Command/self_upgrade.pm`):
 1. Runs `git pull` in the VCtools directory
 2. Writes `time()` to `~/.vctools/last-updated.vctools`
-3. Checks if `extlib/update-request` timestamp > `~/.vctools/last-updated.extlib`
-4. If so, reinstalls extlib dependencies and updates `last-updated.extlib`
+3. Checks if `share/build/update-request` timestamp > `~/.vctools/last-updated.extlib`
+4. If so, runs `vc-perlbrew INSTALL` to rebuild extlib (which writes `last-updated.extlib`)
+
+The path to `share/build/update-request` is defined as a constant in
+`App::VC::Config` (`EXTLIB_UPDATE_REQUEST`) and mirrored in `bin/vc-perlbrew`.
 
 Can also upgrade individual modules: `vc self-upgrade Some::Module`
 

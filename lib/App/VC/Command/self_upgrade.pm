@@ -19,6 +19,15 @@ class App::VC::Command::self_upgrade extends App::VC::Command
 	use MooseX::Types::Moose qw< :all >;
 
 
+	sub _needs_extlib_update
+	{
+		my ($update_request_file, $last_updated_file) = @_;
+		my $requested = eval { $update_request_file->slurp } // 0;
+		my $updated   = eval { $last_updated_file->slurp }   // 0;
+		return $requested > $updated;
+	}
+
+
 	override usage_desc (...)
 	{
 		return super() . " [module ...]";
@@ -69,12 +78,20 @@ class App::VC::Command::self_upgrade extends App::VC::Command
 			App::VC::Config->config_file('last-updated.vctools')->spew( time() );
 
 			my $extlib_updated = App::VC::Config->config_file('last-updated.extlib');
-			if ( file('extlib', 'update-request')->slurp > (eval { $extlib_updated->slurp } // 0) )
+			my $update_request = file(App::VC::Config->extlib_update_request_path);
+			if ( _needs_extlib_update($update_request, $extlib_updated) )
 			{
 				say STDERR $self->color_msg(cyan => "Upgrading extlib:");
 				say STDERR "Installing necessary CPAN modules locally ",
 						"(", $self->color_msg(cyan => 'not'), " messing with your system) ...";
-				$extlib_updated->spew( time() );
+				try
+				{
+					system("bin/vc-perlbrew INSTALL </dev/null");
+				}
+				catch ($e)
+				{
+					$self->fatal("Extlib rebuild failed; will retry on next self-upgrade");
+				}
 			}
 		}
 

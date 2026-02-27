@@ -22,6 +22,8 @@ class App::VC::Config
 
 
 	const my $POLICY_KEY => 'ProjectPolicy';
+	# relative path from VCtoolsDir; keep in sync with `bin/vc-perlbrew`
+	const my $EXTLIB_UPDATE_REQUEST => 'share/build/update-request';
 
 
 	# ATTRIBUTES
@@ -215,6 +217,12 @@ class App::VC::Config
 
 		state $home = File::HomeDir->my_home;
 		return file($home, '.vctools', $filename);
+	}
+
+	# path (relative to VCtoolsDir) of the extlib update-request timestamp file
+	method extlib_update_request_path ($invocant:)
+	{
+		return $EXTLIB_UPDATE_REQUEST;
 	}
 
 

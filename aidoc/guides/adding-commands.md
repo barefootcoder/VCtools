@@ -309,7 +309,13 @@ Qty options: `1` (exactly one), `1+` (one or more), `0+` (zero or more), `0-1` (
    - [ ] Run `bin/vc-perlbrew RUN prove -lv t/<name>.t` to verify
    - [ ] Run full test suite: `bin/vc-perlbrew RUN prove -l t/`
    - [ ] **Update `Changes` file** under `NEXT` section (see below)
-   - [ ] Add to `cpanfile` if new dependencies are needed
+   - [ ] Add to `cpanfile` if new dependencies are needed, **and** touch the extlib
+     update-request file so `vc self-upgrade` triggers a rebuild for existing users:
+     ```bash
+     date +%s > share/build/update-request
+     git add share/build/update-request
+     ```
+     (See [release-process.md § "When to Touch update-request Files"](release-process.md#when-to-touch-update-request-files) for details.)
 
 ## Updating the Changes File
 

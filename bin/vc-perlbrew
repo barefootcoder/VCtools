@@ -29,6 +29,11 @@ cpanm=$PERLBREW_ROOT/bin/cpanm
 cpm=$PERLBREW_ROOT/bin/cpm
 perlver=5.14.4
 
+# extlib update tracking — keep in sync with App::VC::Config::EXTLIB_UPDATE_REQUEST
+extlib_update_request=$vctoolsdir/share/build/update-request
+vctools_conf_dir=${HOME}/.vctools
+last_updated_extlib=$vctools_conf_dir/last-updated.extlib
+
 
 function perl-run
 {
@@ -114,6 +119,11 @@ then
 	perl-run cpanm install -nq local::lib Carton
 	# Now install all our required modules.
 	perl-run cpm install -L $PERL_LOCAL_LIB_ROOT
+
+	# Record that extlib was updated, so `vc self-upgrade` knows not to redo it.
+	# Mirrors the path used by App::VC::Config->config_file('last-updated.extlib').
+	mkdir -p $vctools_conf_dir
+	date +%s > $last_updated_extlib
 
 else
 
