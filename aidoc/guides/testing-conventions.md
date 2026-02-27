@@ -42,14 +42,18 @@ t/
 
 ```bash
 # Run all tests
-prove -l t/
+bin/vc-perlbrew RUN prove -l t/
 
 # Run a single test with verbose output
-prove -lv t/config.t
+bin/vc-perlbrew RUN prove -lv t/config.t
 
 # Run with debugging
-prove -lv t/command_output.t 2>&1 | less
+bin/vc-perlbrew RUN prove -lv t/command_output.t 2>&1 | less
 ```
+
+Using `bin/vc-perlbrew RUN` ensures that the perlbrewed Perl and the private dependency
+stack (`extlib/`) are on the path. A bare `prove` would use the system Perl, which may lack
+required modules or be the wrong version.
 
 **Note**: Tests do NOT require a real VCS installation. All tests use fake configs with a
 `fake` VC type, so no git/svn operations are performed.

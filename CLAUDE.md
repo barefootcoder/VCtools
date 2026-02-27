@@ -17,7 +17,7 @@ Read the relevant guide(s) in `aidoc/guides/`:
 - **Bracing**: Allman style (opening brace on its own line)
 - **OO**: `class Foo extends Bar { }` via MooseX::Declare; attributes use MooseX::Has::Sugar
 - **Commands**: `augment validate_args` and `augment execute` (not `override`)
-- **Tests**: `prove -l t/` to run; use `fake_cmd`/`fake_custom` from `t/Test/App/VC.pm`
+- **Tests**: `bin/vc-perlbrew RUN prove -l t/` to run; use `fake_cmd`/`fake_custom` from `t/Test/App/VC.pm`
 - **Version**: `const our $VERSION` in `lib/App/VC.pm`; changelog in `Changes`
 - **Changes file**: Every feature, bug fix, or notable change **must** include an entry in the `Changes` file under the `NEXT` section. The implementing agent owns this -- do not defer to the release process. See "Updating the Changes File" in [adding-commands.md](aidoc/guides/adding-commands.md) for format details.
 - **Config actions**: defined in `share/conf/git.conf` (and `svn.conf`), not in Perl code

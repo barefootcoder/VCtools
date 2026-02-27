@@ -62,6 +62,13 @@ class App::VC extends MooseX::App::Cmd
 						);
 
 
+	# MooseX::NonMoose needs this to prevent Moose-style keyword arguments (e.g.
+	# config => $config) from leaking through to App::Cmd::new, which expects either
+	# no arguments or a single hashref.  Without this, App::Cmd::new receives the flat
+	# list and misinterprets the first key as a hashref, causing a crash.
+	method FOREIGNBUILDARGS (@) { return () }
+
+
 	# PRIVATE METHODS
 
 	# The easiest way to provide on-the-fly commands in an App::Cmd structure is to catch the system

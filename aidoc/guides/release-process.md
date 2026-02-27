@@ -34,7 +34,7 @@ At release time, the only `Changes` work is replacing `NEXT` with the version li
 ### 1. Verify All Tests Pass
 
 ```bash
-prove -l t/
+bin/vc-perlbrew RUN prove -l t/
 ```
 
 All 19 test files must pass. Do not proceed if any test fails.
@@ -125,7 +125,7 @@ git push origin --tags    # if you tagged
 
 ```bash
 # 1. Run tests
-prove -l t/
+bin/vc-perlbrew RUN prove -l t/
 
 # 2. Verify NEXT section has entries (added by implementing agents)
 # 3. Bump version in lib/App/VC.pm

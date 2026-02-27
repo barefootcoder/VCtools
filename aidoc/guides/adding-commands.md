@@ -306,8 +306,8 @@ Qty options: `1` (exactly one), `1+` (one or more), `0+` (zero or more), `0-1` (
    - [ ] Add `<CustomCommand>` block to appropriate config
 4. **For either type**:
    - [ ] Write test file `t/<name>.t` using `fake_cmd` or `fake_custom`
-   - [ ] Run `prove -lv t/<name>.t` to verify
-   - [ ] Run full test suite: `prove -l t/`
+   - [ ] Run `bin/vc-perlbrew RUN prove -lv t/<name>.t` to verify
+   - [ ] Run full test suite: `bin/vc-perlbrew RUN prove -l t/`
    - [ ] **Update `Changes` file** under `NEXT` section (see below)
    - [ ] Add to `cpanfile` if new dependencies are needed
 
