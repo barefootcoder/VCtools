@@ -28,6 +28,9 @@ perlbrew=$PERLBREW_ROOT/bin/perlbrew
 cpanm=$PERLBREW_ROOT/bin/cpanm
 cpm=$PERLBREW_ROOT/bin/cpm
 perlver=5.14.4
+# cpm 0.999+ requires perl 5.24; never bump this past what $perlver can run
+cpmver=0.998003
+cpm_url=https://raw.githubusercontent.com/skaji/cpm/$cpmver/cpm
 
 # extlib update tracking — keep in sync with App::VC::Config::EXTLIB_UPDATE_REQUEST
 extlib_update_request=$vctoolsdir/share/build/update-request
@@ -35,19 +38,58 @@ vctools_conf_dir=${HOME}/.vctools
 last_updated_extlib=$vctools_conf_dir/last-updated.extlib
 
 
+function download
+{
+	# try `curl` first; fall back to `wget`, then `fetch` as a last resort
+	if type -t curl >/dev/null
+	then
+		curl -fsSL "$1"
+	elif type -t wget >/dev/null
+	then
+		wget -qO - "$1"
+	elif type -t fetch >/dev/null
+	then
+		fetch -qo- "$1"
+	else
+		die "cannot figure out a way to download $1"
+	fi
+}
+
+function cpm-is-pinned-version
+{
+	# don't run `cpm` to ask: a too-new one won't even compile under our perl
+	[[ -r $cpm ]] && grep -q "\$VERSION='$cpmver'" $cpm
+}
+
+function have-perlbrew
+{
+	[[ -x $perlbrew && -d $PERLBREW_ROOT/perls/perl-$perlver ]]
+}
+
+# the fallback here mirrors the one in the BEGIN block of `bin/vc`
 function perl-run
 {
-	$perlbrew --quiet exec --with $perlver "$@"
+	if have-perlbrew
+	then
+		$perlbrew --quiet exec --with $perlver "$@"
+	else
+		"$@"
+	fi
 }
 
 function perl-exec
 {
-	exec $perlbrew --quiet exec --with $perlver "$@"
+	if have-perlbrew
+	then
+		exec $perlbrew --quiet exec --with $perlver "$@"
+	else
+		exec "$@"
+	fi
 }
 
 function set_env
 {
-	[[ -x $perlbrew && -d $PERLBREW_ROOT/perls/perl-$perlver ]] || die "not enough parts installed; re-run without args"
+	have-perlbrew || [[ -d $PERL_LOCAL_LIB_ROOT/lib/perl5 ]] || die "not enough parts installed; re-run without args"
 	# Save the path, then clear env vars that were initialized at the top of the script.  This
 	# prevents local::lib from seeing them and creating duplicated entries in PERL_LOCAL_LIB_ROOT,
 	# which breaks cpanm's internal (fat-packed) local::lib v2.000015.
@@ -80,19 +122,7 @@ then
 	# Install perlbrew if necessary.
 	if [[ ! -r $perlbrew ]]
 	then
-		# try `curl` first; fall back to `wget`, then `fetch` as a last resort
-		if type -t curl >/dev/null
-		then
-			curl -L https://install.perlbrew.pl | bash
-		elif type -t wget >/dev/null
-		then
-			wget -O - https://install.perlbrew.pl | bash
-		elif type -t fetch >/dev/null
-		then
-			fetch -o- https://install.perlbrew.pl | sh
-		else
-			die "cannot figure out a way to download perlbrew"
-		fi
+		download https://install.perlbrew.pl | bash
 	fi
 
 	# Install cpanm if necessary.
@@ -101,10 +131,12 @@ then
 		$perlbrew install-cpanm
 	fi
 
-	# Install cpm if necessary.
-	if [[ ! -r $cpm ]]
+	# Install cpm if necessary (or replace one at the wrong version).
+	if ! cpm-is-pinned-version
 	then
-		$perlbrew install-cpm
+		download $cpm_url >$cpm.new
+		chmod +x $cpm.new
+		mv $cpm.new $cpm
 	fi
 
 	# Install base perl if necessary.
@@ -112,11 +144,13 @@ then
 	then
 		$perlbrew install -n -j 5 --noman -D optimize=-O1 $perlver
 	fi
+	# everything below must run under the perlbrew perl, so don't let perl-run fall back here
+	have-perlbrew || die "perl $perlver failed to install"
 
 	# Install a very few necessary modules into the base perl lib dirs.
 	# Don't have to check if these are there or not, as `cpanm` will just DTRT.
 	# Note that we use `cpanm` here because `cpm` would put them in the wrong place.
-	perl-run cpanm install -nq local::lib Carton
+	perl-run cpanm -nq local::lib Carton
 	# Now install all our required modules.
 	perl-run cpm install -L $PERL_LOCAL_LIB_ROOT
 

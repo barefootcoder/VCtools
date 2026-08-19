@@ -6,7 +6,7 @@ This guide covers how to release a new version of VCtools.
 
 There are two places where the version appears:
 
-1. **`lib/App/VC.pm`** line 26: `const our $VERSION => 'v0.20';`
+1. **`lib/App/VC.pm`** line 26: `const our $VERSION => 'v0.XX';`
 2. **`Changes`**: changelog entries with version, date, and commit hash
 
 ## Changes File Format
@@ -18,9 +18,14 @@ or fix is completed -- see the "Updating the Changes File" section in
 
 At release time, the only `Changes` work is replacing `NEXT` with the version line:
 
-- Version line format: `<version>   <date>      <short-commit-hash>` (tab-separated)
+- Version line format: `<version><TAB><date><TAB><TAB><short-commit-hash>`
 - Date format: `YYYY-MM-DD`
-- Commit hash: first 11 characters of the release commit's SHA
+- Commit hash: first 10 characters of the *last commit included in the release*, which is the
+  release commit's parent, not the release commit's own SHA. Get it with
+  `git rev-parse --short=10 HEAD` just before making the release commit.
+
+The 0.20 line uses spaces and an 11-character hash. That release is the outlier; every other
+release from 0.16 on uses the tabs-and-10 form above, so match those.
 
 ## Versioning Convention
 
@@ -31,13 +36,16 @@ At release time, the only `Changes` work is replacing `NEXT` with the version li
 
 ## Release Steps
 
+The release is always its own commit, on top of the work it releases. Commit and push that work
+first, so the hash the release line records can't change afterwards.
+
 ### 1. Verify All Tests Pass
 
 ```bash
 bin/vc-perlbrew RUN prove -l t/
 ```
 
-All 19 test files must pass. Do not proceed if any test fails.
+All 21 test files must pass. Do not proceed if any test fails.
 
 ### 2. Verify Changes Entries Exist
 
@@ -59,12 +67,13 @@ const our $VERSION => 'v0.21';
 
 ### 4. Finalize the Changes Entry
 
-Replace `NEXT` with the new version line. Leave a fresh `NEXT` above it:
+Replace `NEXT` with the new version line, using today's date and the hash of the commit you're
+releasing (`git rev-parse --short=10 HEAD`). Leave a fresh `NEXT` above it:
 
 ```
 NEXT
 
-0.21   2025-08-15      <PLACEHOLDER>
+0.21	2026-08-18		abc1234def
 	*	new commands:
 		vc your-new-command
 	*	bug fixes:
@@ -74,8 +83,6 @@ NEXT
 	...
 ```
 
-Use today's date. The commit hash will be filled in after committing.
-
 ### 5. Commit the Release
 
 ```bash
@@ -83,29 +90,7 @@ git add lib/App/VC.pm Changes
 git commit -m "release version 0.21"
 ```
 
-### 6. Update the Commit Hash in Changes
-
-After committing, get the short hash:
-
-```bash
-git log --oneline -1
-# Output: abc1234def5 release version 0.21
-```
-
-Edit `Changes` to replace the placeholder with the actual hash:
-
-```
-0.21   2025-08-15      abc1234def5
-```
-
-Then amend the commit:
-
-```bash
-git add Changes
-git commit --amend --no-edit
-```
-
-### 7. Tag the Release (optional)
+### 6. Tag the Release (optional)
 
 Not strictly required based on historical practice (past releases don't appear to use tags),
 but recommended:
@@ -114,7 +99,7 @@ but recommended:
 git tag v0.21
 ```
 
-### 8. Push
+### 7. Push
 
 ```bash
 git push origin master
@@ -124,24 +109,21 @@ git push origin --tags    # if you tagged
 ## Quick Reference
 
 ```bash
+# 0. Commit and push the work being released, then:
+
 # 1. Run tests
 bin/vc-perlbrew RUN prove -l t/
 
 # 2. Verify NEXT section has entries (added by implementing agents)
 # 3. Bump version in lib/App/VC.pm
-# 4. Finalize Changes entry with date and placeholder hash
+# 4. Finalize Changes entry with today's date and this hash:
+git rev-parse --short=10 HEAD
 
 # 5. Commit
 git add lib/App/VC.pm Changes
 git commit -m "release version 0.XX"
 
-# 6. Get hash and update Changes
-git log --oneline -1
-# Edit Changes with actual hash
-git add Changes
-git commit --amend --no-edit
-
-# 7. Push
+# 6. Push
 git push origin master
 ```
 

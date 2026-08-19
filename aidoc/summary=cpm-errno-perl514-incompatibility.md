@@ -80,6 +80,8 @@ This also removes the need to install cpm at all, so the `install-cpm` block can
 
 Instead of `$perlbrew install-cpm` (which grabs the latest), install a specific older version that doesn't use EINTR/EPIPE. This would require figuring out which cpm version last worked with 5.14.
 
+**Update:** Option B was ultimately adopted (cpm pinned to 0.998003), when latest-cpm broke installs a second time by requiring Perl 5.24. See `summary=cpm-perl524-minimum.md`.
+
 ### Option C: Upgrade perlbrew Perl version
 
 Change `perlver=5.14.4` in `bin/vc-perlbrew` to 5.20 or later. This is the most comprehensive fix (would also prevent future Perl-version incompatibilities like the App::Cmd issue) but has the largest blast radius — all VCtools modules and the application itself would need to be verified against the newer Perl.

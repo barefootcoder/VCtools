@@ -6,10 +6,13 @@ NEXT
 		vctools-prereq-verify, ModuleList : redirect stdin from /dev/null in cpanm calls to prevent hang on piped input
 		self_upgrade : fix fatal error when `extlib/update-request` doesn't exist (broken since extlib was gitignored)
 		self_upgrade : actually run `vc-perlbrew INSTALL` when extlib needs rebuilding (was a no-op since 2013)
+		vc-perlbrew : drop stray `install` arg from the cpanm call that installs local::lib and Carton
+		vc-perlbrew : RUN and RUNVC fall back to the ambient perl when extlib has no perlbrew (as `vc` itself does)
 	*	installation improvements:
 		cpanfile : pin App::Cmd to 0.331 (last version compatible with Perl 5.14)
 		cpanfile : fix MooseX::App::Cmd version pin (0.331 doesn't exist; correct version is 0.32)
 		vc-perlbrew : allow patchperl to fix Errno.pm generation on GCC 5+ (fixes cpm failure on Ubuntu 22.04+)
+		vc-perlbrew : pin cpm to 0.998003, replacing one at the wrong version (0.999+ requires Perl 5.24)
 	*	general cleanup and refactoring:
 		self_upgrade : move update-request file from gitignored `extlib/` to tracked `share/build/`
 		self_upgrade, Config : add shared constant for extlib update-request path
@@ -17,9 +20,12 @@ NEXT
 	*	unit test improvements:
 		App::VC : add FOREIGNBUILDARGS to prevent Moose args leaking to App::Cmd::new (used in unit tests)
 		self_upgrade : add unit tests for extlib update-request timestamp comparison logic
+		vc-perlbrew : add unit tests (which source the bash script from Perl) for the cpm pin and the perlbrew fallback
+		Test::App::VC : don't assume the switch help starts with -h (newer Getopt::Long::Descriptive doesn't)
 	*	documentation improvements:
 		testing guide, CLAUDE.md : use `bin/vc-perlbrew RUN prove` instead of bare `prove`
 		release-process : update extlib update-request paths and instructions
+		release-process : correct the release-line hash (it's the parent commit's) and its tab formatting
 		adding-commands : checklist now includes touching `share/build/update-request` when `cpanfile` changes
 
 0.20   2025-07-12      d253c55f39f
