@@ -24,9 +24,6 @@ At release time, the only `Changes` work is replacing `NEXT` with the version li
   release commit's parent, not the release commit's own SHA. Get it with
   `git rev-parse --short=10 HEAD` just before making the release commit.
 
-The 0.20 line uses spaces and an 11-character hash. That release is the outlier; every other
-release from 0.16 on uses the tabs-and-10 form above, so match those.
-
 ## Versioning Convention
 
 - Format: `0.XX` (two-digit minor version, no patch level)

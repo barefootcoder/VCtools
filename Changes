@@ -1,6 +1,8 @@
 Revision history for VCtools
 
 NEXT
+
+0.21	2026-08-19		201acad339
 	*	bug fixes:
 		vc-perlbrew : fix duplicated PERL_LOCAL_LIB_ROOT in set_env that broke cpanm's local::lib
 		vctools-prereq-verify, ModuleList : redirect stdin from /dev/null in cpanm calls to prevent hang on piped input
@@ -28,7 +30,7 @@ NEXT
 		release-process : correct the release-line hash (it's the parent commit's) and its tab formatting
 		adding-commands : checklist now includes touching `share/build/update-request` when `cpanfile` changes
 
-0.20   2025-07-12      d253c55f39f
+0.20	2025-07-12		d253c55f39
 	*	runtime improvements:
 		local::lib detection : can now put extlib/ in a user-chosen dir (pointed to by an env var)
 	*	installation improvements:
