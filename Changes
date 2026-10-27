@@ -1,6 +1,8 @@
 Revision history for VCtools
 
 NEXT
+	*	installation improvements:
+		vc-perlbrew : INSTALL rebuilds an existing perl whose Errno.pm is broken (built before patchperl was allowed)
 
 0.21	2026-08-19		201acad339
 	*	bug fixes:

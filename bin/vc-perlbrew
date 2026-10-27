@@ -139,6 +139,14 @@ then
 		mv $cpm.new $cpm
 	fi
 
+	# A perl built without patchperl (pre-`aa00c52`) has an empty Errno.pm, which breaks cpm; rebuild it.
+	brewed_perl=$PERLBREW_ROOT/perls/perl-$perlver
+	if [[ -x $brewed_perl/bin/perl ]] && ! $brewed_perl/bin/perl -MErrno=EINTR -e1 2>/dev/null
+	then
+		echo "perl $perlver has a broken Errno.pm; rebuilding it"
+		rm -rf $brewed_perl
+	fi
+
 	# Install base perl if necessary.
 	if [[ ! $($perlbrew list) ]]
 	then
